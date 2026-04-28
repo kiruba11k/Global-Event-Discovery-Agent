@@ -6,10 +6,17 @@ from loguru import logger
 
 settings = get_settings()
 
+is_sqlite = settings.database_url.startswith("sqlite")
+engine_kwargs = {
+    "echo": settings.debug,
+    "pool_pre_ping": True,
+}
+if is_sqlite:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.debug,
-    connect_args={"check_same_thread": False},
+    **engine_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(

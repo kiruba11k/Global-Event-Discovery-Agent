@@ -269,7 +269,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "apis_configured": {
             "ticketmaster": bool(settings.ticketmaster_key),
             "eventbrite": bool(settings.eventbrite_token),
-            "meetup": bool(settings.meetup_key),
+            "meetup": True,  # public Meetup GraphQL query currently does not require API key
             "luma": bool(settings.luma_api_key),
         },
     }

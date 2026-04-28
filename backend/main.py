@@ -19,6 +19,15 @@ from ingestion.ingestion_manager import run_seed_only
 settings = get_settings()
 
 
+def get_allowed_origins() -> list[str]:
+    origins = [o.strip() for o in settings.frontend_origin.split(",") if o.strip()]
+    local_defaults = ["http://localhost:5173", "http://localhost:3000"]
+    for origin in local_defaults:
+        if origin not in origins:
+            origins.append(origin)
+    return origins
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: init DB, load FAISS index, seed events if empty."""
@@ -83,13 +92,7 @@ app = FastAPI(
 # ─── CORS ─────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_origin,
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://*.onrender.com",
-        "*",  # tighten in production
-    ],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
