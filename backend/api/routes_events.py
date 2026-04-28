@@ -9,25 +9,16 @@ POST /api/refresh        — trigger data refresh
 """
 import io
 import uuid
-import json
-import asyncio
 from datetime import datetime
-from typing import Optional, List
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
 from db.crud import get_candidate_events, get_all_events, get_event_by_id, count_events
-from models.icp_profile import ICPProfile, SearchRequest, SearchResponse
-from models.event import RankedEvent
-from relevance.embedder import (
-    build_profile_text, search_similar, add_events_to_index,
-    load_index, get_index,
-)
-from relevance.scorer import score_candidates, assign_tier
+from models.icp_profile import SearchRequest, SearchResponse
+from relevance.scorer import score_candidates
 from relevance.groq_ranker import rank_with_groq
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from config import get_settings
@@ -83,20 +74,24 @@ async def search_events(
     logger.info(f"Candidates after DB filter: {len(candidates)}")
 
     # ── Step 2: Semantic similarity ────────────────────────────
-    profile_text = build_profile_text(profile)
-    index = get_index()
-
     cosine_scores: dict = {}
+    if settings.enable_semantic_search:
+        from relevance.embedder import build_profile_text, search_similar, add_events_to_index, get_index
 
-    if index.ntotal > 0:
-        similar = search_similar(profile_text, top_k=100)
-        cosine_scores = {r["id"]: r["cosine_score"] for r in similar}
+        profile_text = build_profile_text(profile)
+        index = get_index()
+
+        if index.ntotal > 0:
+            similar = search_similar(profile_text, top_k=100)
+            cosine_scores = {r["id"]: r["cosine_score"] for r in similar}
+        else:
+            # Build index from candidates on the fly
+            logger.info("Building FAISS index from candidates...")
+            add_events_to_index(candidates)
+            similar = search_similar(profile_text, top_k=100)
+            cosine_scores = {r["id"]: r["cosine_score"] for r in similar}
     else:
-        # Build index from candidates on the fly
-        logger.info("Building FAISS index from candidates...")
-        add_events_to_index(candidates)
-        similar = search_similar(profile_text, top_k=100)
-        cosine_scores = {r["id"]: r["cosine_score"] for r in similar}
+        logger.info("Semantic search disabled: using rules + LLM ranking only.")
 
     # ── Step 3: Hybrid scoring ─────────────────────────────────
     scored = score_candidates(candidates, profile, cosine_scores)
@@ -242,6 +237,8 @@ async def export_csv(profile_id: str = Query(...)):
             "Source": r.source_platform,
         })
 
+    import pandas as pd
+
     df = pd.DataFrame(rows)
     stream = io.StringIO()
     df.to_csv(stream, index=False)
@@ -259,12 +256,15 @@ async def export_csv(profile_id: str = Query(...)):
 # ═══════════════════════════════════════════════════════════════════
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
-    from relevance.embedder import get_index
     total = await count_events(db)
-    index = get_index()
+    if settings.enable_semantic_search:
+        from relevance.embedder import get_index
+        index_size = get_index().ntotal
+    else:
+        index_size = 0
     return {
         "total_events_in_db": total,
-        "faiss_vectors": index.ntotal,
+        "faiss_vectors": index_size,
         "groq_enabled": bool(settings.groq_api_key),
         "apis_configured": {
             "ticketmaster": bool(settings.ticketmaster_key),

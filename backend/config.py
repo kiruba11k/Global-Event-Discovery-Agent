@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # ── Embedding model (local, free) ────────────
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dim: int = 384
+    enable_semantic_search: bool = True
+    preload_index_on_startup: bool = False
 
     # ── Event APIs (free tiers) ──────────────────
     ticketmaster_key: str = ""          # developer.ticketmaster.com  → 5000/day

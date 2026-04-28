@@ -21,6 +21,14 @@ services:
         value: llama-3.3-70b-versatile
       - key: EMBEDDING_MODEL
         value: all-MiniLM-L6-v2
+      - key: ENABLE_SEMANTIC_SEARCH
+        value: "false"
+      - key: PRELOAD_INDEX_ON_STARTUP
+        value: "false"
+      - key: COSINE_WEIGHT
+        value: "0.0"
+      - key: RULE_WEIGHT
+        value: "1.0"
       - key: SCRAPE_DELAY_SECONDS
         value: "2.0"
       - key: SCRAPE_TIMEOUT_SECONDS

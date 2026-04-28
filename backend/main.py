@@ -13,7 +13,6 @@ from loguru import logger
 from config import get_settings
 from db.database import init_db
 from api.routes_events import router as events_router
-from relevance.embedder import load_index, add_events_to_index
 from ingestion.ingestion_manager import run_seed_only
 
 settings = get_settings()
@@ -30,16 +29,13 @@ def get_allowed_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB, load FAISS index, seed events if empty."""
+    """Startup: init DB and optionally warm up semantic index."""
     logger.info("=== Event Intelligence Agent starting up ===")
 
     # 1. Init database tables
     await init_db()
 
-    # 2. Load FAISS index from disk (if exists)
-    load_index()
-
-    # 3. Seed curated events if DB is empty
+    # 2. Seed curated events if DB is empty
     from db.database import AsyncSessionLocal
     from db.crud import count_events
     async with AsyncSessionLocal() as db:
@@ -49,33 +45,30 @@ async def lifespan(app: FastAPI):
         logger.info("DB is empty — seeding curated events...")
         stats = await run_seed_only()
         logger.info(f"Seed complete: {stats}")
-
-        # 4. Build FAISS index from seed events
-        from db.database import AsyncSessionLocal
-        from db.crud import get_all_events
-        async with AsyncSessionLocal() as db:
-            events = await get_all_events(db, limit=500)
-        if events:
-            add_events_to_index(events)
-            logger.info(f"FAISS index built with {len(events)} events.")
     else:
-        logger.info(f"DB has {total} events. Loading into FAISS...")
+        logger.info(f"DB has {total} events.")
+
+    if settings.enable_semantic_search and settings.preload_index_on_startup:
         from db.database import AsyncSessionLocal
         from db.crud import get_all_events
-        from relevance.embedder import get_index
+        from relevance.embedder import load_index, add_events_to_index, get_index
+
+        load_index()
         idx = get_index()
         if idx.ntotal == 0:
             async with AsyncSessionLocal() as db:
                 events = await get_all_events(db, limit=500)
-            add_events_to_index(events)
-            logger.info(f"FAISS rebuilt: {idx.ntotal} vectors.")
+            if events:
+                add_events_to_index(events)
+                logger.info(f"FAISS rebuilt: {idx.ntotal} vectors.")
 
     logger.info("=== Startup complete. Ready. ===")
     yield
 
     # Shutdown
-    from relevance.embedder import save_index
-    save_index()
+    if settings.enable_semantic_search:
+        from relevance.embedder import save_index
+        save_index()
     logger.info("=== Shutdown complete ===")
 
 
