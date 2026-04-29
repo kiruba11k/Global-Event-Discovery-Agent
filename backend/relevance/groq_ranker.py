@@ -160,15 +160,19 @@ async def rank_with_groq(
                 events_json=json.dumps(events_dict, indent=2),
             )
 
-            completion = client.chat.completions.create(
-                model=settings.groq_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=settings.groq_temperature,
-                max_tokens=settings.groq_max_tokens,
-                response_format={"type": "json_object"},
+            completion = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.chat.completions.create,
+                    model=settings.groq_model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=settings.groq_temperature,
+                    max_tokens=settings.groq_max_tokens,
+                    response_format={"type": "json_object"},
+                ),
+                timeout=settings.groq_timeout_seconds,
             )
 
             raw = completion.choices[0].message.content
@@ -182,6 +186,11 @@ async def rank_with_groq(
 
         except ValidationError as ve:
             logger.error(f"Groq output failed schema validation: {ve}")
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Groq call exceeded {settings.groq_timeout_seconds}s timeout. "
+                "Falling back to rule-based rationale."
+            )
         except Exception as e:
             logger.error(f"Groq API error: {e}. Falling back to rule-based rationale.")
 

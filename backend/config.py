@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     groq_temperature: float = 0.1
     groq_max_tokens: int = 4096
+    groq_timeout_seconds: int = 20
 
     # ── Embedding model (local, free) ────────────
     embedding_model: str = "all-MiniLM-L6-v2"
