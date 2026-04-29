@@ -120,21 +120,95 @@ def _profile_to_dict(profile: ICPProfile) -> dict:
     }
 
 
-def _fallback_rationale(event: EventORM, profile: ICPProfile, tier: str) -> str:
+def _fallback_rationale(event: EventORM, profile: ICPProfile, tier: str, score: float) -> str:
     """Rule-based rationale when Groq is unavailable."""
-    ind_overlap = [i for i in profile.target_industries if i.lower() in (event.industry_tags or "").lower()]
-    persona_overlap = [p for p in profile.target_personas if p.lower() in (event.audience_personas or "").lower()]
+    event_industries = (event.industry_tags or "").lower()
+    event_personas = (event.audience_personas or "").lower()
+    event_geo = f"{event.city or ''}, {event.country or ''}".lower()
+    event_type = (event.category or "").lower()
+
+    signal_specs = [
+        {
+            "event_label": "event.industry_tags",
+            "profile_label": "profile.target_industries",
+            "event_value": event_industries,
+            "profile_values": profile.target_industries or [],
+            "limit": 3,
+        },
+        {
+            "event_label": "event.audience_personas",
+            "profile_label": "profile.target_personas",
+            "event_value": event_personas,
+            "profile_values": profile.target_personas or [],
+            "limit": 3,
+        },
+        {
+            "event_label": "event.city/event.country",
+            "profile_label": "profile.target_geographies",
+            "event_value": event_geo,
+            "profile_values": profile.target_geographies or [],
+            "limit": 2,
+        },
+        {
+            "event_label": "event.category",
+            "profile_label": "profile.preferred_event_types",
+            "event_value": event_type,
+            "profile_values": profile.preferred_event_types or [],
+            "limit": 2,
+        },
+    ]
+
+    strengths = []
+    gaps = []
+
+    for spec in signal_specs:
+        overlaps = [
+            candidate for candidate in spec["profile_values"]
+            if candidate and candidate.lower() in spec["event_value"]
+        ]
+        if overlaps:
+            strengths.append(
+                f"{spec['event_label']} matches {spec['profile_label']} "
+                f"({', '.join(overlaps[:spec['limit']])})"
+            )
+            continue
+        if spec["profile_values"]:
+            gaps.append(f"{spec['event_label']} has weak overlap with {spec['profile_label']}")
+
+    score_label = (
+        "high relevance"
+        if score >= 0.75 else
+        "moderate relevance"
+        if score >= 0.45 else
+        "low relevance"
+    )
 
     if tier == "GO":
-        reasons = []
-        if ind_overlap:
-            reasons.append(f"event.industry_tags matches profile.target_industries: {', '.join(ind_overlap)}")
-        if persona_overlap:
-            reasons.append(f"event.audience_personas includes: {', '.join(persona_overlap)}")
-        return ". ".join(reasons) if reasons else "Strong semantic overlap with company profile."
+        return (
+            f"{'; '.join(strengths[:2])}. "
+            f"Verdict GO due to {score_label} ({score:.2f}) from multiple ICP signal matches."
+            if strengths else
+            "High semantic overlap with company profile."
+        )
+
     if tier == "CONSIDER":
-        return "Partial overlap with ICP. Verify attendee mix before committing."
-    return "No significant overlap with target industries or personas."
+        return (
+            f"{'; '.join(strengths[:2]) if strengths else 'Some ICP overlap detected'}. "
+            f"{gaps[0] if gaps else 'Validate attendee mix and buying authority before committing.'} "
+            f"Verdict CONSIDER reflects {score_label} ({score:.2f})."
+        )
+
+    if strengths:
+        return (
+            f"{'; '.join(strengths[:1])}, but overall score remains low because "
+            f"{gaps[0] if gaps else 'other ICP signals are missing'}. "
+            f"Verdict SKIP reflects {score_label} ({score:.2f})."
+        )
+
+    return (
+        "SKIP because event.industry_tags and event.audience_personas do not clearly match "
+        f"profile.target_industries/profile.target_personas; relevance is {score_label} ({score:.2f})."
+    )
 
 
 async def rank_with_groq(
@@ -208,7 +282,7 @@ async def rank_with_groq(
             key_nums = gr.key_numbers
         else:
             verdict = tier
-            rationale = _fallback_rationale(event, profile, tier)
+            rationale = _fallback_rationale(event, profile, tier, score)
             parts = []
             if event.est_attendees:
                 parts.append(f"{event.est_attendees:,}+ attendees")
