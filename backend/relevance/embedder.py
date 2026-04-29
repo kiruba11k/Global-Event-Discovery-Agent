@@ -5,8 +5,6 @@ No API calls, no cost, no rate limits.
 """
 import os
 import numpy as np
-import faiss
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Optional
 from config import get_settings
 from loguru import logger
@@ -14,26 +12,38 @@ from loguru import logger
 settings = get_settings()
 
 # Singleton model — loaded once at startup
-_model: Optional[SentenceTransformer] = None
-_faiss_index: Optional[faiss.IndexFlatIP] = None  # Inner product = cosine on normalised vecs
+_model: Optional[object] = None
+_faiss_index: Optional[object] = None  # Inner product = cosine on normalised vecs
 _id_map: List[str] = []  # position → event_id
 
 FAISS_PATH = "faiss_index.bin"
 IDMAP_PATH = "faiss_idmap.npy"
 
 
-def get_model() -> SentenceTransformer:
+def _load_sentence_transformer():
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer
+
+
+def _load_faiss():
+    import faiss
+    return faiss
+
+
+def get_model():
     global _model
     if _model is None:
         logger.info("Loading embedding model (all-MiniLM-L6-v2)...")
+        SentenceTransformer = _load_sentence_transformer()
         _model = SentenceTransformer(settings.embedding_model)
         logger.info("Embedding model loaded.")
     return _model
 
 
-def get_index() -> faiss.IndexFlatIP:
+def get_index():
     global _faiss_index
     if _faiss_index is None:
+        faiss = _load_faiss()
         _faiss_index = faiss.IndexFlatIP(settings.embedding_dim)
     return _faiss_index
 
@@ -128,6 +138,7 @@ def cosine_score(text_a: str, text_b: str) -> float:
 def save_index():
     global _faiss_index, _id_map
     if _faiss_index:
+        faiss = _load_faiss()
         faiss.write_index(_faiss_index, FAISS_PATH)
         np.save(IDMAP_PATH, np.array(_id_map))
         logger.info("FAISS index saved.")
@@ -135,6 +146,7 @@ def save_index():
 
 def load_index():
     global _faiss_index, _id_map
+    faiss = _load_faiss()
     if os.path.exists(FAISS_PATH) and os.path.exists(IDMAP_PATH):
         _faiss_index = faiss.read_index(FAISS_PATH)
         _id_map = list(np.load(IDMAP_PATH, allow_pickle=True))

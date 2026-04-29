@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     # ── Embedding model (local, free) ────────────
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dim: int = 384
-    enable_semantic_search: bool = True
+    # Keep disabled by default for low-memory/free-tier deployments.
+    # all-MiniLM + torch can exceed 512MB containers.
+    enable_semantic_search: bool = False
     preload_index_on_startup: bool = False
 
     # ── Event APIs (free tiers) ──────────────────
