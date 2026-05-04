@@ -17,7 +17,6 @@ SEARCH_QUERIES = [
     "cloud computing", "digital transformation", "startup summit",
     "enterprise software", "cybersecurity conference", "ecommerce expo",
 ]
-
 COUNTRIES = ["SG", "IN", "MY", "US", "GB", "AU", "AE", "DE"]
 
 
@@ -35,7 +34,7 @@ class EventbriteConnector(BaseConnector):
         seen = set()
 
         async with httpx.AsyncClient(headers=headers, timeout=12) as client:
-            for query in SEARCH_QUERIES[:6]:  # stay within free limits
+            for query in SEARCH_QUERIES[:6]:
                 for country in COUNTRIES[:4]:
                     params = {
                         "q": query,
@@ -71,15 +70,11 @@ class EventbriteConnector(BaseConnector):
 
                         desc = e.get("description", {}).get("text", "") or ""
                         summary = e.get("summary", "") or ""
-
-                        # Ticket price
                         ticket = e.get("ticket_availability") or {}
                         min_price = ticket.get("minimum_ticket_price", {})
                         price_val = float(min_price.get("major_value", 0)) if min_price else 0.0
                         is_free = e.get("is_free", False)
                         price_desc = "Free" if is_free else (f"From ${price_val:.0f}" if price_val else "See website")
-
-                        # Capacity
                         capacity = self.safe_int(e.get("capacity", 0))
 
                         events.append(EventCreate(
