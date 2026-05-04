@@ -1,7 +1,10 @@
+"""
+Database setup — includes both events and company_profiles tables.
+"""
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import text
 from config import get_settings
-from models.event import Base
+from models.event import Base as EventBase
+from models.company_profile import CompanyProfileORM  # ensures table is registered
 from loguru import logger
 
 settings = get_settings()
@@ -14,10 +17,7 @@ engine_kwargs = {
 if is_sqlite:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 
-engine = create_async_engine(
-    settings.database_url,
-    **engine_kwargs,
-)
+engine = create_async_engine(settings.database_url, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -28,8 +28,8 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def init_db():
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database initialised.")
+        await conn.run_sync(EventBase.metadata.create_all)
+    logger.info("Database initialised (events + company_profiles).")
 
 
 async def get_db():
