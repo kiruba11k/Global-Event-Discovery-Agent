@@ -1,6 +1,6 @@
 """
 Event Intelligence Agent — FastAPI Application
-Run locally: uvicorn main:app --reload --port 8000
+Run: uvicorn main:app --reload --port 8000
 """
 import asyncio
 from contextlib import asynccontextmanager
@@ -20,22 +20,20 @@ settings = get_settings()
 
 def get_allowed_origins() -> list[str]:
     origins = [o.strip() for o in settings.frontend_origin.split(",") if o.strip()]
-    local_defaults = ["http://localhost:5173", "http://localhost:3000"]
-    for origin in local_defaults:
-        if origin not in origins:
-            origins.append(origin)
+    for default in ["http://localhost:5173", "http://localhost:3000"]:
+        if default not in origins:
+            origins.append(default)
     return origins
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB and optionally warm up semantic index."""
     logger.info("=== Event Intelligence Agent starting up ===")
 
-    # 1. Init database tables
+    # Init all DB tables (events + company_profiles)
     await init_db()
 
-    # 2. Seed curated events if DB is empty
+    # Seed if DB is empty
     from db.database import AsyncSessionLocal
     from db.crud import count_events
     async with AsyncSessionLocal() as db:
@@ -48,11 +46,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.info(f"DB has {total} events.")
 
+    # Optional: warm up semantic index
     if settings.enable_semantic_search and settings.preload_index_on_startup:
         from db.database import AsyncSessionLocal
         from db.crud import get_all_events
         from relevance.embedder import load_index, add_events_to_index, get_index
-
         load_index()
         idx = get_index()
         if idx.ntotal == 0:
@@ -62,17 +60,15 @@ async def lifespan(app: FastAPI):
                 add_events_to_index(events)
                 logger.info(f"FAISS rebuilt: {idx.ntotal} vectors.")
 
-    logger.info("=== Startup complete. Ready. ===")
+    logger.info("=== Startup complete ===")
     yield
 
-    # Shutdown
     if settings.enable_semantic_search:
         from relevance.embedder import save_index
         save_index()
     logger.info("=== Shutdown complete ===")
 
 
-# ─── Create app ───────────────────────────────────────────────────
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -82,7 +78,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ─── CORS ─────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
@@ -91,7 +86,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Routes ───────────────────────────────────────────────────────
 app.include_router(events_router, prefix="/api", tags=["events"])
 
 
@@ -110,7 +104,6 @@ async def health():
     return {"status": "ok", "version": settings.app_version}
 
 
-# ─── Global exception handler ─────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}")
