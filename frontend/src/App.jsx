@@ -5,7 +5,7 @@ import ICPForm from './components/ICPForm'
 import EventTable from './components/EventTable'
 import { api } from './api/client'
 import { Zap, Globe, Brain, TrendingUp, ChevronRight, Sparkles } from 'lucide-react'
-
+import './App.css'
 /* ── Stats counter animation ───────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
   const [display, setDisplay] = useState(0)
