@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, X, Zap, ChevronDown, ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 const INDUSTRY_OPTIONS = [
@@ -125,6 +125,15 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
   })
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [step, setStep] = useState(0)
+
+  useEffect(() => {
+    if (!companyData) return
+    setForm(prev => ({
+      ...prev,
+      company_name: companyData.company_name || prev.company_name,
+      company_description: companyData.what_we_do || prev.company_description,
+    }))
+  }, [companyData])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

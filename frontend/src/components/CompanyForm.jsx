@@ -17,7 +17,7 @@ const NEED_PRESETS = [
 ]
 
 export default function CompanyForm({ onSave, saved }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [form, setForm] = useState(DEFAULT)
   const [deckFile, setDeckFile] = useState(null)
   const [dragging, setDragging] = useState(false)
@@ -36,7 +36,15 @@ export default function CompanyForm({ onSave, saved }) {
 
   const handleSave = async () => {
     setSaving(true)
-    try { await onSave(form, deckFile) } finally { setSaving(false) }
+    try {
+      const payload = {
+        ...form,
+        founded_year: form.founded_year ? parseInt(form.founded_year, 10) : null,
+      }
+      await onSave(payload, deckFile)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const allEmpty = !form.company_name && !form.location && !form.what_we_do && !deckFile
@@ -80,7 +88,7 @@ export default function CompanyForm({ onSave, saved }) {
         </div>}
 
         {step === 2 && <div className="wizard-pane slide-in">
-          <div className="deck-upload" onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0])}} onClick={()=>fileRef.current?.click()}>
+          <div className={`deck-upload ${dragging ? 'drag' : ''}`} onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0])}} onClick={()=>fileRef.current?.click()}>
             <input ref={fileRef} type="file" accept=".pdf" onChange={e=>handleFile(e.target.files[0])} style={{ display: 'none' }} />
             <div className="deck-upload-icon">{deckFile ? <FileText size={24} style={{ color: 'var(--accent)' }} /> : <Upload size={24} style={{ color: 'var(--text-dim)' }} />}</div>
             <div className="deck-upload-text">{deckFile ? deckFile.name : 'Drop PDF here or click to upload'}</div>
