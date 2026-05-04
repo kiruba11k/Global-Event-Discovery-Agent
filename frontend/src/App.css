@@ -374,7 +374,7 @@ select option { background: var(--bg-card); }
 /* ── Table ───────────────────────────────────────────────── */
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table thead tr {
-  background: linear-gradient(135deg, #0a1628, #0d1f3a);
+  background: linear-gradient(135deg, #e6eefb, #dbe8ff);
   border-bottom: 1px solid #d9e2ec;
 }
 .data-table th {
@@ -416,7 +416,7 @@ select option { background: var(--bg-card); }
 .score-pct { font-size: 10px; color: var(--text-dim); }
 
 /* ── Expand row ──────────────────────────────────────────── */
-.expand-row td { padding: 0; border-bottom: 1px solid #d9e2ec; background: #dfe5f2; }
+.expand-row td { padding: 0; border-bottom: 1px solid #d9e2ec; background: #edf3ff; }
 .expand-inner { padding: 24px 28px; animation: expandIn 0.2s ease; }
 @keyframes expandIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .expand-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
