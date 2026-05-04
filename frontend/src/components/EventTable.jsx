@@ -1,152 +1,197 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone } from 'lucide-react'
 
-const VERDICT_CLASS = {
-  GO: 'verdict-go',
-  CONSIDER: 'verdict-consider',
-  SKIP: 'verdict-skip',
+/* ── ROI calculator ─────────────────────────────────────── */
+function calcROI(attendees) {
+  const n = parseInt(attendees) || 0
+  if (n >= 5000) return { tier: 'Large Event', meetings: 25, minL: 4, maxL: 6 }
+  if (n >= 3000) return { tier: 'Mid-Large Event', meetings: '15–20', minL: 3.2, maxL: 4.8 }
+  if (n >= 1000) return { tier: 'Mid Event', meetings: '10–15', minL: 2.4, maxL: 3.6 }
+  if (n > 0)     return { tier: 'Boutique Event', meetings: '5–10', minL: 1.6, maxL: 2.4 }
+  return null
 }
 
-const VERDICT_BG = {
-  GO: 'bg-green-50',
-  CONSIDER: 'bg-amber-50',
-  SKIP: 'bg-red-50',
-}
+function ROICard({ attendees, eventName }) {
+  const roi = calcROI(attendees)
+  if (!roi) return null
 
-function ScoreBar({ score }) {
-  const pct = Math.round(score * 100)
-  const color = pct >= 68 ? 'bg-green-500' : pct >= 42 ? 'bg-amber-400' : 'bg-red-400'
+  const fmt = (v) => `₹${v}L`
+
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
+    <div className="roi-card">
+      <div className="roi-header">
+        <div className="roi-title">
+          {roi.icon} ROI Potential — {roi.tier}
+        </div>
+        <a
+          href="https://leadstrategus.com/contact/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="roi-cta"
+        >
+          <Phone size={11} />
+          Schedule Strategy Call
+        </a>
       </div>
-      <span className="text-xs text-slate-500">{pct}%</span>
+
+      <div className="roi-grid">
+        <div className="roi-metric">
+          <div className="roi-value">{attendees?.toLocaleString() || '—'}</div>
+          <div className="roi-metric-label">Est. Attendees</div>
+        </div>
+        <div className="roi-metric">
+          <div className="roi-value">{roi.meetings}</div>
+          <div className="roi-metric-label">Meetings Achievable</div>
+        </div>
+        <div className="roi-metric">
+          <div className="roi-value">{fmt(roi.minL)}–{fmt(roi.maxL)}</div>
+          <div className="roi-metric-label">LeadStrategus Engagement</div>
+        </div>
+      </div>
+
+      <div className="roi-note">
+        * LeadStrategus executes pre-event outreach, booth presence coordination, and post-event follow-up
+        to maximise your pipeline at {eventName || 'this event'}. Pricing in INR. Contact us to customise.
+      </div>
     </div>
   )
 }
 
-function Link({ href, text }) {
-  if (!href) return <span className="text-slate-400 text-xs">—</span>
+/* ── Score bar ──────────────────────────────────────────── */
+function ScoreBar({ score }) {
+  const pct = Math.round((score || 0) * 100)
+  const color = pct >= 68 ? '#10b981' : pct >= 42 ? '#f59e0b' : '#f43f5e'
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-brand-500 hover:text-brand-700 text-xs underline"
-    >
-      {text || 'Link'} <ExternalLink size={10} />
+    <div className="score-bar">
+      <div className="score-track">
+        <div className="score-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="score-pct">{pct}%</span>
+    </div>
+  )
+}
+
+/* ── Link ───────────────────────────────────────────────── */
+function ELink({ href, text }) {
+  if (!href) return <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="expand-link">
+      {text} <ExternalLink size={10} />
     </a>
   )
 }
 
+/* ── Verdict badge ──────────────────────────────────────── */
+function Verdict({ v }) {
+  const cls = { GO: 'verdict-go', CONSIDER: 'verdict-consider', SKIP: 'verdict-skip' }
+  const dot = { GO: '●', CONSIDER: '◆', SKIP: '○' }
+  return (
+    <span className={`verdict-badge ${cls[v] || ''}`}>
+      <span>{dot[v] || '○'}</span>
+      {v}
+    </span>
+  )
+}
+
+/* ── Event row ──────────────────────────────────────────── */
 function EventRow({ event, index }) {
-  const [expanded, setExpanded] = useState(false)
+  const [open, setOpen] = useState(false)
+  const isGo = event.fit_verdict === 'GO'
+  const industries = (event.industry || '').split(',').filter(Boolean)
+  const personas = (event.buyer_persona || '').split(',').filter(Boolean)
 
   return (
     <>
-      {/* Main row */}
       <tr
-        className={`border-b border-slate-100 hover:bg-brand-50 transition-colors cursor-pointer ${
-          VERDICT_BG[event.fit_verdict] || ''
-        }`}
-        onClick={() => setExpanded((x) => !x)}
+        className={`${open ? 'expanded' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        style={{ animationDelay: `${index * 30}ms` }}
       >
-        {/* # */}
-        <td className="px-3 py-3 text-center text-xs text-slate-400 font-mono">{index + 1}</td>
-
-        {/* Event Name */}
-        <td className="px-3 py-3">
-          <div className="font-semibold text-slate-800 text-sm leading-tight">{event.event_name}</div>
-          <div className="text-xs text-slate-500 mt-0.5">{event.source_platform}</div>
+        <td style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, fontFamily: 'monospace' }}>
+          {index + 1}
         </td>
-
-        {/* Date */}
-        <td className="px-3 py-3 text-xs text-slate-700 whitespace-nowrap">{event.date}</td>
-
-        {/* Place */}
-        <td className="px-3 py-3 text-xs text-slate-700">{event.place}</td>
-
-        {/* Industry */}
-        <td className="px-3 py-3">
-          <div className="flex flex-wrap gap-1">
-            {(event.industry || '').split(',').slice(0, 3).map((tag, i) => (
-              <span key={i} className="bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded">
-                {tag.trim()}
-              </span>
+        <td>
+          <div className="event-name">{event.event_name}</div>
+          <div className="event-source">{event.source_platform}</div>
+        </td>
+        <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{event.date}</td>
+        <td style={{ fontSize: 11 }}>{event.place}</td>
+        <td>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {industries.slice(0, 3).map((t, i) => (
+              <span key={i} className="industry-tag">{t.trim()}</span>
             ))}
           </div>
         </td>
-
-        {/* Pricing */}
-        <td className="px-3 py-3 text-xs text-slate-700">{event.pricing || '—'}</td>
-
-        {/* Verdict */}
-        <td className="px-3 py-3 text-center">
-          <span className={VERDICT_CLASS[event.fit_verdict] || 'text-xs'}>{event.fit_verdict}</span>
+        <td style={{ fontSize: 11 }}>{event.pricing || '—'}</td>
+        <td style={{ textAlign: 'center' }}>
+          <Verdict v={event.fit_verdict} />
         </td>
-
-        {/* Score */}
-        <td className="px-3 py-3">
-          <ScoreBar score={event.relevance_score} />
-        </td>
-
-        {/* Expand */}
-        <td className="px-3 py-3 text-center text-slate-400">
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <td><ScoreBar score={event.relevance_score} /></td>
+        <td style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
+          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </td>
       </tr>
 
-      {/* Expanded detail row */}
-      {expanded && (
-        <tr className="bg-slate-50">
-          <td colSpan={9} className="px-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              {/* What it's about */}
-              <div>
-                <div className="font-semibold text-slate-700 mb-1 text-xs uppercase tracking-wide">What It's About</div>
-                <p className="text-slate-600 text-xs leading-relaxed">{event.what_its_about || '—'}</p>
-              </div>
-
-              {/* Key Numbers */}
-              <div>
-                <div className="font-semibold text-slate-700 mb-1 text-xs uppercase tracking-wide">Key Numbers</div>
-                <p className="text-slate-600 text-xs">{event.key_numbers || '—'}</p>
-              </div>
-
-              {/* Buyer Persona */}
-              <div>
-                <div className="font-semibold text-slate-700 mb-1 text-xs uppercase tracking-wide">Buyer Personas</div>
-                <div className="flex flex-wrap gap-1">
-                  {(event.buyer_persona || '').split(',').map((p, i) => (
-                    <span key={i} className="bg-brand-100 text-brand-700 text-xs px-1.5 py-0.5 rounded">
-                      {p.trim()}
-                    </span>
-                  ))}
+      {open && (
+        <tr className="expand-row">
+          <td colSpan={9}>
+            <div className="expand-inner">
+              <div className="expand-grid">
+                {/* Summary */}
+                <div>
+                  <div className="expand-block-label">What It's About</div>
+                  <div className="expand-block-text">{event.what_its_about || '—'}</div>
                 </div>
-              </div>
 
-              {/* Verdict Notes */}
-              <div className="md:col-span-2">
-                <div className="font-semibold text-slate-700 mb-1 text-xs uppercase tracking-wide">
-                  AI Rationale
-                </div>
-                <p className="text-slate-600 text-xs leading-relaxed italic">"{event.verdict_notes}"</p>
-              </div>
-
-              {/* Links */}
-              <div>
-                <div className="font-semibold text-slate-700 mb-1 text-xs uppercase tracking-wide">Links</div>
-                <div className="space-y-1">
-                  <div><Link href={event.event_link} text="Register / Event Page" /></div>
-                  {event.speakers_link && <div><Link href={event.speakers_link} text="Speakers" /></div>}
-                  {event.agenda_link && <div><Link href={event.agenda_link} text="Agenda" /></div>}
-                  {event.pricing_link && <div><Link href={event.pricing_link} text="Pricing" /></div>}
-                </div>
-                {event.sponsors && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    <span className="font-medium">Sponsors:</span> {event.sponsors}
+                {/* Key Numbers */}
+                <div>
+                  <div className="expand-block-label">Key Numbers</div>
+                  <div className="expand-block-text" style={{ color: 'var(--accent)' }}>
+                    {event.key_numbers || '—'}
                   </div>
+                </div>
+
+                {/* Personas */}
+                <div>
+                  <div className="expand-block-label">Buyer Personas</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {personas.map((p, i) => (
+                      <span key={i} className="persona-chip">{p.trim()}</span>
+                    ))}
+                    {personas.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>}
+                  </div>
+                </div>
+
+                {/* Links */}
+                <div>
+                  <div className="expand-block-label">Links</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <ELink href={event.event_link} text="Register / Event Page" />
+                    {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
+                    {event.agenda_link && <ELink href={event.agenda_link} text="Agenda" />}
+                    {event.pricing_link && event.pricing_link !== event.event_link && (
+                      <ELink href={event.pricing_link} text="Pricing" />
+                    )}
+                  </div>
+                  {event.sponsors && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+                      <span style={{ fontWeight: 600 }}>Sponsors: </span>{event.sponsors}
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Rationale */}
+                <div className="ai-rationale">
+                  <div className="expand-block-label" style={{ marginBottom: 6 }}>
+                    🤖 AI Relevance Analysis
+                  </div>
+                  <div className="ai-rationale-text">"{event.verdict_notes}"</div>
+                </div>
+
+                {/* ROI Card */}
+                {event.est_attendees > 0 && (
+                  <ROICard attendees={event.est_attendees} eventName={event.event_name} />
                 )}
               </div>
             </div>
@@ -157,113 +202,92 @@ function EventRow({ event, index }) {
   )
 }
 
-export default function EventTable({ events, profileId, onExport }) {
+/* ── Main table ─────────────────────────────────────────── */
+export default function EventTable({ events }) {
   const [filter, setFilter] = useState('ALL')
   const [sort, setSort] = useState({ key: 'relevance_score', dir: 'desc' })
 
-  const verdictOrder = { GO: 0, CONSIDER: 1, SKIP: 2 }
-
-  const filtered = events.filter(
-    (e) => filter === 'ALL' || e.fit_verdict === filter
-  )
-
+  const VERDICT_ORDER = { GO: 0, CONSIDER: 1, SKIP: 2 }
+  const filtered = events.filter(e => filter === 'ALL' || e.fit_verdict === filter)
   const sorted = [...filtered].sort((a, b) => {
-    let av = a[sort.key]
-    let bv = b[sort.key]
-    if (sort.key === 'fit_verdict') {
-      av = verdictOrder[av] ?? 3
-      bv = verdictOrder[bv] ?? 3
-    }
+    let av = a[sort.key], bv = b[sort.key]
+    if (sort.key === 'fit_verdict') { av = VERDICT_ORDER[av] ?? 3; bv = VERDICT_ORDER[bv] ?? 3 }
     return sort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
   })
 
-  const toggleSort = (key) => {
-    setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
-  }
+  const toggleSort = (key) =>
+    setSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
 
   const counts = {
     ALL: events.length,
-    GO: events.filter((e) => e.fit_verdict === 'GO').length,
-    CONSIDER: events.filter((e) => e.fit_verdict === 'CONSIDER').length,
-    SKIP: events.filter((e) => e.fit_verdict === 'SKIP').length,
+    GO: events.filter(e => e.fit_verdict === 'GO').length,
+    CONSIDER: events.filter(e => e.fit_verdict === 'CONSIDER').length,
+    SKIP: events.filter(e => e.fit_verdict === 'SKIP').length,
   }
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-        <div>
-          <h2 className="text-base font-bold text-slate-800">
-            {events.length} Events Found
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Click any row to expand details. Sorted by relevance.</p>
-        </div>
+  const filterConfig = [
+    { key: 'ALL', cls: '' },
+    { key: 'GO', cls: 'active-go' },
+    { key: 'CONSIDER', cls: 'active-consider' },
+    { key: 'SKIP', cls: 'active-skip' },
+  ]
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Filter tabs */}
-          {['ALL', 'GO', 'CONSIDER', 'SKIP'].map((v) => (
+  const COLS = [
+    { label: '#', key: null, center: true, width: 40 },
+    { label: 'Event', key: 'event_name' },
+    { label: 'Date', key: 'date' },
+    { label: 'Location', key: null },
+    { label: 'Industry', key: null },
+    { label: 'Pricing', key: null },
+    { label: 'Verdict', key: 'fit_verdict', center: true },
+    { label: 'Score', key: 'relevance_score' },
+    { label: '', key: null, width: 30 },
+  ]
+
+  return (
+    <div className="table-wrapper">
+      {/* Filter bar */}
+      <div className="table-filters">
+        <div className="filter-tabs">
+          {filterConfig.map(({ key, cls }) => (
             <button
-              key={v}
-              onClick={() => setFilter(v)}
-              className={`text-xs font-semibold px-3 py-1 rounded-full transition-colors ${
-                filter === v
-                  ? v === 'ALL'
-                    ? 'bg-brand-700 text-white'
-                    : v === 'GO'
-                    ? 'bg-green-600 text-white'
-                    : v === 'CONSIDER'
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-red-500 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`filter-tab ${filter === key ? (cls || 'active') : ''}`}
             >
-              {v} ({counts[v]})
+              {key} <span style={{ opacity: 0.6, marginLeft: 3 }}>({counts[key]})</span>
             </button>
           ))}
-
-          {/* Export */}
-          {profileId && (
-            <button
-              onClick={onExport}
-              className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition-colors"
-            >
-              ↓ Export CSV
-            </button>
-          )}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+          Click any row to see ROI analysis & AI rationale
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
+      <div className="table-scroll">
+        <table className="data-table">
           <thead>
-            <tr className="bg-brand-700 text-white text-xs">
-              <th className="px-3 py-3 text-center w-8">#</th>
-              <th className="px-3 py-3 cursor-pointer" onClick={() => toggleSort('event_name')}>
-                <div className="flex items-center gap-1">Event Name <ArrowUpDown size={10} /></div>
-              </th>
-              <th className="px-3 py-3 cursor-pointer whitespace-nowrap" onClick={() => toggleSort('date')}>
-                <div className="flex items-center gap-1">Date <ArrowUpDown size={10} /></div>
-              </th>
-              <th className="px-3 py-3">Location</th>
-              <th className="px-3 py-3">Industry</th>
-              <th className="px-3 py-3">Pricing</th>
-              <th className="px-3 py-3 text-center cursor-pointer" onClick={() => toggleSort('fit_verdict')}>
-                <div className="flex items-center justify-center gap-1">Verdict <ArrowUpDown size={10} /></div>
-              </th>
-              <th className="px-3 py-3 cursor-pointer" onClick={() => toggleSort('relevance_score')}>
-                <div className="flex items-center gap-1">Score <ArrowUpDown size={10} /></div>
-              </th>
-              <th className="px-3 py-3 w-6"></th>
+            <tr>
+              {COLS.map((col, i) => (
+                <th
+                  key={i}
+                  onClick={() => col.key && toggleSort(col.key)}
+                  style={{ width: col.width, textAlign: col.center ? 'center' : 'left', cursor: col.key ? 'pointer' : 'default' }}
+                >
+                  {col.key ? (
+                    <div className="th-inner" style={{ justifyContent: col.center ? 'center' : 'flex-start' }}>
+                      {col.label}
+                      {col.key && <ArrowUpDown size={9} style={{ opacity: 0.5 }} />}
+                    </div>
+                  ) : col.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-6 py-10 text-center text-slate-400 text-sm">
-                  No events match the current filter.
-                </td>
-              </tr>
+              <tr><td colSpan={9} className="empty-state">No events match this filter.</td></tr>
             ) : (
               sorted.map((event, i) => (
                 <EventRow key={event.id} event={event} index={i} />
@@ -272,6 +296,30 @@ export default function EventTable({ events, profileId, onExport }) {
           </tbody>
         </table>
       </div>
+
+      {/* Bottom CTA */}
+      {events.length > 0 && (
+        <div style={{
+          padding: '14px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: 'wrap', gap: 10
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
+            {counts.GO} strong matches found · ROI available for {events.filter(e => e.est_attendees > 0).length} events
+          </div>
+          <a
+            href="https://leadstrategus.com/contact/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="roi-cta"
+            style={{ fontSize: 11 }}
+          >
+            <Phone size={10} />
+            Get Strategy Consultation
+          </a>
+        </div>
+      )}
     </div>
   )
 }
