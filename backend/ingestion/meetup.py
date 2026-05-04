@@ -1,6 +1,5 @@
 """
 Meetup GraphQL API — free, no key required for public events
-Endpoint: api.meetup.com/gql
 """
 import httpx
 from typing import List
@@ -28,6 +27,18 @@ CITIES = [
     ("Kuala Lumpur", "MY"),
 ]
 
+CITY_COORDS = {
+    "Singapore":    (1.3521, 103.8198),
+    "Mumbai":       (19.0760, 72.8777),
+    "Bangalore":    (12.9716, 77.5946),
+    "New York":     (40.7128, -74.0060),
+    "London":       (51.5074, -0.1278),
+    "Sydney":       (-33.8688, 151.2093),
+    "Dubai":        (25.2048, 55.2708),
+    "Berlin":       (52.5200, 13.4050),
+    "Kuala Lumpur": (3.1390, 101.6869),
+}
+
 QUERY = """
 query($query: String!, $lat: Float!, $lon: Float!) {
   keywordSearch(
@@ -38,24 +49,9 @@ query($query: String!, $lat: Float!, $lon: Float!) {
       node {
         result {
           ... on Event {
-            id
-            title
-            dateTime
-            endTime
-            description
-            eventUrl
-            going
-            isOnline
-            venue {
-              name
-              address
-              city
-              country
-            }
-            group {
-              name
-              topics { name }
-            }
+            id title dateTime endTime description eventUrl going isOnline
+            venue { name address city country }
+            group { name topics { name } }
           }
         }
       }
@@ -63,18 +59,6 @@ query($query: String!, $lat: Float!, $lon: Float!) {
   }
 }
 """
-
-CITY_COORDS = {
-    "Singapore":     (1.3521, 103.8198),
-    "Mumbai":        (19.0760, 72.8777),
-    "Bangalore":     (12.9716, 77.5946),
-    "New York":      (40.7128, -74.0060),
-    "London":        (51.5074, -0.1278),
-    "Sydney":        (-33.8688, 151.2093),
-    "Dubai":         (25.2048, 55.2708),
-    "Berlin":        (52.5200, 13.4050),
-    "Kuala Lumpur":  (3.1390, 101.6869),
-}
 
 
 class MeetupConnector(BaseConnector):
@@ -121,7 +105,6 @@ class MeetupConnector(BaseConnector):
                         group = node.get("group") or {}
                         topics_raw = [t.get("name", "") for t in group.get("topics", [])]
                         industry_tags = ",".join(topics_raw[:5]).lower()
-
                         going = self.safe_int(node.get("going", 0))
                         is_online = node.get("isOnline", False)
 
