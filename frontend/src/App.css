@@ -533,3 +533,12 @@ select option { background: var(--bg-card); }
   .wizard-actions { flex-direction: column; }
   .wizard-actions button { width: 100%; }
 }
+
+
+.dropdown-selector { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; background: var(--bg-card-2); }
+.dropdown-toggle { width: 100%; background: transparent; border: none; display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer; color: var(--text-sub); }
+.dropdown-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.dropdown-panel { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.checkbox-pills .tag-pill { display: inline-flex; align-items: center; gap: 5px; }
+.company-form-grid-inner { grid-template-columns: 1fr 1fr; }
+@media (max-width: 640px) { .company-form-grid-inner { grid-template-columns: 1fr; } }
