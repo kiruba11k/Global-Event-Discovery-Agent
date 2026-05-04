@@ -1,12 +1,14 @@
+"""
+Event models — updated RankedEvent to include est_attendees for ROI calculator.
+"""
 from __future__ import annotations
-from datetime import datetime, date
-from typing import Optional, List
-from pydantic import BaseModel, HttpUrl, field_validator
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel
 from sqlalchemy import Column, String, Float, Integer, Boolean, Text, DateTime
 from sqlalchemy.orm import DeclarativeBase
 
 
-# ─── SQLAlchemy ORM ───────────────────────────────────────────────
 class Base(DeclarativeBase):
     pass
 
@@ -14,25 +16,22 @@ class Base(DeclarativeBase):
 class EventORM(Base):
     __tablename__ = "events"
 
-    id               = Column(String, primary_key=True)          # UUID
+    id               = Column(String, primary_key=True)
     source_platform  = Column(String, nullable=False)
     source_url       = Column(String, nullable=False)
     dedup_hash       = Column(String, unique=True, index=True)
 
-    # Basic
     name             = Column(String, nullable=False, index=True)
     description      = Column(Text, default="")
     short_summary    = Column(Text, default="")
     edition_number   = Column(String, default="")
 
-    # Temporal
     start_date       = Column(String, nullable=False, index=True)
     end_date         = Column(String, default="")
     duration_days    = Column(Integer, default=1)
     timezone         = Column(String, default="UTC")
     is_annual        = Column(Boolean, default=False)
 
-    # Location
     venue_name       = Column(String, default="")
     address          = Column(String, default="")
     city             = Column(String, default="", index=True)
@@ -42,19 +41,16 @@ class EventORM(Base):
     is_virtual       = Column(Boolean, default=False)
     is_hybrid        = Column(Boolean, default=False)
 
-    # Scale
     est_attendees    = Column(Integer, default=0)
     est_buyer_orgs   = Column(Integer, default=0)
     vip_count        = Column(Integer, default=0)
     exhibitor_count  = Column(Integer, default=0)
     speaker_count    = Column(Integer, default=0)
 
-    # Classification
-    category         = Column(String, default="")          # tech/health/finance/etc
-    industry_tags    = Column(Text, default="")            # comma-separated
-    audience_personas = Column(Text, default="")           # comma-separated
+    category         = Column(String, default="")
+    industry_tags    = Column(Text, default="")
+    audience_personas = Column(Text, default="")
 
-    # Commercial
     ticket_price_usd      = Column(Float, default=0.0)
     price_description     = Column(String, default="")
     registration_url      = Column(String, default="")
@@ -62,20 +58,15 @@ class EventORM(Base):
     speakers_url          = Column(String, default="")
     agenda_url            = Column(String, default="")
 
-    # Relevance (filled per-query)
     relevance_score  = Column(Float, default=0.0)
-    relevance_tier   = Column(String, default="")          # GO/CONSIDER/SKIP
+    relevance_tier   = Column(String, default="")
     rationale        = Column(Text, default="")
 
-    # Provenance
     ingested_at      = Column(DateTime, default=datetime.utcnow)
     last_verified_at = Column(DateTime, default=datetime.utcnow)
     confidence_score = Column(Float, default=0.8)
 
-    # Vector embedding stored externally in FAISS; index key = id
 
-
-# ─── Pydantic read/write models ───────────────────────────────────
 class EventBase(BaseModel):
     name: str
     description: str = ""
@@ -121,7 +112,7 @@ class EventRead(EventBase):
 
 
 class RankedEvent(BaseModel):
-    """What the API returns to the frontend — matches the sample output columns."""
+    """What the API returns to the frontend."""
     id: str
     event_name: str
     date: str
@@ -140,3 +131,4 @@ class RankedEvent(BaseModel):
     agenda_link: str
     relevance_score: float
     source_platform: str
+    est_attendees: int = 0              # ← used by frontend ROI calculator
