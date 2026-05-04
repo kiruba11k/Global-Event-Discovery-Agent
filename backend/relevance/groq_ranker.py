@@ -1,14 +1,6 @@
 """
-Groq LLM Ranker v2 — dynamic prompt, cross-validation agent, grounded rationale.
-
-Anti-hallucination layers:
-  L1 — system prompt with field-citation requirement
-  L2 — Pydantic schema validation of LLM output
-  L3 — cross-validation agent flags fabricated data
-  L4 — rule-based fallback when Groq unavailable or fails
-
-Dynamic prompt: company context + deck text + pre-computed match signals
-  so the LLM explains WHY, using the actual data it received.
+Groq LLM Ranker v3 — plain-language business rationale.
+No field-name citations in output. Reads like a sales analyst wrote it.
 """
 import json
 import asyncio
@@ -57,10 +49,9 @@ class ValidationResponse(BaseModel):
     validations: List[ValidationResult]
 
 
-# ── Groq client singleton ──────────────────────────────────────────
+# ── Groq singleton ─────────────────────────────────────────────────
 
 _groq_client: Optional[Groq] = None
-
 
 def get_groq_client() -> Optional[Groq]:
     global _groq_client
@@ -71,16 +62,9 @@ def get_groq_client() -> Optional[Groq]:
     return _groq_client
 
 
-# ── Dynamic system prompt builder ─────────────────────────────────
+# ── System prompt ──────────────────────────────────────────────────
 
-def _build_system_prompt(
-    profile: ICPProfile,
-    company_ctx: Optional[CompanyContext],
-) -> str:
-    """
-    Build a rich, data-driven system prompt.
-    Injects company context + deck text so the LLM has maximum signal.
-    """
+def _build_system_prompt(profile: ICPProfile, company_ctx: Optional[CompanyContext]) -> str:
     company_block = ""
     if company_ctx:
         parts = []
@@ -91,76 +75,84 @@ def _build_system_prompt(
         if company_ctx.founded_year:
             parts.append(f"Founded: {company_ctx.founded_year}")
         if company_ctx.what_we_do:
-            parts.append(f"What they do/sell:\n{company_ctx.what_we_do[:600]}")
+            parts.append(f"What they sell/do: {company_ctx.what_we_do[:500]}")
         if company_ctx.what_we_need:
-            parts.append(f"What they need from events:\n{company_ctx.what_we_need[:500]}")
+            parts.append(f"What they need from events: {company_ctx.what_we_need[:400]}")
         if company_ctx.deck_text:
-            parts.append(
-                f"Context extracted from their company deck (use this for deeper matching):\n"
-                f"{company_ctx.deck_text[:2000]}"
-            )
+            parts.append(f"From their pitch deck:\n{company_ctx.deck_text[:1800]}")
         if parts:
-            company_block = "\n\nEXTENDED COMPANY CONTEXT:\n" + "\n".join(parts)
+            company_block = "\n\nCOMPANY CONTEXT:\n" + "\n".join(parts)
 
-    # Stringify profile for reference in prompt
-    icp_summary = (
-        f"  target_industries: {profile.target_industries}\n"
-        f"  target_personas: {profile.target_personas}\n"
-        f"  target_geographies: {profile.target_geographies}\n"
-        f"  preferred_event_types: {profile.preferred_event_types}\n"
-        f"  company_description: {profile.company_description[:300]}"
+    icp_block = (
+        f"  Sells to industries: {', '.join(profile.target_industries)}\n"
+        f"  Targets these buyer roles: {', '.join(profile.target_personas)}\n"
+        f"  Focus geographies: {', '.join(profile.target_geographies)}\n"
+        f"  Preferred event formats: {', '.join(profile.preferred_event_types)}\n"
+        f"  What the company does: {profile.company_description[:300]}"
     )
 
-    return f"""You are EventRanker, an elite B2B sales event analyst for LeadStrategus.
-Your job: determine whether each event is worth attending for sales pipeline generation.
+    return f"""You are an expert B2B sales strategist writing event recommendations for a sales team.
 
-ICP PROFILE SUMMARY:
-{icp_summary}
+YOUR CLIENT'S ICP (Ideal Customer Profile):
+{icp_block}
 {company_block}
 
-VERDICT DEFINITIONS — use these precisely:
-  GO      = event.industry_tags OR event.audience_personas clearly match ≥1 profile signal
-             AND geography is acceptable (or event is virtual/global)
-             → Recommend attending. Strong pipeline potential.
-  CONSIDER = some ICP overlap but missing 1-2 key signals (e.g. right industry, wrong geo)
-             OR signals are indirect (related field, adjacent persona)
-             → Worth evaluating. Validate before committing budget.
-  SKIP    = no meaningful overlap between event data and ICP
-             (completely different industry, wrong audience, irrelevant geography)
-             → Not worth pursuing for this ICP.
+YOUR JOB: For each event, write a verdict (GO / CONSIDER / SKIP) and a plain-English explanation
+that a salesperson or business executive can immediately understand.
 
-ABSOLUTE RULES:
-1. Use ONLY data from the JSON provided. Never invent speaker names, sponsors, prices, or dates.
-2. If a field is missing/null in event data → say "not specified", never guess.
-3. Output ONLY valid JSON with key "ranked_events". Zero prose outside JSON.
-4. verdict_notes MUST cite specific event field names and actual values:
-     CORRECT: "event.industry_tags ('fintech,payments') directly matches profile.target_industries"
-     WRONG:   "This is a great networking opportunity" (no field citation = REJECT, use CONSIDER)
-5. Be generous with GO for events with even 1 clear industry OR persona match.
-   Only SKIP if there is genuinely no overlap at all.
-6. verdict_notes: 2-3 sentences. Specific field citations. No vague praise.
-7. key_numbers: use ONLY integers from event.est_attendees, event.vip_count, event.speaker_count.
-8. If company deck context was provided, incorporate those insights into your rationale.
-   e.g. if the deck says they sell supply chain software → a logistics expo is a GO.
+VERDICT RULES:
+  GO      = This event clearly attracts the right buyers in the right industry.
+             Strong pipeline potential. Recommend attending.
+  CONSIDER = Some overlap with target buyers or industry, but not a perfect fit.
+             Worth evaluating further before committing budget.
+  SKIP    = The event audience, industry, or location doesn't match the ICP.
+             Not worth the investment for this sales motion.
+
+WRITING RULES FOR verdict_notes (CRITICAL):
+  ✅ Write like a smart sales analyst talking to a colleague.
+  ✅ Mention specific industries, job titles, and locations from the event data.
+  ✅ Explain WHY it's relevant (or not) in terms of sales opportunity.
+  ✅ Be concrete: name the audience, the industry, why it matters for pipeline.
+  ❌ NEVER mention code, field names, or technical terms like "event.industry_tags",
+     "profile.target_personas", "ICP", "data fields", "metadata", etc.
+  ❌ NEVER say "the event's industry tags match the profile". That's developer speak.
+  ❌ NEVER be generic ("great networking opportunity"). Be specific to this event.
+
+EXAMPLES OF GOOD verdict_notes:
+  GO:      "This is Singapore's largest fintech festival drawing 65,000 attendees including
+            CFOs, payments heads, and banking leaders — exactly the buyers you're targeting.
+            The conference format gives strong opportunity for structured meetings."
+  CONSIDER:"This retail tech expo attracts CMOs and ecommerce heads which partially overlaps
+            with your target buyers, but the audience skews more consumer brand than
+            enterprise software — worth evaluating if retail is a near-term priority."
+  SKIP:    "This is primarily an academic computer science conference targeting researchers
+            and students, not the enterprise decision-makers you're selling to. The audience
+            won't generate pipeline for your sales motion."
+
+EXAMPLES OF BAD verdict_notes (DO NOT DO THIS):
+  ❌ "The event.industry_tags match profile.target_industries."
+  ❌ "event.audience_personas aligns with the ICP target_personas field."
+  ❌ "This is a good networking event." (too vague)
+
+key_numbers: only include real numbers from the event data (attendee count, VIPs, speakers).
+Output ONLY valid JSON. No text outside the JSON object.
 """
 
 
 # ── Cross-validation agent ─────────────────────────────────────────
 
-VALIDATION_SYSTEM = """You are ValidationAgent, a quality-control AI for event relevance verdicts.
+VALIDATION_SYSTEM = """You are a quality-control reviewer for B2B event recommendations.
 
-Review each verdict and check:
-1. Does the verdict (GO/CONSIDER/SKIP) logically follow from the event data?
-   - GO needs at least 1 clear industry OR persona match
-   - SKIP should only be used when there is genuinely NO overlap
-2. Does verdict_notes cite actual field values from the event data (not invented content)?
-3. Are key_numbers actual integers from the event data (not fabricated)?
-4. Flag any hallucinated data (invented speakers, sponsors, prices not in event data).
+Check each verdict for:
+1. Does the verdict (GO/CONSIDER/SKIP) make logical sense given the event data?
+2. Does the verdict_notes contain any technical field names like "event.industry_tags",
+   "profile.target_personas", "ICP field", etc.? If so, flag hallucination_flag=true.
+3. Is verdict_notes written in plain business English? If it's developer-speak, flag it.
+4. Are key_numbers fabricated (not in event data)? If so, flag hallucination_flag=true.
 
-Be LENIENT with GO verdicts — only correct if the event clearly has zero ICP overlap.
-Correct SKIP → CONSIDER if there's any reasonable industry or persona connection.
+Be lenient on GO vs CONSIDER. Only correct SKIP if the event clearly has some buyer overlap.
 
-Output JSON only:
+Return JSON only:
 {
   "validations": [
     {
@@ -174,10 +166,10 @@ Output JSON only:
 }"""
 
 
-# ── Prompt builders ────────────────────────────────────────────────
+# ── Serialisers ────────────────────────────────────────────────────
 
 def _event_to_dict(event: EventORM, pre_score: float, pre_tier: str, detail: dict) -> dict:
-    """Minimal, DB-verified dict. Includes pre-score and match detail as hints."""
+    """Clean event data for the LLM. Hints included to guide reasoning."""
     return {
         "id": event.id,
         "name": event.name,
@@ -191,41 +183,42 @@ def _event_to_dict(event: EventORM, pre_score: float, pre_tier: str, detail: dic
         "vip_count": getattr(event, "vip_count", 0),
         "speaker_count": getattr(event, "speaker_count", 0),
         "category": event.category,
-        "industry_tags": event.industry_tags,
-        "audience_personas": event.audience_personas,
-        "price_description": event.price_description,
-        # Hints from rule engine (helps LLM calibrate)
-        "_pre_score": pre_score,
-        "_pre_tier": pre_tier,
-        "_rule_industry_matches": detail.get("industry_matched", []),
-        "_rule_persona_matches": detail.get("persona_matched", []),
-        "_rule_geo": detail.get("geo_matched", ""),
+        "industry_focus": event.industry_tags,
+        "typical_attendees": event.audience_personas,
+        "pricing": event.price_description,
+        # Rule engine hints (help LLM calibrate)
+        "pre_relevance_score": pre_score,
+        "pre_tier_suggestion": pre_tier,
+        "rule_matched_industries": detail.get("industry_matched", []),
+        "rule_matched_personas": detail.get("persona_matched", []),
+        "rule_geo_match": detail.get("geo_matched", ""),
     }
 
 
 def _profile_to_dict(profile: ICPProfile) -> dict:
     return {
         "company_name": profile.company_name,
-        "company_description": profile.company_description[:400],
+        "what_we_do": profile.company_description[:400],
         "target_industries": profile.target_industries,
-        "target_personas": profile.target_personas,
-        "target_geographies": profile.target_geographies,
+        "target_buyer_roles": profile.target_personas,
+        "target_locations": profile.target_geographies,
         "preferred_event_types": profile.preferred_event_types,
-        "budget_usd": profile.budget_usd,
+        "max_budget_usd": profile.budget_usd,
         "min_attendees": profile.min_attendees,
     }
 
 
-def _build_ranking_prompt(events_dict: list, profile_dict: dict) -> str:
-    return f"""ICP Profile:
+def _ranking_prompt(events_dict: list, profile_dict: dict) -> str:
+    return f"""CLIENT ICP:
 {json.dumps(profile_dict, indent=2)}
 
-Events to evaluate (pre-scored by rule engine — _pre_tier and _rule_* fields are hints):
+EVENTS TO EVALUATE:
 {json.dumps(events_dict, indent=2)}
 
-For each event, determine GO / CONSIDER / SKIP and explain WHY using exact field names and values.
-When _rule_industry_matches or _rule_persona_matches are non-empty, that is evidence of overlap.
-Only override a _pre_tier of GO/CONSIDER to SKIP if you are certain there is zero ICP relevance.
+The "pre_tier_suggestion" and "rule_matched_*" fields show what the rule engine already found.
+Use these as strong hints — override to SKIP only if you're certain there is zero buyer overlap.
+
+Write verdict_notes in plain sales-analyst language. No technical field names. Be specific.
 
 Return JSON:
 {{
@@ -233,33 +226,16 @@ Return JSON:
     {{
       "id": "<event id>",
       "fit_verdict": "GO|CONSIDER|SKIP",
-      "verdict_notes": "<2-3 sentences citing event field names and values>",
-      "key_numbers": "<attendees/VIPs/speakers from event data only>"
+      "verdict_notes": "<2-3 plain-English sentences a salesperson would understand>",
+      "key_numbers": "<real numbers from event data only>"
     }}
   ]
 }}"""
 
 
-def _build_validation_prompt(events_dict: list, primary_results: list) -> str:
-    return f"""SOURCE EVENT DATA:
-{json.dumps(events_dict, indent=2)}
+# ── LLM call ───────────────────────────────────────────────────────
 
-PRIMARY VERDICTS TO VALIDATE:
-{json.dumps(primary_results, indent=2)}
-
-Check each verdict. Be lenient — only flag clear errors or fabricated data.
-Return validation JSON."""
-
-
-# ── LLM call helper ────────────────────────────────────────────────
-
-async def _call_groq(
-    client: Groq,
-    system: str,
-    user: str,
-    timeout: int,
-    label: str = "groq",
-) -> Optional[str]:
+async def _call_groq(client, system, user, timeout, label="groq") -> Optional[str]:
     try:
         completion = await asyncio.wait_for(
             asyncio.to_thread(
@@ -267,7 +243,7 @@ async def _call_groq(
                 model=settings.groq_model,
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user", "content": user},
+                    {"role": "user",   "content": user},
                 ],
                 temperature=settings.groq_temperature,
                 max_tokens=settings.groq_max_tokens,
@@ -283,8 +259,6 @@ async def _call_groq(
     return None
 
 
-# ── Key number builder ─────────────────────────────────────────────
-
 def _build_key_numbers(event: EventORM) -> str:
     parts = []
     if event.est_attendees:
@@ -296,7 +270,7 @@ def _build_key_numbers(event: EventORM) -> str:
     return "; ".join(parts) if parts else "See event website"
 
 
-# ── Main ranking function ──────────────────────────────────────────
+# ── Main entry ─────────────────────────────────────────────────────
 
 async def rank_with_groq(
     events: List[EventORM],
@@ -306,114 +280,82 @@ async def rank_with_groq(
     pre_details: Dict[str, dict],
     company_ctx: Optional[CompanyContext] = None,
 ) -> List[RankedEvent]:
-    """
-    Two-agent pipeline:
-      Agent 1 — primary ranker with dynamic system prompt + company context
-      Agent 2 — cross-validator flags hallucinations and corrects clear errors
-    Falls back to rule-based rationale if Groq is unavailable.
-    """
     client = get_groq_client()
     groq_results: Dict[str, GroqEventResult] = {}
     hallucinated: set = set()
 
     if client and events:
-        events_dict = [
-            _event_to_dict(e, pre_scores.get(e.id, 0.0), pre_tiers.get(e.id, "SKIP"),
-                           pre_details.get(e.id, {}))
-            for e in events
-        ]
+        events_dict   = [_event_to_dict(e, pre_scores.get(e.id, 0.0),
+                                        pre_tiers.get(e.id, "SKIP"),
+                                        pre_details.get(e.id, {})) for e in events]
         profile_dict  = _profile_to_dict(profile)
         system_prompt = _build_system_prompt(profile, company_ctx)
-        ranking_prompt = _build_ranking_prompt(events_dict, profile_dict)
+        user_prompt   = _ranking_prompt(events_dict, profile_dict)
 
-        # ── Agent 1: Primary ranker ────────────────────────────────
-        raw = await _call_groq(
-            client, system_prompt, ranking_prompt,
-            timeout=settings.groq_timeout_seconds,
-            label="primary-ranker",
-        )
+        # Agent 1 — primary ranker
+        raw = await _call_groq(client, system_prompt, user_prompt,
+                               timeout=settings.groq_timeout_seconds, label="ranker")
         if raw:
             try:
                 parsed = GroqRankingResponse.model_validate_json(raw)
                 for item in parsed.ranked_events:
                     groq_results[item.id] = item
-                logger.info(f"Primary ranker: {len(groq_results)} events ranked.")
+                logger.info(f"Ranker: {len(groq_results)} events ranked.")
             except ValidationError as ve:
-                logger.error(f"Primary ranker schema error: {ve}")
+                logger.error(f"Ranker schema error: {ve}")
 
-        # ── Agent 2: Cross-validator ───────────────────────────────
+        # Agent 2 — cross-validator
         if len(groq_results) >= 3:
             primary_list = [
-                {
-                    "id": r.id,
-                    "fit_verdict": r.fit_verdict,
-                    "verdict_notes": r.verdict_notes,
-                    "key_numbers": r.key_numbers,
-                }
+                {"id": r.id, "fit_verdict": r.fit_verdict,
+                 "verdict_notes": r.verdict_notes, "key_numbers": r.key_numbers}
                 for r in groq_results.values()
             ]
             val_raw = await _call_groq(
-                client,
-                VALIDATION_SYSTEM,
-                _build_validation_prompt(events_dict, primary_list),
+                client, VALIDATION_SYSTEM,
+                f"SOURCE DATA:\n{json.dumps(events_dict, indent=2)}\n\n"
+                f"VERDICTS:\n{json.dumps(primary_list, indent=2)}",
                 timeout=max(10, settings.groq_timeout_seconds // 2),
                 label="validator",
             )
             if val_raw:
                 try:
-                    val_parsed = ValidationResponse.model_validate_json(val_raw)
+                    val = ValidationResponse.model_validate_json(val_raw)
                     corrections = 0
-                    for val in val_parsed.validations:
-                        if val.hallucination_flag:
-                            hallucinated.add(val.id)
-                            logger.warning(f"Hallucination flagged: {val.id} — {val.issue}")
-                        if (not val.verdict_ok
-                                and val.corrected_verdict
-                                and val.id in groq_results):
-                            old = groq_results[val.id].fit_verdict
-                            groq_results[val.id] = GroqEventResult(
-                                id=val.id,
-                                fit_verdict=val.corrected_verdict,
-                                verdict_notes=(
-                                    f"[Corrected: {val.issue}] "
-                                    + groq_results[val.id].verdict_notes
-                                ),
-                                key_numbers=groq_results[val.id].key_numbers,
+                    for v in val.validations:
+                        if v.hallucination_flag:
+                            hallucinated.add(v.id)
+                            logger.warning(f"Flagged: {v.id} — {v.issue}")
+                        if not v.verdict_ok and v.corrected_verdict and v.id in groq_results:
+                            old = groq_results[v.id].fit_verdict
+                            groq_results[v.id] = GroqEventResult(
+                                id=v.id,
+                                fit_verdict=v.corrected_verdict,
+                                verdict_notes=groq_results[v.id].verdict_notes,
+                                key_numbers=groq_results[v.id].key_numbers,
                             )
                             corrections += 1
-                            logger.info(f"Corrected: {val.id} {old}→{val.corrected_verdict}")
-                    logger.info(
-                        f"Validation done: {corrections} corrections, "
-                        f"{len(hallucinated)} hallucinations."
-                    )
-                except ValidationError as ve:
-                    logger.warning(f"Validator schema error: {ve} — skipping")
+                            logger.info(f"Corrected {v.id}: {old}→{v.corrected_verdict}")
+                    logger.info(f"Validation: {corrections} corrections, {len(hallucinated)} flagged.")
                 except Exception as e:
                     logger.warning(f"Validator error: {e}")
-        else:
-            logger.info("Skipping cross-validation (too few Groq results).")
 
-    # ── Assemble final list ────────────────────────────────────────
+    # ── Build output ───────────────────────────────────────────────
     ranked: List[RankedEvent] = []
-
     for event in events:
         score  = pre_scores.get(event.id, 0.0)
         tier   = pre_tiers.get(event.id, "SKIP")
         detail = pre_details.get(event.id, {})
 
-        # Use Groq result unless it hallucinated
         if event.id in groq_results and event.id not in hallucinated:
             gr = groq_results[event.id]
-            verdict  = gr.fit_verdict
+            verdict   = gr.fit_verdict
             rationale = gr.verdict_notes
-            key_nums = gr.key_numbers or _build_key_numbers(event)
+            key_nums  = gr.key_numbers or _build_key_numbers(event)
         else:
-            # Fully dynamic rule-based fallback
-            verdict  = tier
+            verdict   = tier
             rationale = build_fallback_rationale(event, profile, detail, score, tier)
-            key_nums = _build_key_numbers(event)
-            if event.id in hallucinated:
-                rationale = "[Quality-check fallback] " + rationale
+            key_nums  = _build_key_numbers(event)
 
         ranked.append(RankedEvent(
             id=event.id,
@@ -421,8 +363,7 @@ async def rank_with_groq(
             date=(
                 event.start_date
                 + (f" – {event.end_date}"
-                   if event.end_date and event.end_date != event.start_date
-                   else "")
+                   if event.end_date and event.end_date != event.start_date else "")
             ),
             place=", ".join(filter(None, [event.venue_name, event.city, event.country])),
             event_link=event.registration_url or event.source_url or "",
