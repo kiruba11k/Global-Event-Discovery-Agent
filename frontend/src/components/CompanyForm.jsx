@@ -84,7 +84,7 @@ export default function CompanyForm({ onSave, saved }) {
                 placeholder="e.g. Acme Technologies"
               />
             </div>
-            <div className="company-form-grid">
+            <div className="company-form-grid company-form-grid-inner">
               <div className="form-field">
                 <label className="field-label">
                   <Calendar size={10} style={{ display: 'inline', marginRight: 4 }} />

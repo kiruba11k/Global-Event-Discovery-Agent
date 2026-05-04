@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X, Zap, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, X, Zap, ChevronDown, ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 const INDUSTRY_OPTIONS = [
   'Technology', 'AI / Machine Learning', 'Cloud Computing', 'Fintech',
@@ -44,6 +44,7 @@ const STEPS = [
 
 function TagSelector({ label, options, selected, onChange, placeholder }) {
   const [custom, setCustom] = useState('')
+  const [open, setOpen] = useState(false)
 
   const toggle = (opt) => {
     if (selected.includes(opt)) onChange(selected.filter(s => s !== opt))
@@ -59,8 +60,14 @@ function TagSelector({ label, options, selected, onChange, placeholder }) {
   }
 
   return (
-    <div className="tag-selector">
-      <div className="tag-label">{label}</div>
+    <div className="tag-selector dropdown-selector">
+      <button type="button" className="dropdown-toggle" onClick={() => setOpen(v => !v)}>
+        <div>
+          <div className="tag-label">{label}</div>
+          <div className="dropdown-meta">{selected.length ? `${selected.length} selected` : 'Choose from suggestions or add custom'}</div>
+        </div>
+        <ChevronDown size={16} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
 
       {selected.length > 0 && (
         <div className="tag-selected">
@@ -75,31 +82,36 @@ function TagSelector({ label, options, selected, onChange, placeholder }) {
         </div>
       )}
 
-      <div className="tag-pills">
-        {options.map(opt => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => toggle(opt)}
-            className={`tag-pill ${selected.includes(opt) ? 'active' : ''}`}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
+      {open && (
+        <div className="dropdown-panel">
+          <div className="tag-pills checkbox-pills">
+            {options.map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => toggle(opt)}
+                className={`tag-pill ${selected.includes(opt) ? 'active' : ''}`}
+              >
+                {selected.includes(opt) && <Check size={11} />}
+                {opt}
+              </button>
+            ))}
+          </div>
 
-      <div className="tag-custom">
-        <input
-          type="text"
-          value={custom}
-          onChange={e => setCustom(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustom())}
-          placeholder={placeholder}
-        />
-        <button type="button" onClick={addCustom} className="tag-add-btn">
-          <Plus size={14} />
-        </button>
-      </div>
+          <div className="tag-custom">
+            <input
+              type="text"
+              value={custom}
+              onChange={e => setCustom(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustom())}
+              placeholder={placeholder}
+            />
+            <button type="button" onClick={addCustom} className="tag-add-btn">
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
