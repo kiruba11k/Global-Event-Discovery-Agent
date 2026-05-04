@@ -1,7 +1,6 @@
 """
 Luma API — free tier, rate-limited
 Register: lu.ma/developers
-Strong source for tech conferences and startup events 2025-2026
 """
 import httpx
 from typing import List
@@ -11,13 +10,8 @@ from config import get_settings
 from loguru import logger
 
 settings = get_settings()
-
 BASE = "https://api.lu.ma/public/v1"
-
-QUERY_TERMS = [
-    "ai", "tech", "saas", "fintech", "data", "cloud",
-    "startup", "product", "devops", "web3",
-]
+QUERY_TERMS = ["ai", "tech", "saas", "fintech", "data", "cloud", "startup", "product", "devops", "web3"]
 
 
 class LumaConnector(BaseConnector):
@@ -83,7 +77,7 @@ class LumaConnector(BaseConnector):
                         industry_tags=f"{term},tech,startup",
                         audience_personas="founders,developers,investors,product managers",
                         est_attendees=self.safe_int(ev.get("guest_count", 0)),
-                        ticket_price_usd=0.0 if is_free else 0.0,
+                        ticket_price_usd=0.0,
                         price_description=price_desc,
                         registration_url=f"https://lu.ma/{ev.get('url', '')}",
                     ))
