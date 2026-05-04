@@ -136,7 +136,7 @@ export default function App() {
       const goCount = (res.events || []).filter(e => e.fit_verdict === 'GO').length
       toast.success(
         `Found ${res.total_found || 0} events — ${goCount} are strong matches`,
-        { duration: 4000, icon: '🎯' }
+        { duration: 4000 }
       )
       setTimeout(() => {
         document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' })

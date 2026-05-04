@@ -184,7 +184,7 @@ function EventRow({ event, index }) {
                 {/* AI Rationale */}
                 <div className="ai-rationale">
                   <div className="expand-block-label" style={{ marginBottom: 6 }}>
-                    🤖 AI Relevance Analysis
+                    AI Relevance Analysis
                   </div>
                   <div className="ai-rationale-text">"{event.verdict_notes}"</div>
                 </div>
