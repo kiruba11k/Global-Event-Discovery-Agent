@@ -18,3 +18,4 @@ rapidfuzz
 tenacity
 loguru
 starlette
+pypdf
