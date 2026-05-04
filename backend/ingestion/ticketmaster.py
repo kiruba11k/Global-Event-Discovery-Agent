@@ -11,21 +11,13 @@ from loguru import logger
 
 settings = get_settings()
 
-SEGMENTS = ["KZFzniwnSyZfZ7v7nJ", "KZFzniwnSyZfZ7v7nE"]  # Music, Arts
-CLASSIFICATIONS = [
-    ("Technology", "KnvZfZ7vAe1", "tech"),
-    ("Conferences", "KnvZfZ7vAeA", "conference"),
-    ("Business", "KnvZfZ7vAev", "business"),
-    ("Expos & Fairs", "KnvZfZ7vAeI", "expo"),
-]
-
 MARKETS = [
-    ("Singapore",   "SG", ""),
-    ("India",       "IN", ""),
-    ("Malaysia",    "MY", ""),
-    ("USA",         "US", ""),
-    ("UK",          "GB", ""),
-    ("Australia",   "AU", ""),
+    ("Singapore",  "SG"),
+    ("India",      "IN"),
+    ("Malaysia",   "MY"),
+    ("USA",        "US"),
+    ("UK",         "GB"),
+    ("Australia",  "AU"),
 ]
 
 
@@ -53,7 +45,7 @@ class TicketmasterConnector(BaseConnector):
 
         events: List[EventCreate] = []
         async with httpx.AsyncClient() as client:
-            for country_name, country_code, _ in MARKETS:
+            for country_name, country_code in MARKETS:
                 raw = await self._fetch_page(client, {"countryCode": country_code})
                 for e in raw:
                     dates = e.get("dates", {}).get("start", {})
@@ -74,14 +66,12 @@ class TicketmasterConnector(BaseConnector):
 
                     price_ranges = e.get("priceRanges", [])
                     price_min = price_ranges[0].get("min", 0.0) if price_ranges else 0.0
-                    price_desc = (
-                        f"From ${price_min:.0f}" if price_min else "See website"
-                    )
+                    price_desc = f"From ${price_min:.0f}" if price_min else "See website"
 
                     name = self.safe_str(e.get("name", ""))
                     dh = self.make_hash(name, start_date, city)
 
-                    ec = EventCreate(
+                    events.append(EventCreate(
                         id=self.make_id(),
                         source_platform="Ticketmaster",
                         source_url=e.get("url", ""),
@@ -101,7 +91,5 @@ class TicketmasterConnector(BaseConnector):
                         ticket_price_usd=float(price_min),
                         price_description=price_desc,
                         registration_url=e.get("url", ""),
-                    )
-                    events.append(ec)
-
+                    ))
         return events
