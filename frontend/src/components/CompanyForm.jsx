@@ -156,7 +156,7 @@ export default function CompanyForm({ onSave, saved }) {
                 style={{ display: 'none' }}
               />
               <div className="deck-upload-icon">
-                {deckFile ? '📄' : <Upload size={24} style={{ color: 'var(--text-dim)' }} />}
+                {deckFile ? <FileText size={24} style={{ color: 'var(--accent)' }} /> : <Upload size={24} style={{ color: 'var(--text-dim)' }} />}
               </div>
               {deckFile ? (
                 <>
