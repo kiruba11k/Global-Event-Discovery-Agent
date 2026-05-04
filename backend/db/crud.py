@@ -2,10 +2,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, or_
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from models.event import EventORM, EventCreate
+from models.company_profile import CompanyProfileORM, CompanyProfileCreate
 from datetime import datetime, date
 from typing import List, Optional
+import uuid
 from loguru import logger
 
+
+# ═══════════════════════════════════════════════════════════
+# Event CRUD
+# ═══════════════════════════════════════════════════════════
 
 async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
     """Insert or ignore duplicate (by dedup_hash)."""
@@ -59,7 +65,6 @@ async def get_candidate_events(
     min_attendees: int = 0,
     limit: int = 300,
 ) -> List[EventORM]:
-    """Filter events by geography + date + attendees before semantic scoring."""
     today = date.today().isoformat()
     date_from = date_from or today
     date_to = date_to or "2027-12-31"
@@ -70,7 +75,6 @@ async def get_candidate_events(
         EventORM.est_attendees >= min_attendees,
     )
 
-    # Geography filter (OR across countries/cities)
     if geographies and "global" not in [g.lower() for g in geographies]:
         geo_filters = []
         for geo in geographies:
@@ -104,3 +108,39 @@ async def purge_past_events(db: AsyncSession) -> int:
     )
     await db.commit()
     return result.rowcount
+
+
+# ═══════════════════════════════════════════════════════════
+# Company Profile CRUD
+# ═══════════════════════════════════════════════════════════
+
+async def create_company_profile(
+    db: AsyncSession,
+    data: CompanyProfileCreate,
+    deck_text: str = "",
+    deck_filename: str = "",
+) -> CompanyProfileORM:
+    profile = CompanyProfileORM(
+        id=str(uuid.uuid4()),
+        company_name=data.company_name,
+        founded_year=data.founded_year,
+        location=data.location,
+        what_we_do=data.what_we_do,
+        what_we_need=data.what_we_need,
+        deck_text=deck_text[:8000],   # limit stored text
+        deck_filename=deck_filename,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(profile)
+    await db.commit()
+    await db.refresh(profile)
+    logger.info(f"Company profile created: {profile.id}")
+    return profile
+
+
+async def get_company_profile(db: AsyncSession, profile_id: str) -> Optional[CompanyProfileORM]:
+    result = await db.execute(
+        select(CompanyProfileORM).where(CompanyProfileORM.id == profile_id)
+    )
+    return result.scalar_one_or_none()
