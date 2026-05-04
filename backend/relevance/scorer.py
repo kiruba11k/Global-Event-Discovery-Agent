@@ -195,72 +195,116 @@ def _tier(score: float, semantic_active: bool) -> str:
 def build_fallback_rationale(event: EventORM, profile: ICPProfile,
                               detail: dict, score: float, tier: str) -> str:
     """
-    Build a fully dynamic rationale from actual match data.
-    Called by groq_ranker when Groq is unavailable.
+    Plain-language business rationale — no code field names, no developer speak.
+    Reads like a sales analyst wrote it.
     """
-    strengths, gaps = [], []
+    event_name    = event.name or "This event"
+    event_loc     = f"{event.city}, {event.country}".strip(", ") or "an unspecified location"
+    ind_matched   = detail.get("industry_matched", [])
+    per_matched   = detail.get("persona_matched", [])
+    geo_matched   = detail.get("geo_matched", "")
+    type_matched  = detail.get("type_matched", False)
+    att_tier      = detail.get("attendee_tier", "")
+    score_pct     = int(score * 100)
 
-    if detail.get("industry_matched"):
-        strengths.append(
-            f"event.industry_tags matches profile.target_industries on: "
-            f"{', '.join(detail['industry_matched'][:3])}"
+    # Build industry sentence
+    if ind_matched:
+        ind_sentence = (
+            f"{event_name} focuses on {_join_natural(ind_matched[:3])}, "
+            f"which directly aligns with your target market."
         )
-    elif detail.get("industry_missed"):
-        gaps.append(
-            f"event.industry_tags ('{(event.industry_tags or 'unknown')[:50]}') "
-            f"has no overlap with profile.target_industries "
-            f"({', '.join((profile.target_industries or [])[:3])})"
-        )
-
-    if detail.get("persona_matched"):
-        strengths.append(
-            f"event.audience_personas matches profile.target_personas on: "
-            f"{', '.join(detail['persona_matched'][:3])}"
-        )
-    elif detail.get("persona_missed"):
-        gaps.append(
-            f"event.audience_personas ('{(event.audience_personas or 'unknown')[:50]}') "
-            f"doesn't match profile.target_personas "
-            f"({', '.join((profile.target_personas or [])[:3])})"
+    else:
+        target_inds = _join_natural((profile.target_industries or [])[:3])
+        ind_sentence = (
+            f"{event_name} covers topics outside your core focus of {target_inds}."
         )
 
-    if detail.get("geo_matched"):
-        strengths.append(
-            f"event location ({event.city}, {event.country}) "
-            f"satisfies profile.target_geographies ({detail['geo_matched']})"
+    # Build audience/persona sentence
+    event_personas = _clean_tags(event.audience_personas or "")
+    target_personas = _join_natural((profile.target_personas or [])[:3])
+    if per_matched:
+        per_sentence = (
+            f"The event draws {_join_natural(per_matched[:3])} — "
+            f"exactly the decision-makers you want in front of."
         )
-    elif detail.get("geo_missed"):
-        gaps.append(
-            f"event location ({event.city}, {event.country}) "
-            f"is outside profile.target_geographies "
-            f"({', '.join((profile.target_geographies or [])[:3])})"
+    elif event_personas:
+        per_sentence = (
+            f"The typical attendees are {event_personas[:80]}, "
+            f"which doesn't strongly match the {target_personas} you're targeting."
+        )
+    else:
+        per_sentence = (
+            f"Attendee profile is unclear — hard to confirm alignment "
+            f"with your target buyers ({target_personas})."
         )
 
-    if detail.get("type_matched"):
-        strengths.append(
-            f"event.category '{event.category}' matches profile.preferred_event_types"
+    # Build geo sentence
+    if geo_matched and geo_matched != "Global":
+        geo_sentence = f"It's held in {event_loc}, which is within your target regions."
+    elif geo_matched == "Global":
+        geo_sentence = f"Held in {event_loc} — your global focus means geography isn't a barrier."
+    elif event.is_virtual or event.is_hybrid:
+        geo_sentence = f"This is a virtual/hybrid event, so your team can participate remotely regardless of location."
+    else:
+        target_geos = _join_natural((profile.target_geographies or [])[:3])
+        geo_sentence = (
+            f"It's based in {event_loc}, which falls outside your primary target regions ({target_geos})."
         )
 
-    if detail.get("attendee_tier"):
-        strengths.append(detail["attendee_tier"])
-
-    score_pct = int(score * 100)
-    signal_summary = f"Relevance score: {score_pct}%"
+    # Format + size note
+    format_note = ""
+    if type_matched and att_tier:
+        format_note = f"Format ({event.category}) matches your preference, with {att_tier}."
+    elif att_tier:
+        format_note = f"Scale: {att_tier}."
+    elif type_matched:
+        format_note = f"The {event.category} format matches your preferred event type."
 
     if tier == TIER_GO:
         verdict_line = (
-            f"GO — strong ICP match across {len(strengths)} signal(s). "
-            f"{signal_summary}. Recommended for pipeline generation."
+            f"Strong fit — this event is worth attending for pipeline generation ({score_pct}% match)."
         )
-    elif tier == TIER_CONSIDER:
-        gap_note = f" Gap: {gaps[0]}." if gaps else " Validate attendee buying authority."
-        verdict_line = f"CONSIDER — partial ICP match. {signal_summary}.{gap_note}"
-    else:
-        gap_note = f" {'; '.join(gaps[:2])}." if gaps else " Insufficient ICP signal overlap."
-        verdict_line = f"SKIP — weak ICP match. {signal_summary}.{gap_note}"
+        parts = [ind_sentence, per_sentence]
+        if format_note: parts.append(format_note)
+        parts.append(verdict_line)
 
-    parts = strengths + [verdict_line]
-    return " | ".join(parts)
+    elif tier == TIER_CONSIDER:
+        verdict_line = (
+            f"Partial fit ({score_pct}% match) — worth evaluating before committing budget."
+        )
+        parts = [ind_sentence, per_sentence]
+        if geo_sentence and not geo_matched: parts.append(geo_sentence)
+        parts.append(verdict_line)
+
+    else:  # SKIP
+        verdict_line = (
+            f"Weak fit ({score_pct}% match) — the audience and industry focus don't align "
+            f"well enough to justify the investment for your current sales motion."
+        )
+        parts = []
+        if not ind_matched:   parts.append(ind_sentence)
+        if not per_matched:   parts.append(per_sentence)
+        if not geo_matched:   parts.append(geo_sentence)
+        if not parts:         parts.append(ind_sentence)
+        parts.append(verdict_line)
+
+    return " ".join(parts)
+
+
+def _join_natural(items: list) -> str:
+    """['A', 'B', 'C'] → 'A, B and C'"""
+    items = [str(i) for i in items if i]
+    if not items:       return "your target areas"
+    if len(items) == 1: return items[0]
+    if len(items) == 2: return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _clean_tags(tag_str: str) -> str:
+    """'CTO,CIO,VP Engineering' → 'CTOs, CIOs, VP Engineering'"""
+    tags = [t.strip() for t in tag_str.split(",") if t.strip()]
+    return ", ".join(tags[:4])
+
 
 
 # ── Public API ─────────────────────────────────────────────────────
