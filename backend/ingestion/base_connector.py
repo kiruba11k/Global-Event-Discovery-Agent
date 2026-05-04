@@ -29,7 +29,6 @@ class BaseConnector(ABC):
 
     @abstractmethod
     async def fetch(self) -> List[EventCreate]:
-        """Fetch events and return normalised EventCreate objects."""
         pass
 
     async def run(self) -> List[EventCreate]:
