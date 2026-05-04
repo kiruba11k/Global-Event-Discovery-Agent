@@ -16,8 +16,20 @@ class ICPProfile(BaseModel):
     max_results: int = 30
 
 
+class CompanyContext(BaseModel):
+    """Optional enriched context from saved company profile + deck."""
+    company_name: str = ""
+    founded_year: str = ""
+    location: str = ""
+    what_we_do: str = ""
+    what_we_need: str = ""
+    deck_text: str = ""          # extracted from PDF upload
+
+
 class SearchRequest(BaseModel):
     profile: ICPProfile
+    company_profile_id: Optional[str] = None  # links to saved CompanyProfile
+    company_context: Optional[CompanyContext] = None  # inline context (fallback)
 
 
 class SearchResponse(BaseModel):
