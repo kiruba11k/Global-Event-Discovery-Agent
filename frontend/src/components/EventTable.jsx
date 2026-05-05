@@ -5,9 +5,9 @@ import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone } 
 function calcROI(attendees) {
   const n = parseInt(attendees) || 0
   if (n >= 5000) return { tier: 'Large Event', meetings: 25, minL: 4, maxL: 6 }
-  if (n >= 3000) return { tier: 'Mid-Large Event', meetings: '15–20', minL: 3.2, maxL: 4.8 }
-  if (n >= 1000) return { tier: 'Mid Event', meetings: '10–15', minL: 2.4, maxL: 3.6 }
-  if (n > 0)     return { tier: 'Boutique Event', meetings: '5–10', minL: 1.6, maxL: 2.4 }
+  if (n >= 3000) return { tier: 'Mid-Large Event', meetings: '15 - 20', minL: 3.2, maxL: 4.8 }
+  if (n >= 1000) return { tier: 'Mid Event', meetings: '10 - 15', minL: 2.4, maxL: 3.6 }
+  if (n > 0)     return { tier: 'Boutique Event', meetings: '5 - 10', minL: 1.6, maxL: 2.4 }
   return null
 }
 
@@ -36,7 +36,7 @@ function ROICard({ attendees, eventName }) {
 
       <div className="roi-grid">
         <div className="roi-metric">
-          <div className="roi-value">{attendees?.toLocaleString() || '—'}</div>
+          <div className="roi-value">{attendees?.toLocaleString() || ' - '}</div>
           <div className="roi-metric-label">Est. Attendees</div>
         </div>
         <div className="roi-metric">
@@ -112,8 +112,8 @@ function EventRow({ event, index }) {
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        <td style={{ fontSize: 11, textAlign: 'center' }}>{calcROI(event.est_attendees)?.meetings || '—'}</td>
-        <td style={{ fontSize: 11, textAlign: 'center' }}>{event.est_attendees ? `₹${calcROI(event.est_attendees).minL}L–₹${calcROI(event.est_attendees).maxL}L` : '—'}</td>
+        <td style={{ fontSize: 11, textAlign: 'center' }}>{calcROI(event.est_attendees)?.meetings || ' - '}</td>
+        <td style={{ fontSize: 11, textAlign: 'center' }}>{event.est_attendees ? `₹${calcROI(event.est_attendees).minL}L–₹${calcROI(event.est_attendees).maxL}L` : ' - '}</td>
         <td style={{ textAlign: 'center' }}>
           <button className={`expand-toggle ${open ? 'open' : ''}`} onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o)}} aria-label={open ? 'Collapse details' : 'Expand details'}>
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -129,14 +129,14 @@ function EventRow({ event, index }) {
                 {/* Summary */}
                 <div>
                   <div className="expand-block-label">What It's About</div>
-                  <div className="expand-block-text">{event.what_its_about || '—'}</div>
+                  <div className="expand-block-text">{event.what_its_about || ' - '}</div>
                 </div>
 
                 {/* Key Numbers */}
                 <div>
                   <div className="expand-block-label">Key Numbers</div>
                   <div className="expand-block-text" style={{ color: 'var(--accent)' }}>
-                    {event.key_numbers || '—'}
+                    {event.key_numbers || ' - '}
                   </div>
                 </div>
 
