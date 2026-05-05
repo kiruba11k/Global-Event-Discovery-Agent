@@ -6,7 +6,7 @@ const STEPS = [
   { id: 'location',  icon: MapPin, question: 'Where are you headquartered?',        hint: 'City, country or region' },
   { id: 'mission',   icon: Zap, question: 'What does your company sell or do?',  hint: 'The more specific, the sharper the AI matching' },
   { id: 'objective', icon: Target, question: 'What do you need from events?',       hint: 'Choose one or type your own goal' },
-  { id: 'deck',      icon: FileText, question: 'Upload your company deck',            hint: 'Optional — we extract key context for deeper AI matching' },
+  { id: 'deck',      icon: FileText, question: 'Upload your company deck',            hint: 'Optional - we extract key context for deeper AI matching' },
 ]
 
 const OBJECTIVES = [
@@ -75,7 +75,7 @@ export default function CompanyForm({ onSave, saved }) {
     <button className="company-trigger" onClick={() => setOpen(true)}>
       {saved
         ? <><CheckCircle size={15} className="ct-icon saved" /><span>Company context saved</span><span className="ct-edit">Edit</span></>
-        : <><Sparkles size={15} className="ct-icon" /><span>Add company context</span><span className="ct-hint">Optional — improves matching</span><ChevronRight size={13} className="ct-chevron" /></>}
+        : <><Sparkles size={15} className="ct-icon" /><span>Add company context</span><span className="ct-hint">Optional - improves matching</span><ChevronRight size={13} className="ct-chevron" /></>}
     </button>
   )
 
