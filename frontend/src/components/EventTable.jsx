@@ -157,11 +157,7 @@ function EventRow({ event, index }) {
                   <div className="expand-block-text">
                     {event.pricing || ' - '}
                   </div>
-                  {event.pricing_link && (
-                    <div style={{ marginTop: 6 }}>
-                      <ELink href={event.pricing_link} text="Pricing details" />
-                    </div>
-                  )}
+
                 </div>
 
                 {/* Links */}
