@@ -57,20 +57,6 @@ function ROICard({ attendees, eventName }) {
   )
 }
 
-/* ── Score bar ──────────────────────────────────────────── */
-function ScoreBar({ score }) {
-  const pct = Math.round((score || 0) * 100)
-  const color = pct >= 68 ? '#10b981' : pct >= 42 ? '#f59e0b' : '#f43f5e'
-  return (
-    <div className="score-bar">
-      <div className="score-track">
-        <div className="score-fill" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <span className="score-pct">{pct}%</span>
-    </div>
-  )
-}
-
 /* ── Link ───────────────────────────────────────────────── */
 function ELink({ href, text }) {
   if (!href) return <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
@@ -123,19 +109,21 @@ function EventRow({ event, index }) {
             ))}
           </div>
         </td>
-        <td style={{ fontSize: 11 }}>{event.pricing || '—'}</td>
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        <td><ScoreBar score={event.relevance_score} /></td>
-        <td style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
-          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        <td style={{ fontSize: 11, textAlign: 'center' }}>{calcROI(event.est_attendees)?.meetings || '—'}</td>
+        <td style={{ fontSize: 11, textAlign: 'center' }}>{event.est_attendees ? `₹${calcROI(event.est_attendees).minL}L–₹${calcROI(event.est_attendees).maxL}L` : '—'}</td>
+        <td style={{ textAlign: 'center' }}>
+          <button className={`expand-toggle ${open ? 'open' : ''}`} onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o)}} aria-label={open ? 'Collapse details' : 'Expand details'}>
+            {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </td>
       </tr>
 
       {open && (
         <tr className="expand-row">
-          <td colSpan={9}>
+          <td colSpan={10}>
             <div className="expand-inner">
               <div className="expand-grid">
                 {/* Summary */}
@@ -171,7 +159,7 @@ function EventRow({ event, index }) {
                     {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
                     {event.agenda_link && <ELink href={event.agenda_link} text="Agenda" />}
                     {event.pricing_link && event.pricing_link !== event.event_link && (
-                      <ELink href={event.pricing_link} text="Pricing" />
+                      <ELink href={event.pricing_link} text="Ticket price / entry fee" />
                     )}
                   </div>
                   {event.sponsors && (
@@ -238,10 +226,10 @@ export default function EventTable({ events }) {
     { label: 'Date', key: 'date' },
     { label: 'Location', key: null },
     { label: 'Industry', key: null },
-    { label: 'Pricing', key: null },
     { label: 'Verdict', key: 'fit_verdict', center: true },
-    { label: 'Score', key: 'relevance_score' },
-    { label: '', key: null, width: 30 },
+    { label: 'Meetings Achievable', key: null, center: true },
+    { label: 'ROI', key: null, center: true },
+    { label: '', key: null, width: 42, center: true },
   ]
 
   return (
@@ -287,7 +275,7 @@ export default function EventTable({ events }) {
           </thead>
           <tbody>
             {sorted.length === 0 ? (
-              <tr><td colSpan={9} className="empty-state">No events match this filter.</td></tr>
+              <tr><td colSpan={10} className="empty-state">No events match this filter.</td></tr>
             ) : (
               sorted.map((event, i) => (
                 <EventRow key={event.id} event={event} index={i} />

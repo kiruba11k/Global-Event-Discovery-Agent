@@ -14,6 +14,12 @@ const PERSONA_OPTIONS = [
   'Cloud Architect','Developer / Engineer','Startup Founder','Investor / VC',
   'Sales Director','Marketing Director','Supply Chain Head','Fleet Manager',
   'Hospital CIO','Healthcare Administrator',
+  'Chief Revenue Officer (CRO)','Chief Marketing Officer (CMO)','Chief Product Officer (CPO)',
+  'Chief Strategy Officer (CSO)','VP Sales','VP Marketing','VP Product','VP IT','VP Operations',
+  'Head of Product','Head of Engineering','Head of Innovation','Head of Partnerships',
+  'Director of IT','Director of Data','Director of Procurement','Procurement Head',
+  'Revenue Operations Manager','Sales Operations Manager','Business Development Manager',
+  'Enterprise Architect','Solutions Architect','Data Engineer','ML Engineer',
 ]
 const GEO_OPTIONS = [
   'Global','Singapore','India','Malaysia','USA','UK',
@@ -36,7 +42,7 @@ const STEPS = [
   { key:'personas',  label:'Buyers',     question:'What roles do your decision-makers hold?' },
   { key:'geography', label:'Geography',  question:'Where in the world are you looking?' },
   { key:'events',    label:'Events',     question:'What types of events fit your sales motion?' },
-  { key:'filters',   label:'Filters',    question:'Any date range, budget or size constraints?' },
+  { key:'filters',   label:'Filters',    question:'Any date range, maximum fee, or size constraints?' },
 ]
 
 /* ── Pill selector ──────────────────────────────────────── */
@@ -288,7 +294,7 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                   <input type="date" className="icp-input" value={form.date_to} onChange={e=>set('date_to',e.target.value)} />
                 </div>
                 <div className="icp-field">
-                  <label className="icp-label">Max budget (USD)</label>
+                  <label className="icp-label">Maximum fee you can pay for ticket / speaker / exhibitor slot (USD)</label>
                   <input type="number" ref={inputRef} className="icp-input" value={form.budget_usd}
                     onChange={e=>set('budget_usd',e.target.value)} placeholder="e.g. 2000" />
                 </div>
