@@ -158,9 +158,7 @@ function EventRow({ event, index }) {
                     <ELink href={event.event_link} text="Register / Event Page" />
                     {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
                     {event.agenda_link && <ELink href={event.agenda_link} text="Agenda" />}
-                    {event.pricing_link && event.pricing_link !== event.event_link && (
-                      <ELink href={event.pricing_link} text="Ticket price / entry fee" />
-                    )}
+                    <ELink href={event.pricing_link} text="Ticket price / entry fee" />
                   </div>
                   {event.sponsors && (
                     <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
