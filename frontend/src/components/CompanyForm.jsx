@@ -1,21 +1,21 @@
 import { useState, useRef, useEffect } from 'react'
-import { Building2, MapPin, Calendar, FileText, Upload, CheckCircle, X, ChevronRight, Sparkles } from 'lucide-react'
+import { Building2, MapPin, Calendar, FileText, Upload, CheckCircle, X, ChevronRight, Sparkles, Zap, Target, Handshake, Megaphone, Users, Search, TrendingUp } from 'lucide-react'
 
 const STEPS = [
-  { id: 'name',      emoji: '🏢', question: "What's your company called?",        hint: 'Personalises your event recommendations' },
-  { id: 'location',  emoji: '📍', question: 'Where are you headquartered?',        hint: 'City, country or region' },
-  { id: 'mission',   emoji: '⚡', question: 'What does your company sell or do?',  hint: 'The more specific, the sharper the AI matching' },
-  { id: 'objective', emoji: '🎯', question: 'What do you need from events?',       hint: 'Choose one or type your own goal' },
-  { id: 'deck',      emoji: '📄', question: 'Upload your company deck',            hint: 'Optional — we extract key context for deeper AI matching' },
+  { id: 'name',      icon: Building2, question: "What's your company called?",        hint: 'Personalises your event recommendations' },
+  { id: 'location',  icon: MapPin, question: 'Where are you headquartered?',        hint: 'City, country or region' },
+  { id: 'mission',   icon: Zap, question: 'What does your company sell or do?',  hint: 'The more specific, the sharper the AI matching' },
+  { id: 'objective', icon: Target, question: 'What do you need from events?',       hint: 'Choose one or type your own goal' },
+  { id: 'deck',      icon: FileText, question: 'Upload your company deck',            hint: 'Optional — we extract key context for deeper AI matching' },
 ]
 
 const OBJECTIVES = [
-  { label: 'Pipeline generation', icon: '💰' },
-  { label: 'Brand awareness',     icon: '📣' },
-  { label: 'Partnership deals',   icon: '🤝' },
-  { label: 'Hiring / talent',     icon: '👥' },
-  { label: 'Market research',     icon: '🔍' },
-  { label: 'Investor meetings',   icon: '📈' },
+  { label: 'Pipeline generation', icon: TrendingUp },
+  { label: 'Brand awareness',     icon: Megaphone },
+  { label: 'Partnership deals',   icon: Handshake },
+  { label: 'Hiring / talent',     icon: Users },
+  { label: 'Market research',     icon: Search },
+  { label: 'Investor meetings',   icon: TrendingUp },
 ]
 
 export default function CompanyForm({ onSave, saved }) {
@@ -104,7 +104,7 @@ export default function CompanyForm({ onSave, saved }) {
 
         {/* Body */}
         <div className={`cf-body ${animClass}`}>
-          <div className="cf-emoji-wrap"><span className="cf-emoji">{current.emoji}</span></div>
+          <div className="cf-emoji-wrap"><span className="cf-emoji"><current.icon size={30} strokeWidth={2.2} /></span></div>
           <h2 className="cf-question">{current.question}</h2>
           <p className="cf-hint">{current.hint}</p>
 
@@ -147,7 +147,7 @@ export default function CompanyForm({ onSave, saved }) {
                   <button key={obj.label} type="button"
                     className={`cf-obj-pill ${form.what_we_need===obj.label?'active':''}`}
                     onClick={()=>set('what_we_need', form.what_we_need===obj.label?'':obj.label)}>
-                    <span>{obj.icon}</span>{obj.label}
+                    <span><obj.icon size={15} /></span>{obj.label}
                   </button>
                 ))}
               </div>
