@@ -151,6 +151,19 @@ function EventRow({ event, index }) {
                   </div>
                 </div>
 
+                {/* Pricing */}
+                <div>
+                  <div className="expand-block-label">Ticket price / entry fee</div>
+                  <div className="expand-block-text">
+                    {event.pricing || ' - '}
+                  </div>
+                  {event.pricing_link && (
+                    <div style={{ marginTop: 6 }}>
+                      <ELink href={event.pricing_link} text="Pricing details" />
+                    </div>
+                  )}
+                </div>
+
                 {/* Links */}
                 <div>
                   <div className="expand-block-label">Links</div>
@@ -158,7 +171,6 @@ function EventRow({ event, index }) {
                     <ELink href={event.event_link} text="Register / Event Page" />
                     {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
                     {event.agenda_link && <ELink href={event.agenda_link} text="Agenda" />}
-                    <ELink href={event.pricing_link} text="Ticket price / entry fee" />
                   </div>
                   {event.sponsors && (
                     <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
