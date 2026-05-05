@@ -234,7 +234,7 @@ export default function App() {
           <span>Powered by LeadStrategus · Multi-Agent Event Intelligence</span>
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="footer-cta">
             <b>Schedule a Strategy Call<b/> <ChevronRight size={18} />
-          </a>
+        
         </div>
       </footer>
     </div>
