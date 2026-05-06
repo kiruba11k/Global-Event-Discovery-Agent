@@ -201,8 +201,9 @@ export default function EventTable({ events }) {
   const [filter, setFilter] = useState('ALL')
   const [sort, setSort] = useState({ key: 'relevance_score', dir: 'desc' })
 
-  const VERDICT_ORDER = { GO: 0, CONSIDER: 1, SKIP: 2 }
-  const filtered = events.filter(e => filter === 'ALL' || e.fit_verdict === filter)
+  const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
+  const VERDICT_ORDER = { GO: 0, CONSIDER: 1 }
+  const filtered = displayEvents.filter(e => filter === 'ALL' || e.fit_verdict === filter)
   const sorted = [...filtered].sort((a, b) => {
     let av = a[sort.key], bv = b[sort.key]
     if (sort.key === 'fit_verdict') { av = VERDICT_ORDER[av] ?? 3; bv = VERDICT_ORDER[bv] ?? 3 }
@@ -213,17 +214,15 @@ export default function EventTable({ events }) {
     setSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
 
   const counts = {
-    ALL: events.length,
-    GO: events.filter(e => e.fit_verdict === 'GO').length,
-    CONSIDER: events.filter(e => e.fit_verdict === 'CONSIDER').length,
-    SKIP: events.filter(e => e.fit_verdict === 'SKIP').length,
+    ALL: displayEvents.length,
+    GO: displayEvents.filter(e => e.fit_verdict === 'GO').length,
+    CONSIDER: displayEvents.filter(e => e.fit_verdict === 'CONSIDER').length,
   }
 
   const filterConfig = [
     { key: 'ALL', cls: '' },
     { key: 'GO', cls: 'active-go' },
     { key: 'CONSIDER', cls: 'active-consider' },
-    { key: 'SKIP', cls: 'active-skip' },
   ]
 
   const COLS = [
@@ -292,7 +291,7 @@ export default function EventTable({ events }) {
       </div>
 
       {/* Bottom CTA */}
-      {events.length > 0 && (
+      {displayEvents.length > 0 && (
         <div style={{
           padding: '14px 20px', borderTop: '1px solid var(--border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -300,7 +299,7 @@ export default function EventTable({ events }) {
         }}>
           <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
             <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
-            {counts.GO} strong matches found · ROI available for {events.filter(e => e.est_attendees > 0).length} events
+            {counts.GO} strong matches found · ROI available for {displayEvents.filter(e => e.est_attendees > 0).length} events
           </div>
           <a
             href="https://leadstrategus.com/contact/"
