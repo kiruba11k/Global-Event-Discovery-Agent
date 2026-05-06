@@ -32,7 +32,7 @@ const DEFAULT = {
   target_industries:[], target_personas:[],
   target_geographies:['Global'],
   preferred_event_types:['conference','trade show','summit'],
-  budget_usd:'', date_from:'', date_to:'', min_attendees:200, max_results:30,
+  budget_usd:'', date_from:'', date_to:'', min_attendees:200,
 }
 
 /* ── Steps config ───────────────────────────────────────── */
@@ -173,7 +173,6 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
       ...form,
       budget_usd:    form.budget_usd ? parseFloat(form.budget_usd) : null,
       min_attendees: parseInt(form.min_attendees) || 0,
-      max_results:   parseInt(form.max_results)   || 30,
       date_from:     form.date_from || null,
       date_to:       form.date_to   || null,
     })
@@ -302,16 +301,6 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                   <label className="icp-label">Min attendees</label>
                   <input type="number" className="icp-input" value={form.min_attendees}
                     onChange={e=>set('min_attendees',e.target.value)} />
-                </div>
-              </div>
-              <div className="icp-field icp-results-row">
-                <label className="icp-label">Max results</label>
-                <div className="icp-results-pills">
-                  {[10,20,30,50].map(n => (
-                    <button key={n} type="button"
-                      className={`icp-result-pill ${form.max_results===n?'active':''}`}
-                      onClick={()=>set('max_results',n)}>{n}</button>
-                  ))}
                 </div>
               </div>
             </div>

@@ -10,6 +10,7 @@ POST /api/refresh
 """
 import io, json, uuid
 from datetime import datetime
+from typing import Iterable, Optional
 
 from fastapi import (
     APIRouter, Depends, HTTPException, Query,
@@ -35,6 +36,43 @@ router   = APIRouter()
 settings = get_settings()
 
 _last_results: dict = {}
+
+RESULT_LIMIT = 7
+GO_RESULT_COUNT = 4
+CONSIDER_RESULT_COUNT = 3
+
+
+def _parse_date(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return None
+
+
+def _within_requested_dates(event, date_from: Optional[str], date_to: Optional[str]) -> bool:
+    """Require the event start date to stay inside the user-requested range."""
+    event_start = _parse_date(getattr(event, "start_date", None))
+    if not event_start:
+        return False
+
+    range_start = _parse_date(date_from)
+    range_end = _parse_date(date_to)
+
+    if range_start and event_start < range_start:
+        return False
+    if range_end and event_start > range_end:
+        return False
+    return True
+
+
+def _apply_result_mix(ranked: Iterable) -> list:
+    """Return at most seven events with exactly 4 GO and 3 CONSIDER when available."""
+    selected = list(ranked)[:RESULT_LIMIT]
+    for idx, event in enumerate(selected):
+        event.fit_verdict = "GO" if idx < GO_RESULT_COUNT else "CONSIDER"
+    return selected
 
 
 # ── PDF extraction ─────────────────────────────────────────────────
@@ -152,8 +190,22 @@ async def search_events(
             min_attendees=0,
             limit=300,
         )
+    # Dates are a hard filter: never fall back to all events if the requested range has no matches.
+    candidates = [
+        event for event in candidates
+        if _within_requested_dates(event, profile.date_from, profile.date_to)
+    ]
+
     if not candidates:
-        candidates = await get_all_events(db, limit=200)
+        logger.info("No candidates found inside the requested date range.")
+        _last_results[profile_id] = []
+        return SearchResponse(
+            profile_id=profile_id,
+            company_name=profile.company_name,
+            total_found=0,
+            events=[],
+            generated_at=datetime.utcnow().isoformat() + "Z",
+        )
 
     logger.info(f"Candidates: {len(candidates)}")
 
@@ -194,10 +246,9 @@ async def search_events(
         company_ctx=company_ctx,
     )
 
-    # Sort: GO → CONSIDER → SKIP, then by score desc
-    tier_order = {"GO": 0, "CONSIDER": 1, "SKIP": 2}
-    ranked.sort(key=lambda r: (tier_order.get(r.fit_verdict, 3), -r.relevance_score))
-    ranked = ranked[: profile.max_results]
+    # Sort by score, cap to seven, and force the product-required verdict mix.
+    ranked.sort(key=lambda r: -r.relevance_score)
+    ranked = _apply_result_mix(ranked)
 
     _last_results[profile_id] = ranked
 
