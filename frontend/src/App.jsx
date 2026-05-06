@@ -102,6 +102,7 @@ function SectionLabel({ step, label, sublabel }) {
 export default function App() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState([])
+  const [hasSearched, setHasSearched] = useState(false)
   const [profileId, setProfileId] = useState('')
   const [companyData, setCompanyData] = useState(null)
   const [companyProfileId, setCompanyProfileId] = useState(null)
@@ -131,13 +132,19 @@ export default function App() {
       const payload = { profile }
       if (companyProfileId) payload.company_profile_id = companyProfileId
       const res = await api.search(payload)
-      setResults(res.events || [])
+      const events = res.events || []
+      setResults(events)
+      setHasSearched(true)
       setProfileId(res.profile_id || '')
-      const goCount = (res.events || []).filter(e => e.fit_verdict === 'GO').length
-      toast.success(
-        `Found ${res.total_found || 0} events — ${goCount} are strong matches`,
-        { duration: 4000 }
-      )
+      const goCount = events.filter(e => e.fit_verdict === 'GO').length
+      if (events.length === 0) {
+        toast.error('Not found — no events match the selected date range.')
+      } else {
+        toast.success(
+          `Found ${events.length} events — ${goCount} are strong matches`,
+          { duration: 4000 }
+        )
+      }
       setTimeout(() => {
         document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' })
       }, 300)
@@ -201,6 +208,19 @@ export default function App() {
         </section>
 
         {/* Results */}
+        {hasSearched && results.length === 0 && (
+          <section id="results" className="results-section">
+            <div className="results-header">
+              <div>
+                <h2 className="results-title">Not found</h2>
+                <p className="results-sub">
+                  No events were found between the selected dates. Try a wider date range or different filters.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {results.length > 0 && (
           <section id="results" className="results-section">
             <div className="results-header">
@@ -213,7 +233,7 @@ export default function App() {
                 </p>
               </div>
               <div className="results-pills">
-                {['GO', 'CONSIDER', 'SKIP'].map(v => {
+                {['GO', 'CONSIDER'].map(v => {
                   const count = results.filter(e => e.fit_verdict === v).length
                   return (
                     <div key={v} className={`results-pill pill-${v.toLowerCase()}`}>
