@@ -24,6 +24,7 @@ from ingestion.scraper_conferencealerts import ScraperConferenceAlerts
 from ingestion.scraper_techcrunch import ScraperTechCrunch
 from ingestion.scraper_wikipedia_trade import ScraperWikipediaTrades
 from ingestion.scraper_allconferences import ScraperAllConferences, ScraperConfex
+from ingestion.scraper_mice_directories import ScraperEventsEye, ScraperSACEOS, ScraperMyCEB
 
 
 # Ordered: seed first (always fast), then APIs, then scrapers
@@ -34,6 +35,9 @@ ALL_CONNECTORS = [
     MeetupConnector,         # GraphQL — no key needed
     LumaConnector,           # API — free tier
     ScraperWikipediaTrades,  # Wikipedia — ~600-800 global trade fairs
+    ScraperEventsEye,         # EventsEye — global trade shows across industries/regions
+    ScraperSACEOS,            # Singapore official MICE events/directory
+    ScraperMyCEB,             # Malaysia official MICE events/directory
     ScraperAllConferences,   # allconferences.com — ~300 events
     ScraperConfex,           # confex.com — ~200 events
     Scraper10Times,          # 10times.com — ~200 events
