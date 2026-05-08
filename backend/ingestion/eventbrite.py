@@ -1,6 +1,9 @@
 """
 Eventbrite API — free tier: 2,000 req/hr
 Register: eventbrite.com/platform/api
+
+The connector intentionally covers a broad industry x geography matrix so the
+agent can surface business events globally instead of only a few tech hubs.
 """
 import httpx
 from typing import List
@@ -11,13 +14,30 @@ from loguru import logger
 
 settings = get_settings()
 
+# Broad B2B/MICE discovery terms spanning major event-producing industries.
 SEARCH_QUERIES = [
-    "technology conference", "AI summit", "fintech conference",
-    "healthcare conference", "logistics expo", "data conference",
-    "cloud computing", "digital transformation", "startup summit",
-    "enterprise software", "cybersecurity conference", "ecommerce expo",
+    "technology conference", "AI summit", "cybersecurity conference",
+    "cloud computing conference", "data analytics conference",
+    "enterprise software conference", "startup summit", "fintech conference",
+    "banking finance conference", "insurance conference", "healthcare conference",
+    "medical pharma conference", "biotech conference", "manufacturing expo",
+    "industrial engineering expo", "energy conference", "renewable energy expo",
+    "oil gas conference", "logistics expo", "supply chain conference",
+    "retail ecommerce expo", "marketing conference", "media entertainment conference",
+    "education conference", "real estate conference", "construction expo",
+    "food beverage trade show", "hospitality conference", "travel tourism expo",
+    "agriculture conference", "automotive expo", "aerospace defense conference",
+    "mining conference", "legal conference", "HR conference", "MICE conference",
 ]
-COUNTRIES = ["SG", "IN", "MY", "US", "GB", "AU", "AE", "DE"]
+
+# ISO 3166-1 alpha-2 country codes distributed across North America, LATAM,
+# Europe, Middle East, Africa, South Asia, Southeast Asia, East Asia, and Oceania.
+COUNTRIES = [
+    "US", "CA", "MX", "BR", "AR", "CL", "CO", "GB", "IE", "FR", "DE", "NL",
+    "BE", "ES", "IT", "CH", "SE", "NO", "DK", "FI", "PL", "AE", "SA", "QA",
+    "ZA", "EG", "KE", "NG", "IN", "PK", "BD", "LK", "SG", "MY", "ID", "TH",
+    "VN", "PH", "JP", "KR", "CN", "HK", "TW", "AU", "NZ",
+]
 
 
 class EventbriteConnector(BaseConnector):
@@ -34,12 +54,12 @@ class EventbriteConnector(BaseConnector):
         seen = set()
 
         async with httpx.AsyncClient(headers=headers, timeout=12) as client:
-            for query in SEARCH_QUERIES[:6]:
-                for country in COUNTRIES[:4]:
+            for query in SEARCH_QUERIES:
+                for country in COUNTRIES:
                     params = {
                         "q": query,
                         "location.country": country,
-                        "expand": "venue,organizer,ticket_availability",
+                        "expand": "venue,organizer,ticket_availability,category,subcategory",
                         "page_size": 50,
                         "status": "live",
                         "sort_by": "date",
@@ -62,6 +82,8 @@ class EventbriteConnector(BaseConnector):
                         city = addr.get("city", "")
                         country_name = addr.get("country", country)
                         name = self.safe_str(e.get("name", {}).get("text", ""))
+                        if not name:
+                            continue
 
                         dh = self.make_hash(name, start, city)
                         if dh in seen:
@@ -76,6 +98,9 @@ class EventbriteConnector(BaseConnector):
                         is_free = e.get("is_free", False)
                         price_desc = "Free" if is_free else (f"From ${price_val:.0f}" if price_val else "See website")
                         capacity = self.safe_int(e.get("capacity", 0))
+                        category = (e.get("category") or {}).get("short_name") or query.split()[0].lower()
+                        subcategory = (e.get("subcategory") or {}).get("short_name") or ""
+                        tags = ",".join(filter(None, [query.lower(), category.lower(), subcategory.lower()]))
 
                         events.append(EventCreate(
                             id=self.make_id(),
@@ -91,9 +116,9 @@ class EventbriteConnector(BaseConnector):
                             address=addr.get("localized_address_display", ""),
                             city=city,
                             country=country_name,
-                            category=query.split()[0].lower(),
-                            industry_tags=query.lower(),
-                            audience_personas="business professionals,executives,managers",
+                            category=category,
+                            industry_tags=tags,
+                            audience_personas="business professionals,executives,managers,founders,industry buyers",
                             est_attendees=capacity,
                             ticket_price_usd=price_val,
                             price_description=price_desc,
