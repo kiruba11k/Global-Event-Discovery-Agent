@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Zap, ChevronRight, ChevronLeft, Plus, X, Check } from 'lucide-react'
+import { Zap, ChevronRight, ChevronLeft, Plus, X, Check, DollarSign } from 'lucide-react'
 
 /* ── Data ───────────────────────────────────────────────── */
 const INDUSTRY_OPTIONS = [
@@ -27,22 +27,29 @@ const GEO_OPTIONS = [
 ]
 const EVENT_TYPE_OPTIONS = ['conference','trade show','summit','expo','meetup','workshop']
 
+const DEAL_SIZE_OPTIONS = [
+  { label: 'Low', sublabel: 'Under $10K / year', value: 'low' },
+  { label: 'Medium', sublabel: '$10K – $25K / year', value: 'medium' },
+  { label: 'High', sublabel: '$25K – $75K / year', value: 'high' },
+  { label: 'Enterprise', sublabel: 'Over $75K / year', value: 'enterprise' },
+]
+
 const DEFAULT = {
   company_name:'', company_description:'',
   target_industries:[], target_personas:[],
   target_geographies:['Global'],
   preferred_event_types:['conference','trade show','summit'],
   budget_usd:'', date_from:'', date_to:'', min_attendees:200,
+  avg_deal_size_category: '',   // 'low' | 'medium' | 'high' | 'enterprise'
 }
 
-/* ── Steps config ───────────────────────────────────────── */
 const STEPS = [
   { key:'company',   label:'Company',    question:'What company are we finding events for?' },
   { key:'industry',  label:'Industry',   question:'Which industries are your target buyers in?' },
   { key:'personas',  label:'Buyers',     question:'What roles do your decision-makers hold?' },
   { key:'geography', label:'Geography',  question:'Where in the world are you looking?' },
   { key:'events',    label:'Events',     question:'What types of events fit your sales motion?' },
-  { key:'filters',   label:'Filters',    question:'Any date range, maximum fee, or size constraints?' },
+  { key:'filters',   label:'Filters',    question:'Budget, dates, deal size & event scale?' },
 ]
 
 /* ── Pill selector ──────────────────────────────────────── */
@@ -59,7 +66,6 @@ function PillSelector({ options, selected, onChange, placeholder }) {
     if (v && !selected.includes(v)) { onChange([...selected, v]); setCustom('') }
   }
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false) }
     document.addEventListener('mousedown', handler)
@@ -68,7 +74,6 @@ function PillSelector({ options, selected, onChange, placeholder }) {
 
   return (
     <div className="icp-pill-selector" ref={ref}>
-      {/* Selected chips */}
       {selected.length > 0 && (
         <div className="icp-chips">
           {selected.map(s => (
@@ -79,15 +84,11 @@ function PillSelector({ options, selected, onChange, placeholder }) {
           ))}
         </div>
       )}
-
-      {/* Toggle button */}
       <button type="button" className="icp-pill-toggle" onClick={()=>setShow(v=>!v)}>
         <Plus size={13} style={{ transition:'transform 0.2s', transform: show?'rotate(45deg)':'none' }} />
         {selected.length ? `Add more` : 'Choose options'}
         <span className="icp-count">{selected.length > 0 && `${selected.length} selected`}</span>
       </button>
-
-      {/* Dropdown panel */}
       {show && (
         <div className="icp-panel">
           <div className="icp-panel-pills">
@@ -283,6 +284,31 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
 
           {step === 5 && (
             <div className="icp-fields">
+              {/* ── Average Deal Size — drives pricing tiers ── */}
+              <div className="icp-field">
+                <label className="icp-label" style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <DollarSign size={12} style={{ color:'var(--accent)' }} />
+                  Average deal size (annual contract value)
+                  <span style={{ fontSize:10, color:'var(--text-dim)', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                    — unlocks personalised meeting package pricing
+                  </span>
+                </label>
+                <div className="deal-size-grid">
+                  {DEAL_SIZE_OPTIONS.map(opt => (
+                    <button key={opt.value} type="button"
+                      className={`deal-size-pill ${form.avg_deal_size_category === opt.value ? 'active' : ''}`}
+                      onClick={() => set('avg_deal_size_category', form.avg_deal_size_category === opt.value ? '' : opt.value)}>
+                      <span className="ds-label">{opt.label}</span>
+                      <span className="ds-sub">{opt.sublabel}</span>
+                      {form.avg_deal_size_category === opt.value && <Check size={12} className="ds-check" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="section-divider" style={{ margin:'4px 0' }} />
+
+              {/* ── Dates & budget ── */}
               <div className="icp-filter-grid">
                 <div className="icp-field">
                   <label className="icp-label">From date</label>
@@ -293,7 +319,7 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                   <input type="date" className="icp-input" value={form.date_to} onChange={e=>set('date_to',e.target.value)} />
                 </div>
                 <div className="icp-field">
-                  <label className="icp-label">Maximum fee you can pay for ticket / speaker / exhibitor slot (USD)</label>
+                  <label className="icp-label">Max ticket / exhibitor fee (USD)</label>
                   <input type="number" ref={inputRef} className="icp-input" value={form.budget_usd}
                     onChange={e=>set('budget_usd',e.target.value)} placeholder="e.g. 2000" />
                 </div>
