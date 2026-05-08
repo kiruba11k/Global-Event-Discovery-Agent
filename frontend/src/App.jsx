@@ -4,8 +4,9 @@ import CompanyForm from './components/CompanyForm'
 import ICPForm from './components/ICPForm'
 import EventTable from './components/EventTable'
 import { api } from './api/client'
-import { Zap, Globe, Brain, TrendingUp, ChevronRight, Sparkles } from 'lucide-react'
+import { Zap, Globe, Brain, TrendingUp, ChevronRight, Sparkles, ShieldCheck } from 'lucide-react'
 import './App.css'
+
 /* ── Stats counter animation ───────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
   const [display, setDisplay] = useState(0)
@@ -29,7 +30,6 @@ function StatCounter({ value, suffix = '', label }) {
   )
 }
 
-/* ── Animated orb background ───────────────────────────── */
 function OrbBackground() {
   return (
     <div className="orb-container" aria-hidden>
@@ -41,7 +41,6 @@ function OrbBackground() {
   )
 }
 
-/* ── Hero section ───────────────────────────────────────── */
 function Hero() {
   return (
     <header className="hero">
@@ -62,7 +61,7 @@ function Hero() {
         <div className="hero-stats">
           <StatCounter value={8} suffix="+" label="Event Sources" />
           <div className="stat-divider" />
-          <StatCounter value={500} suffix="+" label="Events Indexed" />
+          <StatCounter value={5000} suffix="+" label="Events Indexed" />
           <div className="stat-divider" />
           <StatCounter value={3} label="AI Ranking Layers" />
           <div className="stat-divider" />
@@ -70,9 +69,10 @@ function Hero() {
         </div>
         <div className="hero-features">
           {[
-            { icon: Brain, text: 'Groq LLM + Cross-Validation' },
-            { icon: Globe, text: 'Global Event Coverage' },
-            { icon: TrendingUp, text: 'ROI Calculator Built-in' },
+            { icon: Brain,       text: 'Groq LLM + Cross-Validation' },
+            { icon: Globe,       text: 'Global Event Coverage' },
+            { icon: TrendingUp,  text: 'ROI Calculator Built-in' },
+            { icon: ShieldCheck, text: 'Cashback Guarantee' },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="hero-feature">
               <Icon size={14} />
@@ -85,7 +85,6 @@ function Hero() {
   )
 }
 
-/* ── Section header ─────────────────────────────────────── */
 function SectionLabel({ step, label, sublabel }) {
   return (
     <div className="section-label">
@@ -100,13 +99,14 @@ function SectionLabel({ step, label, sublabel }) {
 
 /* ── Main App ───────────────────────────────────────────── */
 export default function App() {
-  const [loading, setLoading] = useState(false)
-  const [results, setResults] = useState([])
-  const [hasSearched, setHasSearched] = useState(false)
-  const [profileId, setProfileId] = useState('')
-  const [companyData, setCompanyData] = useState(null)
+  const [loading, setLoading]               = useState(false)
+  const [results, setResults]               = useState([])
+  const [hasSearched, setHasSearched]       = useState(false)
+  const [profileId, setProfileId]           = useState('')
+  const [companyData, setCompanyData]       = useState(null)
   const [companyProfileId, setCompanyProfileId] = useState(null)
-  const [stats, setStats] = useState(null)
+  const [stats, setStats]                   = useState(null)
+  const [dealSizeCategory, setDealSizeCategory] = useState('medium') // default
 
   useEffect(() => {
     api.getStats().then(setStats).catch(() => {})
@@ -127,6 +127,11 @@ export default function App() {
   }
 
   const onSearch = async (profile) => {
+    // Extract deal size for frontend ROI display — doesn't need to go to backend
+    if (profile.avg_deal_size_category) {
+      setDealSizeCategory(profile.avg_deal_size_category)
+    }
+
     setLoading(true)
     try {
       const payload = { profile }
@@ -172,7 +177,6 @@ export default function App() {
       <Hero />
 
       <main className="main-content">
-        {/* DB status bar */}
         {stats && (
           <div className="status-bar">
             <div className="status-dot" />
@@ -190,7 +194,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Step 1 — Your Company (Optional) */}
+        {/* Step 1 — Company (Optional) */}
         <section className="form-section">
           <SectionLabel
             step="01"
@@ -200,12 +204,12 @@ export default function App() {
           <CompanyForm onSave={onCompanySave} saved={!!companyProfileId} />
         </section>
 
-        {/* Step 2 — Your ICP */}
+        {/* Step 2 — ICP */}
         <section className="form-section">
           <SectionLabel
             step="02"
             label="Your ICP"
-            sublabel="Define who you sell to · we find where they gather"
+            sublabel="Define who you sell to · include deal size for personalised pricing"
           />
           <ICPForm onSubmit={onSearch} loading={loading} companyData={companyData} />
         </section>
@@ -232,7 +236,7 @@ export default function App() {
                   <span className="results-count">{displayResults.length}</span> Events Ranked
                 </h2>
                 <p className="results-sub">
-                  Sorted by AI relevance · Expand any row for ROI analysis
+                  Sorted by AI relevance · Expand any row for meeting packages & ROI analysis
                 </p>
               </div>
               <div className="results-pills">
@@ -247,7 +251,11 @@ export default function App() {
                 })}
               </div>
             </div>
-            <EventTable events={displayResults} profileId={profileId} />
+            <EventTable
+              events={displayResults}
+              profileId={profileId}
+              dealSizeCategory={dealSizeCategory}
+            />
           </section>
         )}
       </main>
@@ -258,7 +266,6 @@ export default function App() {
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="footer-cta">
             <b>Schedule a Strategy Call</b> <ChevronRight size={18} />
           </a>
-        
         </div>
       </footer>
     </div>
