@@ -1,57 +1,171 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone, ShieldCheck, Info } from 'lucide-react'
 
-/* ── ROI calculator ─────────────────────────────────────── */
-function calcROI(attendees) {
+/* ═══════════════════════════════════════════════════════════
+   PRICING MATRIX — matches internal pricing doc exactly
+   Rows: meetings (5, 10, 15, 20)
+   Cols: deal size category (low / medium / high / enterprise)
+   Unit: Indian Rupees Lakhs (₹L)
+   ═══════════════════════════════════════════════════════════ */
+const PRICING_MATRIX = {
+  low:        { 5: 2.25, 10: 3.75, 15: 5.00, 20: 6.50 },
+  medium:     { 5: 2.75, 10: 4.50, 15: 6.00, 20: 7.75 },
+  high:       { 5: 3.25, 10: 5.25, 15: 7.00, 20: 9.00 },
+  enterprise: { 5: 3.75, 10: 6.00, 15: 8.00, 20: 10.50 },
+}
+
+const DEAL_LABELS = {
+  low:        'Low (<$10K)',
+  medium:     'Medium ($10K–$25K)',
+  high:       'High ($25K–$75K)',
+  enterprise: 'Enterprise (>$75K)',
+}
+
+/* Based on event attendance, how many meeting packages to offer */
+function getAvailablePackages(attendees) {
   const n = parseInt(attendees) || 0
-  if (n >= 5000) return { tier: 'Large Event', meetings: 25, minL: 4, maxL: 6 }
-  if (n >= 3000) return { tier: 'Mid-Large Event', meetings: '15 - 20', minL: 3.2, maxL: 4.8 }
-  if (n >= 1000) return { tier: 'Mid Event', meetings: '10 - 15', minL: 2.4, maxL: 3.6 }
-  if (n > 0)     return { tier: 'Boutique Event', meetings: '5 - 10', minL: 1.6, maxL: 2.4 }
+  if (n >= 5000) return [5, 10, 15, 20]
+  if (n >= 3000) return [5, 10, 15]
+  if (n >= 1000) return [5, 10]
+  if (n > 0)     return [5]
+  return []
+}
+
+function getEventTier(attendees) {
+  const n = parseInt(attendees) || 0
+  if (n >= 10000) return { tier: 'Flagship Event', tag: '🏟️' }
+  if (n >= 5000)  return { tier: 'Large Event',    tag: '🎯' }
+  if (n >= 3000)  return { tier: 'Mid-Large Event',tag: '📊' }
+  if (n >= 1000)  return { tier: 'Mid Event',      tag: '🤝' }
+  if (n > 0)      return { tier: 'Boutique Event', tag: '💎' }
   return null
 }
 
-function ROICard({ attendees, eventName }) {
-  const roi = calcROI(attendees)
-  if (!roi) return null
+/* ── Pipeline value estimate ──────────────────────────────── */
+function estimatePipeline(meetings, dealSizeCategory) {
+  const midpoints = { low: 5000, medium: 17500, high: 50000, enterprise: 100000 }
+  const mid = midpoints[dealSizeCategory] || midpoints.medium
+  const qualified = Math.round(meetings * 0.4)  // 40% qualify
+  const closed    = Math.round(qualified * 0.25) // 25% close rate
+  const pipeline  = (qualified * mid * 0.5).toLocaleString()  // pipeline value
+  return { qualified, closed, pipeline, mid }
+}
 
-  const fmt = (v) => `₹${v}L`
+/* ── ROI / Pricing card ─────────────────────────────────── */
+function PricingCard({ attendees, eventName, dealSizeCategory }) {
+  const packages   = getAvailablePackages(attendees)
+  const tierInfo   = getEventTier(attendees)
+  const category   = dealSizeCategory || 'medium'
+  const prices     = PRICING_MATRIX[category] || PRICING_MATRIX.medium
+  const [selected, setSelected] = useState(packages[Math.floor(packages.length / 2)] || packages[0])
+
+  if (!tierInfo || packages.length === 0) return null
+
+  const pipe = estimatePipeline(selected, category)
 
   return (
-    <div className="roi-card">
-      <div className="roi-header">
-        <div className="roi-title">
-          {roi.icon} ROI Potential — {roi.tier}
+    <div className="pricing-card">
+      {/* Header */}
+      <div className="pc-header">
+        <div className="pc-title">
+          <span>{tierInfo.tag}</span>
+          <span>LeadStrategus Meeting Packages — {tierInfo.tier}</span>
         </div>
-        <a
-          href="https://leadstrategus.com/contact/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="roi-cta"
-        >
+        {/* Cashback badge */}
+        <div className="cashback-badge">
+          <ShieldCheck size={12} />
+          <span>Cashback Guarantee</span>
+        </div>
+      </div>
+
+      {/* Deal size context */}
+      <div className="pc-deal-label">
+        Pricing for <strong>{DEAL_LABELS[category]}</strong> deals
+        {!dealSizeCategory && <span className="pc-hint"> — select deal size in ICP for personalised pricing</span>}
+      </div>
+
+      {/* Package selector pills */}
+      <div className="pc-pkg-row">
+        {packages.map(m => (
+          <button key={m} type="button"
+            className={`pc-pkg-pill ${selected === m ? 'active' : ''}`}
+            onClick={() => setSelected(m)}>
+            {m} meetings
+          </button>
+        ))}
+      </div>
+
+      {/* Selected package details */}
+      <div className="pc-selected-card">
+        <div className="pc-selected-price">₹{prices[selected]}L</div>
+        <div className="pc-selected-desc">for {selected} guaranteed meetings at {eventName || 'this event'}</div>
+        <div className="pc-pipeline-row">
+          <div className="pc-pipe-stat">
+            <span className="pc-pipe-val">{pipe.qualified}</span>
+            <span className="pc-pipe-label">Qualified leads</span>
+          </div>
+          <div className="pc-pipe-sep" />
+          <div className="pc-pipe-stat">
+            <span className="pc-pipe-val">${pipe.pipeline}</span>
+            <span className="pc-pipe-label">Est. pipeline value</span>
+          </div>
+          <div className="pc-pipe-sep" />
+          <div className="pc-pipe-stat">
+            <span className="pc-pipe-val">{pipe.closed}</span>
+            <span className="pc-pipe-label">Expected closed deals</span>
+          </div>
+        </div>
+      </div>
+
+      {/* All packages reference table */}
+      <div className="pc-table-wrap">
+        <div className="pc-table-label">Full package comparison</div>
+        <table className="pc-table">
+          <thead>
+            <tr>
+              <th>Meetings</th>
+              <th>Investment</th>
+              <th>Qualified Leads</th>
+              <th>Est. Pipeline</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packages.map(m => {
+              const p = estimatePipeline(m, category)
+              return (
+                <tr key={m} className={selected === m ? 'pc-row-active' : ''} onClick={() => setSelected(m)}>
+                  <td><strong>{m}</strong> meetings</td>
+                  <td className="pc-price-cell">₹{prices[m]}L</td>
+                  <td>{p.qualified} leads</td>
+                  <td>${p.pipeline}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* CTA */}
+      <div className="pc-cta-row">
+        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta">
           <Phone size={11} />
-          Schedule Strategy Call
+          Get a Formal Quote
         </a>
-      </div>
-
-      <div className="roi-grid">
-        <div className="roi-metric">
-          <div className="roi-value">{attendees?.toLocaleString() || ' - '}</div>
-          <div className="roi-metric-label">Est. Attendees</div>
-        </div>
-        <div className="roi-metric">
-          <div className="roi-value">{roi.meetings}</div>
-          <div className="roi-metric-label">Meetings Achievable</div>
-        </div>
-        <div className="roi-metric">
-          <div className="roi-value">{fmt(roi.minL)}–{fmt(roi.maxL)}</div>
-          <div className="roi-metric-label">LeadStrategus Engagement</div>
+        <div className="cashback-note">
+          <ShieldCheck size={11} />
+          <span>If we don't deliver the promised meetings, you get a cashback. No questions asked.</span>
         </div>
       </div>
 
-      <div className="roi-note">
-        * LeadStrategus executes pre-event outreach, booth presence coordination, and post-event follow-up
-        to maximise your pipeline at {eventName || 'this event'}. Pricing in INR. Contact us to customise.
+      {/* Disclaimer */}
+      <div className="pc-disclaimer">
+        <Info size={10} />
+        <span>
+          Pricing shown is indicative and based on the internal LeadStrategus pricing matrix v1.
+          Actual engagement fees may vary by event complexity, geography, and specific requirements.
+          Pipeline estimates assume a 40% qualification rate and 25% close rate on your stated deal size ({DEAL_LABELS[category]}).
+          Please request a formal quote for firm pricing and SLA terms.
+        </span>
       </div>
     </div>
   )
@@ -80,11 +194,12 @@ function Verdict({ v }) {
 }
 
 /* ── Event row ──────────────────────────────────────────── */
-function EventRow({ event, index }) {
+function EventRow({ event, index, dealSizeCategory }) {
   const [open, setOpen] = useState(false)
-  const isGo = event.fit_verdict === 'GO'
   const industries = (event.industry || '').split(',').filter(Boolean)
-  const personas = (event.buyer_persona || '').split(',').filter(Boolean)
+  const personas   = (event.buyer_persona || '').split(',').filter(Boolean)
+  const pkgs       = getAvailablePackages(event.est_attendees)
+  const prices     = PRICING_MATRIX[dealSizeCategory || 'medium'] || PRICING_MATRIX.medium
 
   return (
     <>
@@ -112,10 +227,20 @@ function EventRow({ event, index }) {
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        <td style={{ fontSize: 11, textAlign: 'center' }}>{calcROI(event.est_attendees)?.meetings || ' - '}</td>
-        <td style={{ fontSize: 11, textAlign: 'center' }}>{event.est_attendees ? `₹${calcROI(event.est_attendees).minL}L–₹${calcROI(event.est_attendees).maxL}L` : ' - '}</td>
+        {/* Meetings column */}
+        <td style={{ fontSize: 11, textAlign: 'center' }}>
+          {pkgs.length > 0 ? `${pkgs[0]}–${pkgs[pkgs.length-1]}` : '—'}
+        </td>
+        {/* Price range column */}
+        <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
+          {pkgs.length > 0
+            ? `₹${prices[pkgs[0]]}L – ₹${prices[pkgs[pkgs.length-1]]}L`
+            : '—'}
+        </td>
         <td style={{ textAlign: 'center' }}>
-          <button className={`expand-toggle ${open ? 'open' : ''}`} onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o)}} aria-label={open ? 'Collapse details' : 'Expand details'}>
+          <button className={`expand-toggle ${open ? 'open' : ''}`}
+            onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o)}}
+            aria-label={open ? 'Collapse details' : 'Expand details'}>
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </td>
@@ -129,14 +254,14 @@ function EventRow({ event, index }) {
                 {/* Summary */}
                 <div>
                   <div className="expand-block-label">What It's About</div>
-                  <div className="expand-block-text">{event.what_its_about || ' - '}</div>
+                  <div className="expand-block-text">{event.what_its_about || '—'}</div>
                 </div>
 
                 {/* Key Numbers */}
                 <div>
                   <div className="expand-block-label">Key Numbers</div>
                   <div className="expand-block-text" style={{ color: 'var(--accent)' }}>
-                    {event.key_numbers || ' - '}
+                    {event.key_numbers || '—'}
                   </div>
                 </div>
 
@@ -154,10 +279,7 @@ function EventRow({ event, index }) {
                 {/* Pricing */}
                 <div>
                   <div className="expand-block-label">Ticket price / entry fee</div>
-                  <div className="expand-block-text">
-                    {event.pricing || ' - '}
-                  </div>
-
+                  <div className="expand-block-text">{event.pricing || '—'}</div>
                 </div>
 
                 {/* Links */}
@@ -177,15 +299,17 @@ function EventRow({ event, index }) {
 
                 {/* AI Rationale */}
                 <div className="ai-rationale">
-                  <div className="expand-block-label" style={{ marginBottom: 6 }}>
-                    AI Relevance Analysis
-                  </div>
+                  <div className="expand-block-label" style={{ marginBottom: 6 }}>AI Relevance Analysis</div>
                   <div className="ai-rationale-text">"{event.verdict_notes}"</div>
                 </div>
 
-                {/* ROI Card */}
+                {/* Pricing Card — full width */}
                 {event.est_attendees > 0 && (
-                  <ROICard attendees={event.est_attendees} eventName={event.event_name} />
+                  <PricingCard
+                    attendees={event.est_attendees}
+                    eventName={event.event_name}
+                    dealSizeCategory={dealSizeCategory}
+                  />
                 )}
               </div>
             </div>
@@ -197,7 +321,7 @@ function EventRow({ event, index }) {
 }
 
 /* ── Main table ─────────────────────────────────────────── */
-export default function EventTable({ events }) {
+export default function EventTable({ events, dealSizeCategory }) {
   const [filter, setFilter] = useState('ALL')
   const [sort, setSort] = useState({ key: 'relevance_score', dir: 'desc' })
 
@@ -226,15 +350,15 @@ export default function EventTable({ events }) {
   ]
 
   const COLS = [
-    { label: '#', key: null, center: true, width: 40 },
-    { label: 'Event', key: 'event_name' },
-    { label: 'Date', key: 'date' },
-    { label: 'Location', key: null },
-    { label: 'Industry', key: null },
-    { label: 'Verdict', key: 'fit_verdict', center: true },
-    { label: 'Meetings Achievable', key: null, center: true },
-    { label: 'ROI', key: null, center: true },
-    { label: '', key: null, width: 42, center: true },
+    { label: '#',               key: null,             center: true, width: 40  },
+    { label: 'Event',           key: 'event_name'                               },
+    { label: 'Date',            key: 'date'                                     },
+    { label: 'Location',        key: null                                       },
+    { label: 'Industry',        key: null                                       },
+    { label: 'Verdict',         key: 'fit_verdict',    center: true             },
+    { label: 'Meetings Range',  key: null,             center: true             },
+    { label: 'Package Cost',    key: null,             center: true             },
+    { label: '',                key: null,             width: 42, center: true  },
   ]
 
   return (
@@ -252,8 +376,15 @@ export default function EventTable({ events }) {
             </button>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-          Click any row to see ROI analysis & AI rationale
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {dealSizeCategory && (
+            <span style={{ fontSize:10, background:'var(--accent-glow)', border:'1px solid rgba(6,182,212,0.3)', color:'var(--accent)', padding:'3px 10px', borderRadius:100, fontWeight:700 }}>
+              {DEAL_LABELS[dealSizeCategory]}
+            </span>
+          )}
+          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            Expand any row for pricing & AI analysis
+          </div>
         </div>
       </div>
 
@@ -283,7 +414,12 @@ export default function EventTable({ events }) {
               <tr><td colSpan={10} className="empty-state">No events match this filter.</td></tr>
             ) : (
               sorted.map((event, i) => (
-                <EventRow key={event.id} event={event} index={i} />
+                <EventRow
+                  key={event.id}
+                  event={event}
+                  index={i}
+                  dealSizeCategory={dealSizeCategory}
+                />
               ))
             )}
           </tbody>
@@ -295,11 +431,17 @@ export default function EventTable({ events }) {
         <div style={{
           padding: '14px 20px', borderTop: '1px solid var(--border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: 10
+          flexWrap: 'wrap', gap: 10, background: 'linear-gradient(135deg,#f7fbff,#f0f4ff)'
         }}>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-            <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
-            {counts.GO} strong matches found · ROI available for {displayEvents.filter(e => e.est_attendees > 0).length} events
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+              <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
+              {counts.GO} strong matches · Pricing shown for {DEAL_LABELS[dealSizeCategory || 'medium']} deals
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'var(--go)', fontWeight:600 }}>
+              <ShieldCheck size={12} />
+              Cashback guarantee on all packages
+            </div>
           </div>
           <a
             href="https://leadstrategus.com/contact/"
