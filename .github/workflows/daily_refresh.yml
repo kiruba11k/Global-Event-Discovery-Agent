@@ -1,0 +1,29 @@
+name: Daily Event Refresh Ping
+
+on:
+  schedule:
+    # Runs at 02:05 UTC daily — just after APScheduler fires at 02:00.
+    # This also wakes the free-tier Render service if it's spun down.
+    - cron: '5 2 * * *'
+  workflow_dispatch: # Allow manual trigger.
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint (wake service)
+        run: |
+          curl -s --max-time 30 "${{ secrets.BACKEND_URL }}/health" || true
+
+      - name: Wait for service to wake up
+        run: sleep 15
+
+      - name: Trigger event refresh
+        run: |
+          curl -s -X POST \
+            --max-time 60 \
+            -H "Content-Type: application/json" \
+            "${{ secrets.BACKEND_URL }}/api/refresh" || true
+
+      - name: Log result
+        run: echo "Daily refresh ping sent to ${{ secrets.BACKEND_URL }}"
