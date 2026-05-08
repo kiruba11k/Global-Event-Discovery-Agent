@@ -509,3 +509,137 @@ button { font-family: var(--font-body); }
 .expand-toggle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 .expand-toggle.open { border-color: var(--accent-2); color: var(--accent-2); }
 .footer-cta { font-weight: 800; }
+.deal-size-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 640px) { .deal-size-grid { grid-template-columns: 1fr 1fr; } }
+ 
+.deal-size-pill {
+  display: flex; flex-direction: column; align-items: flex-start;
+  background: var(--bg-card-2); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+  cursor: pointer; transition: all 0.18s; text-align: left; position: relative;
+  gap: 2px;
+}
+.deal-size-pill:hover { border-color: var(--accent); background: var(--accent-glow); }
+.deal-size-pill.active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-glow), var(--accent-glow2));
+  box-shadow: 0 0 0 2px rgba(6,182,212,0.2);
+}
+.ds-label { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--font-display); }
+.ds-sub   { font-size: 10px; color: var(--text-dim); }
+.ds-check { position: absolute; top: 10px; right: 10px; color: var(--accent); }
+.deal-size-pill.active .ds-label { color: var(--accent); }
+ 
+/* ═══════════════════════════════════════════════════════════
+   PRICING CARD — inline in expand-row
+   ═══════════════════════════════════════════════════════════ */
+.pricing-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%);
+  border: 1.5px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+ 
+/* Header */
+.pc-header {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+}
+.pc-title {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--accent-2);
+}
+ 
+/* Cashback badge */
+.cashback-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.35);
+  color: var(--go);
+  font-size: 11px; font-weight: 700;
+  padding: 4px 12px; border-radius: 100px;
+  animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes badgePop { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
+ 
+/* Deal label */
+.pc-deal-label {
+  font-size: 11px; color: var(--text-sub); background: rgba(255,255,255,0.7);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+  width: fit-content;
+}
+.pc-hint { color: var(--accent); font-style: italic; }
+ 
+/* Package pills */
+.pc-pkg-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.pc-pkg-pill {
+  font-size: 12px; font-weight: 600; padding: 7px 14px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: #fff; color: var(--text-sub); cursor: pointer;
+  transition: all 0.15s; font-family: var(--font-body);
+}
+.pc-pkg-pill:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.pc-pkg-pill.active {
+  background: linear-gradient(135deg, var(--accent-2), #6366f1);
+  border-color: transparent; color: #fff;
+  box-shadow: 0 3px 12px rgba(59,130,246,0.3);
+}
+ 
+/* Selected package card */
+.pc-selected-card {
+  background: #fff; border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius-sm); padding: 16px 20px;
+  box-shadow: 0 4px 16px rgba(59,130,246,0.08);
+}
+.pc-selected-price {
+  font-family: var(--font-display); font-size: 36px; font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-2), #6366f1);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+.pc-selected-desc { font-size: 12px; color: var(--text-dim); margin-top: 4px; margin-bottom: 14px; }
+.pc-pipeline-row { display: flex; align-items: center; gap: 0; }
+.pc-pipe-stat { flex: 1; text-align: center; }
+.pc-pipe-val { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--accent-2); display: block; }
+.pc-pipe-label { font-size: 10px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.pc-pipe-sep { width: 1px; height: 40px; background: var(--border); }
+ 
+/* Reference table */
+.pc-table-wrap { background: rgba(255,255,255,0.6); border-radius: var(--radius-sm); overflow: hidden; }
+.pc-table-label { font-size: 10px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 14px 6px; }
+.pc-table { width: 100%; border-collapse: collapse; }
+.pc-table thead tr { background: rgba(59,130,246,0.06); }
+.pc-table th { padding: 8px 12px; font-size: 10px; font-weight: 700; color: var(--text-dim); text-align: left; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.pc-table td { padding: 9px 12px; font-size: 12px; color: var(--text-sub); border-top: 1px solid rgba(220,230,243,0.6); cursor: pointer; transition: background 0.12s; }
+.pc-table tr:hover td { background: rgba(59,130,246,0.04); }
+.pc-row-active td { background: rgba(59,130,246,0.06) !important; font-weight: 600; }
+.pc-price-cell { font-weight: 700; color: var(--accent-2); }
+ 
+/* CTA row */
+.pc-cta-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cashback-note {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--go); font-weight: 600;
+}
+ 
+/* Disclaimer */
+.pc-disclaimer {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 10px; color: var(--text-dim);
+  background: rgba(255,255,255,0.5); border-radius: 6px;
+  padding: 8px 12px; line-height: 1.6;
+}
+.pc-disclaimer svg { flex-shrink: 0; margin-top: 2px; color: var(--text-dim); }
+ 
+/* ═══════════════════════════════════════════════════════════
+   TABLE — updated header labels
+   ═══════════════════════════════════════════════════════════ */
+.data-table th:nth-child(7),
+.data-table th:nth-child(8) {
+  white-space: nowrap;
+}
