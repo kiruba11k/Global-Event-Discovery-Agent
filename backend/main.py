@@ -1,9 +1,16 @@
 """
 Event Intelligence Agent — FastAPI Application
 Run: uvicorn main:app --reload --port 8000
+
+Daily scraping strategy (free-tier Render):
+  1. APScheduler fires at 02:00 UTC daily inside the process.
+  2. Pair with a FREE external cron at cron-job.org → POST /api/refresh every 24h.
+     This also keeps the free-tier instance from spinning down.
+  3. GitHub Actions free cron (.github/workflows/daily_ping.yml) is another option.
 """
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,7 +51,51 @@ async def lifespan(app: FastAPI):
         stats = await run_seed_only()
         logger.info(f"Seed complete: {stats}")
     else:
-        logger.info(f"DB has {total} events.")
+        logger.info(f"DB has {total} events — skipping seed.")
+
+    # ── Start APScheduler for daily event refresh ──────────
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        import pytz
+
+        scheduler = AsyncIOScheduler(timezone=pytz.utc)
+
+        async def _daily_refresh():
+            logger.info("=== APScheduler: daily refresh triggered ===")
+            from ingestion.ingestion_manager import run_ingestion
+            try:
+                stats = await run_ingestion()
+                logger.info(f"=== Daily refresh done: {stats['total_saved']} events saved ===")
+            except Exception as exc:
+                logger.error(f"Daily refresh failed: {exc}")
+
+        # Daily at 02:00 UTC
+        scheduler.add_job(
+            _daily_refresh,
+            CronTrigger(hour=2, minute=0, timezone=pytz.utc),
+            id="daily_event_refresh",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+
+        # Run full ingestion 90s after startup (not on every restart — only if DB is small)
+        if total < 200:
+            logger.info("DB has fewer than 200 events — scheduling immediate full ingestion.")
+            scheduler.add_job(
+                _daily_refresh,
+                "date",
+                run_date=datetime.utcnow() + timedelta(seconds=90),
+                id="startup_full_refresh",
+            )
+
+        scheduler.start()
+        logger.info("APScheduler running. Daily refresh at 02:00 UTC.")
+        app.state.scheduler = scheduler
+
+    except ImportError:
+        logger.warning("APScheduler not installed — add 'apscheduler pytz' to requirements.txt")
+        app.state.scheduler = None
 
     # Optional: warm up semantic index
     if settings.enable_semantic_search and settings.preload_index_on_startup:
@@ -62,6 +113,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Startup complete ===")
     yield
+
+    # Shutdown
+    if hasattr(app.state, "scheduler") and app.state.scheduler:
+        app.state.scheduler.shutdown(wait=False)
+        logger.info("APScheduler stopped.")
 
     if settings.enable_semantic_search:
         from relevance.embedder import save_index
