@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     scrape_delay_seconds: float = 2.0
     scrape_timeout_seconds: int = 15
 
+    # ── Protected manual seed endpoints ─────────────────────
+    # Set this in Render before calling POST /api/seed-10times.
+    seed_admin_token: str = ""
+
     # ── Relevance tuning ─────────────────────────
     cosine_weight: float = 0.65
     rule_weight: float = 0.35

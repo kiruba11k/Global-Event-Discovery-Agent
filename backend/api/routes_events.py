@@ -7,6 +7,8 @@ GET  /api/events             — paginated list
 GET  /api/events/{id}
 GET  /api/stats
 POST /api/refresh
+POST /api/seed-10times     — protected background 10times bulk seed
+GET  /api/seed-10times/status
 """
 import io, json, uuid
 from datetime import datetime
@@ -14,7 +16,7 @@ from typing import Iterable, Optional
 
 from fastapi import (
     APIRouter, Depends, HTTPException, Query,
-    BackgroundTasks, UploadFile, File, Form,
+    BackgroundTasks, UploadFile, File, Form, Header,
 )
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +31,7 @@ from models.company_profile import CompanyProfileCreate
 from relevance.scorer import score_candidates
 from relevance.groq_ranker import rank_with_groq
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
+from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from config import get_settings
 from loguru import logger
 
@@ -36,6 +39,7 @@ router   = APIRouter()
 settings = get_settings()
 
 _last_results: dict = {}
+_seed_10times_status: dict = {"running": False, "last_result": None, "last_error": None}
 
 RESULT_LIMIT = 7
 GO_RESULT_COUNT = 4
@@ -354,3 +358,84 @@ async def _do_refresh():
     logger.info("Background refresh started...")
     stats = await run_ingestion()
     logger.info(f"Refresh done: {stats}")
+
+
+# ── POST /api/seed-10times ─────────────────────────────────────────
+
+def _require_seed_token(x_seed_token: str | None) -> None:
+    if not settings.seed_admin_token:
+        raise HTTPException(
+            status_code=503,
+            detail="SEED_ADMIN_TOKEN is not configured on the backend service.",
+        )
+    if x_seed_token != settings.seed_admin_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Seed-Token header.")
+
+
+@router.post("/seed-10times")
+async def seed_10times_events(
+    background_tasks: BackgroundTasks,
+    limit_events: int = Query(1000, ge=1, le=2000),
+    max_pages_per_listing: int = Query(10, ge=1, le=50),
+    concurrency: int = Query(1, ge=1, le=3),
+    delay_seconds: float = Query(3.0, ge=0.0, le=30.0),
+    timeout_seconds: float = Query(25.0, ge=1.0, le=60.0),
+    dry_run: bool = Query(False),
+    x_seed_token: str | None = Header(default=None),
+):
+    _require_seed_token(x_seed_token)
+    if _seed_10times_status["running"]:
+        raise HTTPException(status_code=409, detail="A 10times seed job is already running.")
+
+    config = CrawlConfig(
+        max_pages_per_listing=max_pages_per_listing,
+        limit_events=limit_events,
+        concurrency=concurrency,
+        delay_seconds=delay_seconds,
+        timeout_seconds=timeout_seconds,
+        dry_run=dry_run,
+    )
+    _seed_10times_status.update({
+        "running": True,
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "last_error": None,
+        "requested_config": {
+            "limit_events": limit_events,
+            "max_pages_per_listing": max_pages_per_listing,
+            "concurrency": concurrency,
+            "delay_seconds": delay_seconds,
+            "timeout_seconds": timeout_seconds,
+            "dry_run": dry_run,
+        },
+    })
+    background_tasks.add_task(_do_seed_10times, config)
+    return {
+        "message": "10times seed started. Check /api/seed-10times/status.",
+        "requested_config": _seed_10times_status["requested_config"],
+    }
+
+
+@router.get("/seed-10times/status")
+async def get_seed_10times_status(x_seed_token: str | None = Header(default=None)):
+    _require_seed_token(x_seed_token)
+    return _seed_10times_status
+
+
+async def _do_seed_10times(config: CrawlConfig):
+    logger.info("Background 10times seed started...")
+    try:
+        result = await run_10times_seed(config)
+        _seed_10times_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_result": result,
+            "last_error": None,
+        })
+        logger.info(f"Background 10times seed done: {result}")
+    except Exception as exc:
+        _seed_10times_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_error": str(exc),
+        })
+        logger.exception(f"Background 10times seed failed: {exc}")

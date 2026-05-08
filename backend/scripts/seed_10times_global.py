@@ -1,9 +1,9 @@
 """
 Standalone 10times.com global event seeder.
 
-This script is intentionally not wired into the app's ingestion manager, scheduler, or
-API routes. Run it manually when you want to pull a broad 10times.com snapshot,
-deduplicate it, and seed the configured events database.
+This script powers both manual CLI runs and the protected FastAPI seed endpoint.
+Use it when you want to pull a broad 10times.com snapshot, deduplicate it, and
+seed the configured events database.
 
 Usage from the repository root:
     python backend/scripts/seed_10times_global.py --max-pages-per-listing 3
@@ -504,6 +504,37 @@ async def seed_database(events: list[EventCreate]) -> int:
     return saved
 
 
+async def run_10times_seed(config: CrawlConfig) -> dict:
+    started = datetime.now(UTC)
+    logger.info(f"Starting standalone 10times global crawl at {started.isoformat()}")
+    events = await crawl_events(config)
+    parsed = len(events)
+    logger.info(f"Parsed {parsed} unique 10times events after in-memory deduplication.")
+
+    if config.dry_run:
+        for event in events[:10]:
+            logger.info(f"DRY RUN sample: {event.start_date} | {event.name} | {event.city}, {event.country} | {event.source_url}")
+        logger.info("Dry run complete; database was not modified.")
+        saved = 0
+    else:
+        saved = await seed_database(events)
+        logger.info(f"Seeder complete. Upsert attempted for {saved}/{parsed} events; DB unique constraint ignores duplicate dedup_hash values.")
+
+    finished = datetime.now(UTC)
+    return {
+        "started_at": started.isoformat(),
+        "finished_at": finished.isoformat(),
+        "duration_seconds": round((finished - started).total_seconds(), 2),
+        "parsed_events": parsed,
+        "saved_events": saved,
+        "dry_run": config.dry_run,
+        "limit_events": config.limit_events,
+        "max_pages_per_listing": config.max_pages_per_listing,
+        "concurrency": config.concurrency,
+        "delay_seconds": config.delay_seconds,
+    }
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description="Discover, deduplicate, and seed global 10times.com events.")
     parser.add_argument("--max-pages-per-listing", type=int, default=2, help="Number of paginated pages to crawl for each discovered listing URL.")
@@ -523,19 +554,7 @@ async def main() -> int:
         dry_run=args.dry_run,
     )
 
-    started = datetime.now(UTC)
-    logger.info(f"Starting standalone 10times global crawl at {started.isoformat()}")
-    events = await crawl_events(config)
-    logger.info(f"Parsed {len(events)} unique 10times events after in-memory deduplication.")
-
-    if config.dry_run:
-        for event in events[:10]:
-            logger.info(f"DRY RUN sample: {event.start_date} | {event.name} | {event.city}, {event.country} | {event.source_url}")
-        logger.info("Dry run complete; database was not modified.")
-        return 0
-
-    saved = await seed_database(events)
-    logger.info(f"Seeder complete. Upsert attempted for {saved}/{len(events)} events; DB unique constraint ignores duplicate dedup_hash values.")
+    await run_10times_seed(config)
     return 0
 
 
