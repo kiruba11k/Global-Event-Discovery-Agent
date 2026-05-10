@@ -9,6 +9,7 @@ Free-tier strategy:
   - Target: 5,000+ events in DB covering next 6 months globally
 """
 import asyncio
+from datetime import date
 from typing import List
 from loguru import logger
 
@@ -53,12 +54,33 @@ FAST_CONNECTORS = [
 ]
 
 
+def _is_past_event(event) -> bool:
+    """Return True when an event has already ended.
+
+    Connector output is not guaranteed to be current. In particular, curated
+    seed data can become stale over time. Filtering here prevents refresh jobs
+    from purging old rows and then immediately re-inserting the same expired
+    events.
+    """
+    today = date.today()
+    raw_date = getattr(event, "end_date", None) or getattr(event, "start_date", None)
+    if not raw_date:
+        return False
+
+    try:
+        event_date = date.fromisoformat(str(raw_date)[:10])
+    except ValueError:
+        return False
+
+    return event_date < today
+
+
 async def run_ingestion(connectors=None) -> dict:
-    """Run all (or specified) connectors and store results."""
+    """Run all (or specified) connectors and store only current/future events."""
     if connectors is None:
         connectors = ALL_CONNECTORS
 
-    stats = {"total_fetched": 0, "total_saved": 0, "errors": []}
+    stats = {"total_fetched": 0, "total_saved": 0, "skipped_past": 0, "errors": []}
 
     async with AsyncSessionLocal() as db:
         # Purge events that have already passed — keep DB lean
@@ -72,14 +94,20 @@ async def run_ingestion(connectors=None) -> dict:
                 events = await connector.run()
                 stats["total_fetched"] += len(events)
 
+                current_events = [event for event in events if not _is_past_event(event)]
+                skipped_past = len(events) - len(current_events)
+                stats["skipped_past"] += skipped_past
+                if skipped_past:
+                    logger.info(f"[{connector.name}] Skipped {skipped_past} past events.")
+
                 saved = 0
-                for event in events:
+                for event in current_events:
                     ok = await upsert_event(db, event)
                     if ok:
                         saved += 1
 
                 stats["total_saved"] += saved
-                logger.info(f"[{connector.name}] Saved {saved}/{len(events)} events.")
+                logger.info(f"[{connector.name}] Saved {saved}/{len(current_events)} current/future events.")
 
             except Exception as e:
                 msg = f"[{connector.name}] Error: {e}"
