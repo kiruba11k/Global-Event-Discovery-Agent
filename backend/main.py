@@ -1,15 +1,14 @@
 """
-Event Intelligence Agent — FastAPI Application
-Run: uvicorn main:app --reload --port 8000
+Event Intelligence Agent — main.py v3
 
-Startup logic (fixed):
-  1. init DB tables
-  2. Count events
-  3. If 0 → seed (fast, no purge)
-  4. If > 0 → skip seed entirely (events already in DB)
-  5. If < 100 → schedule a full ingestion in 90s to top up
-  6. APScheduler runs full ingestion daily at 02:00 UTC
+Key fixes vs v2:
+  1. Logs the exact DB file path on startup so you can verify it's on the disk
+  2. Shows event count by source in startup logs
+  3. Never re-seeds if any events already exist in DB
+  4. Startup populate only fires if total < 60 (seed count)
+  5. /health returns DB path and event breakdown for diagnostics
 """
+import os
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -20,7 +19,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from config import get_settings
-from db.database import init_db
+from db.database import init_db, DATABASE_URL
 from api.routes_events import router as events_router
 from api.routes_email  import router as email_router
 
@@ -37,29 +36,41 @@ def get_allowed_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("=== Event Intelligence Agent starting ===")
+    logger.info("=" * 60)
+    logger.info("Event Intelligence Agent — starting up")
+    logger.info(f"Database URL : {DATABASE_URL[:80]}")
+    logger.info(f"Render env   : {'YES' if os.environ.get('RENDER') else 'NO (local)'}")
+    logger.info("=" * 60)
 
+    # Init DB tables (idempotent — safe every restart)
     await init_db()
 
+    # Check current state
     from db.database import AsyncSessionLocal
-    from db.crud import count_events
+    from db.crud import count_events, count_by_source
     async with AsyncSessionLocal() as db:
-        total = await count_events(db)
+        total   = await count_events(db)
+        by_src  = await count_by_source(db)
 
     logger.info(f"DB has {total} events on startup.")
+    if by_src:
+        for src, cnt in sorted(by_src.items(), key=lambda x: -x[1]):
+            logger.info(f"  {src:<20} {cnt:>5} events")
 
-    # ── Step 1: seed only if completely empty ───────────────
+    # ── Seed ONLY if completely empty ──────────────────────────
     if total == 0:
-        logger.info("DB empty — running seed (fast, no purge).")
+        logger.info("DB is empty → seeding curated events (no purge).")
         from ingestion.ingestion_manager import run_seed_only
         seed_stats = await run_seed_only()
-        logger.info(f"Seed done: {seed_stats['total_inserted']} events inserted.")
-        async with AsyncSessionLocal() as db:
-            total = await count_events(db)
+        logger.info(
+            f"Seed done: inserted={seed_stats['total_inserted']} "
+            f"total_in_db={seed_stats['total_in_db']}"
+        )
+        total = seed_stats["total_in_db"]
     else:
-        logger.info(f"DB has {total} events — skipping seed.")
+        logger.info("DB has events → skipping seed.")
 
-    # ── Step 2: start APScheduler ───────────────────────────
+    # ── APScheduler ────────────────────────────────────────────
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from apscheduler.triggers.cron import CronTrigger
@@ -68,19 +79,24 @@ async def lifespan(app: FastAPI):
         scheduler = AsyncIOScheduler(timezone=pytz.utc)
 
         async def _full_refresh():
-            """Full ingestion — called daily and optionally on startup."""
-            logger.info("=== Scheduled refresh: running full ingestion ===")
+            logger.info("APScheduler: running full ingestion...")
             from ingestion.ingestion_manager import run_ingestion
             try:
                 stats = await run_ingestion()
+                from db.crud import count_by_source
+                from db.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as db:
+                    by_src = await count_by_source(db)
                 logger.info(
                     f"Refresh done — "
                     f"fetched={stats['total_fetched']} "
                     f"inserted={stats['total_inserted']} "
                     f"total_in_db={stats['total_in_db']}"
                 )
+                for src, cnt in sorted(by_src.items(), key=lambda x: -x[1]):
+                    logger.info(f"  {src:<20} {cnt:>5} events")
             except Exception as exc:
-                logger.error(f"Refresh error: {exc}")
+                logger.error(f"Full refresh error: {exc}")
 
         # Daily at 02:00 UTC
         scheduler.add_job(
@@ -91,69 +107,44 @@ async def lifespan(app: FastAPI):
             misfire_grace_time=3600,
         )
 
-        # If DB is still small after seeding, kick off a full scrape in 90s.
-        # This runs ONCE and populates the DB from all scrapers.
-        # It does NOT purge seed events (purge_past_events skips Seed rows).
-        if total < 100:
+        # Fire a full populate 2 minutes after startup if DB is small
+        # (< 60 = basically just seeds, not yet scraped)
+        if total < 60:
             logger.info(
-                f"DB has only {total} events — "
-                "scheduling full ingestion in 90s to populate from all scrapers."
+                f"DB has only {total} events (likely just seeds). "
+                "Scheduling full ingestion in 2 minutes."
             )
             scheduler.add_job(
                 _full_refresh,
                 "date",
-                run_date=datetime.utcnow() + timedelta(seconds=90),
+                run_date=datetime.utcnow() + timedelta(seconds=120),
                 id="startup_populate",
                 replace_existing=True,
             )
 
         scheduler.start()
         app.state.scheduler = scheduler
-        logger.info("APScheduler running — daily full refresh at 02:00 UTC.")
+        logger.info("APScheduler started — daily refresh at 02:00 UTC.")
 
     except ImportError:
-        logger.warning("APScheduler not installed. Run: pip install apscheduler pytz")
+        logger.warning("apscheduler not installed — add 'apscheduler pytz' to requirements.txt")
         app.state.scheduler = None
 
-    # ── Step 3: optional semantic index warm-up ─────────────
-    if settings.enable_semantic_search and settings.preload_index_on_startup:
-        try:
-            from db.database import AsyncSessionLocal
-            from db.crud import get_all_events
-            from relevance.embedder import load_index, add_events_to_index, get_index
-            load_index()
-            idx = get_index()
-            if idx.ntotal == 0:
-                async with AsyncSessionLocal() as db:
-                    events = await get_all_events(db, limit=500)
-                if events:
-                    add_events_to_index(events)
-                    logger.info(f"FAISS rebuilt: {idx.ntotal} vectors.")
-        except Exception as e:
-            logger.warning(f"Semantic index warm-up skipped: {e}")
-
-    logger.info("=== Startup complete ===")
+    logger.info("=" * 60)
+    logger.info("Startup complete. Serving requests.")
+    logger.info("=" * 60)
     yield
 
-    # ── Shutdown ────────────────────────────────────────────
+    # ── Shutdown ────────────────────────────────────────────────
     if hasattr(app.state, "scheduler") and app.state.scheduler:
         app.state.scheduler.shutdown(wait=False)
-        logger.info("APScheduler stopped.")
-
-    if settings.enable_semantic_search:
-        try:
-            from relevance.embedder import save_index
-            save_index()
-        except Exception:
-            pass
-
-    logger.info("=== Shutdown complete ===")
+        logger.info("Scheduler stopped.")
+    logger.info("Shutdown complete.")
 
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="AI-powered B2B event discovery and relevance ranking.",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -184,18 +175,26 @@ async def root():
 @app.get("/health")
 async def health():
     """
-    Lightweight health check.
-    Used by external cron services (cron-job.org, GitHub Actions)
-    to keep the free-tier Render service awake.
+    Detailed health check — shows DB path, event counts by source.
+    Use this to verify the disk is working and data is persisting.
     """
-    from db.database import AsyncSessionLocal
-    from db.crud import count_events
+    from db.database import AsyncSessionLocal, DATABASE_URL
+    from db.crud import count_events, count_by_source
     try:
         async with AsyncSessionLocal() as db:
-            total = await count_events(db)
-        return {"status": "ok", "events_in_db": total}
-    except Exception:
-        return {"status": "ok"}   # don't fail health check on DB error
+            total  = await count_events(db)
+            by_src = await count_by_source(db)
+        return {
+            "status":          "ok",
+            "version":         settings.app_version,
+            "database_url":    DATABASE_URL[:60] + "...",
+            "total_events":    total,
+            "events_by_source": by_src,
+            "render_env":      bool(os.environ.get("RENDER")),
+            "disk_path":       os.environ.get("RENDER_DISK_PATH", "not set"),
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @app.exception_handler(Exception)
@@ -203,7 +202,7 @@ async def global_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error. Please try again."},
+        content={"detail": "Internal server error."},
     )
 
 
