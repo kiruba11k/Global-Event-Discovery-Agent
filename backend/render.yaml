@@ -4,39 +4,69 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: |
+      apt-get install -y \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libcairo2 \
+        libgdk-pixbuf2.0-0 \
+        libharfbuzz0b \
+        libffi-dev \
+        shared-mime-info \
+        2>/dev/null || true
       pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      # ── LLM ─────────────────────────────────────
       - key: GROQ_API_KEY
         sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # ── Event APIs ───────────────────────────────
       - key: TICKETMASTER_KEY
         sync: false
       - key: EVENTBRITE_TOKEN
         sync: false
       - key: LUMA_API_KEY
         sync: false
+
+      # ── Email (Resend) ───────────────────────────
+      # Sign up free at resend.com — 3,000 emails/month
+      - key: RESEND_API_KEY
+        sync: false
+      # Must be a domain verified in your Resend account
+      # For testing use: onboarding@resend.dev
+      - key: RESEND_FROM_EMAIL
+        value: reports@leadstrategus.com
+
+      # ── Frontend / CORS ──────────────────────────
       - key: FRONTEND_ORIGIN
         sync: false
-      - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
-      - key: EMBEDDING_MODEL
-        value: all-MiniLM-L6-v2
+
+      # ── Embedding (disabled — exceeds 512MB free tier RAM) ──
       - key: ENABLE_SEMANTIC_SEARCH
         value: "false"
       - key: PRELOAD_INDEX_ON_STARTUP
         value: "false"
+
+      # ── Scoring (rules-only on free tier) ───────
       - key: COSINE_WEIGHT
         value: "0.0"
       - key: RULE_WEIGHT
         value: "1.0"
+
+      # ── Scraper tuning ───────────────────────────
       - key: SCRAPE_DELAY_SECONDS
-        value: "2.0"
+        value: "2.5"
       - key: SCRAPE_TIMEOUT_SECONDS
         value: "15"
       - key: TOP_K_FOR_LLM
         value: "20"
+
+      # ── Database ─────────────────────────────────
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./events.db
+
     disk:
       name: events-db
       mountPath: /opt/render/project/src/backend
@@ -51,3 +81,24 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
+
+# ─────────────────────────────────────────────────────────────
+# FREE-TIER DAILY SCRAPING STRATEGY
+# ─────────────────────────────────────────────────────────────
+# Render free tier spins down after 15 min of inactivity.
+# APScheduler inside the app fires at 02:00 UTC IF the app is awake.
+# To guarantee daily scraping even when idle, use ONE of:
+#
+# Option A — GitHub Actions (recommended, completely free):
+#   .github/workflows/daily_refresh.yml
+#   Set secret BACKEND_URL = https://your-app.onrender.com
+#   Pings /health to wake service, then POST /api/refresh
+#
+# Option B — cron-job.org (free):
+#   Add a job: GET https://your-app.onrender.com/health every 10 min
+#   This keeps the service warm AND prevents spin-down
+#   Add a separate job: POST /api/refresh daily at 02:05 UTC
+#
+# Option C — Upgrade to Render Starter ($7/mo):
+#   No spin-down, APScheduler alone is sufficient
+# ─────────────────────────────────────────────────────────────
