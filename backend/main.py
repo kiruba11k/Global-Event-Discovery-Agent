@@ -1,12 +1,6 @@
 """
 Event Intelligence Agent — FastAPI Application
 Run: uvicorn main:app --reload --port 8000
-
-Daily scraping strategy (free-tier Render):
-  1. APScheduler fires at 02:00 UTC daily inside the process.
-  2. Pair with a FREE external cron at cron-job.org → POST /api/refresh every 24h.
-     This also keeps the free-tier instance from spinning down.
-  3. GitHub Actions free cron (.github/workflows/daily_ping.yml) is another option.
 """
 import asyncio
 from contextlib import asynccontextmanager
@@ -20,6 +14,7 @@ from loguru import logger
 from config import get_settings
 from db.database import init_db
 from api.routes_events import router as events_router
+from api.routes_email import router as email_router
 from ingestion.ingestion_manager import run_seed_only
 
 settings = get_settings()
@@ -37,10 +32,8 @@ def get_allowed_origins() -> list[str]:
 async def lifespan(app: FastAPI):
     logger.info("=== Event Intelligence Agent starting up ===")
 
-    # Init all DB tables (events + company_profiles)
     await init_db()
 
-    # Seed if DB is empty
     from db.database import AsyncSessionLocal
     from db.crud import count_events
     async with AsyncSessionLocal() as db:
@@ -51,9 +44,9 @@ async def lifespan(app: FastAPI):
         stats = await run_seed_only()
         logger.info(f"Seed complete: {stats}")
     else:
-        logger.info(f"DB has {total} events — skipping seed.")
+        logger.info(f"DB has {total} events.")
 
-    # ── Start APScheduler for daily event refresh ──────────
+    # ── APScheduler ────────────────────────────────────────
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from apscheduler.triggers.cron import CronTrigger
@@ -62,15 +55,15 @@ async def lifespan(app: FastAPI):
         scheduler = AsyncIOScheduler(timezone=pytz.utc)
 
         async def _daily_refresh():
-            logger.info("=== APScheduler: daily refresh triggered ===")
+            logger.info("=== APScheduler: daily refresh ===")
             from ingestion.ingestion_manager import run_ingestion
             try:
                 stats = await run_ingestion()
-                logger.info(f"=== Daily refresh done: {stats['total_saved']} events saved ===")
+                logger.info(f"Refresh done: {stats['total_saved']} new events, {stats['total_in_db']} total.")
             except Exception as exc:
-                logger.error(f"Daily refresh failed: {exc}")
+                logger.error(f"Daily refresh error: {exc}")
 
-        # Daily at 02:00 UTC
+        # Fire at 02:00 UTC every day
         scheduler.add_job(
             _daily_refresh,
             CronTrigger(hour=2, minute=0, timezone=pytz.utc),
@@ -79,9 +72,9 @@ async def lifespan(app: FastAPI):
             misfire_grace_time=3600,
         )
 
-        # Run full ingestion 90s after startup (not on every restart — only if DB is small)
+        # If DB is small, do a full ingestion 90s after startup
         if total < 200:
-            logger.info("DB has fewer than 200 events — scheduling immediate full ingestion.")
+            logger.info("DB small — scheduling immediate full ingestion in 90s.")
             scheduler.add_job(
                 _daily_refresh,
                 "date",
@@ -90,14 +83,14 @@ async def lifespan(app: FastAPI):
             )
 
         scheduler.start()
-        logger.info("APScheduler running. Daily refresh at 02:00 UTC.")
         app.state.scheduler = scheduler
+        logger.info("APScheduler running — daily refresh at 02:00 UTC.")
 
     except ImportError:
-        logger.warning("APScheduler not installed — add 'apscheduler pytz' to requirements.txt")
+        logger.warning("APScheduler not installed. Add 'apscheduler pytz' to requirements.txt")
         app.state.scheduler = None
 
-    # Optional: warm up semantic index
+    # ── Optional semantic index ────────────────────────────
     if settings.enable_semantic_search and settings.preload_index_on_startup:
         from db.database import AsyncSessionLocal
         from db.crud import get_all_events
@@ -114,11 +107,8 @@ async def lifespan(app: FastAPI):
     logger.info("=== Startup complete ===")
     yield
 
-    # Shutdown
     if hasattr(app.state, "scheduler") and app.state.scheduler:
         app.state.scheduler.shutdown(wait=False)
-        logger.info("APScheduler stopped.")
-
     if settings.enable_semantic_search:
         from relevance.embedder import save_index
         save_index()
@@ -142,7 +132,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Routers ────────────────────────────────────────────────
 app.include_router(events_router, prefix="/api", tags=["events"])
+app.include_router(email_router,  prefix="/api", tags=["email"])
 
 
 @app.get("/")
@@ -150,8 +142,8 @@ async def root():
     return {
         "service": settings.app_name,
         "version": settings.app_version,
-        "status": "ok",
-        "docs": "/docs",
+        "status":  "ok",
+        "docs":    "/docs",
     }
 
 
