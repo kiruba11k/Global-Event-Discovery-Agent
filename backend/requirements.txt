@@ -21,3 +21,46 @@ starlette
 pypdf
 apscheduler
 pytz
+fastapi
+uvicorn[standard]==0.29.0
+sqlalchemy
+aiosqlite
+httpx
+pydantic
+pydantic-settings
+
+# LLM
+groq
+
+# Embeddings (disabled on free tier by default)
+faiss-cpu
+sentence-transformers
+
+# Web scraping
+beautifulsoup4
+playwright
+
+# PDF generation — WeasyPrint (preferred, HTML→PDF)
+# Requires system libs: libpango libcairo libgdk-pixbuf
+# See render.yaml buildCommand for apt-get install
+weasyprint
+
+# PDF fallback — pure Python, zero system deps, always works
+fpdf2
+
+# Email delivery
+resend
+
+# Scheduling
+apscheduler
+pytz
+
+# Misc
+python-multipart
+python-dotenv
+pandas
+rapidfuzz
+tenacity
+loguru
+starlette
+pypdf
