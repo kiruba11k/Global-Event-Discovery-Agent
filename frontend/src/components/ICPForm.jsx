@@ -36,10 +36,11 @@ const DEAL_SIZE_OPTIONS = [
 
 const DEFAULT = {
   company_name:'', company_description:'',
+  email:'',
   target_industries:[], target_personas:[],
   target_geographies:['Global'],
   preferred_event_types:['conference','trade show','summit'],
-  budget_usd:'', date_from:'', date_to:'', min_attendees:200,
+  date_from:'', date_to:'',
   avg_deal_size_category: '',   // 'low' | 'medium' | 'high' | 'enterprise'
 }
 
@@ -49,7 +50,7 @@ const STEPS = [
   { key:'personas',  label:'Buyers',     question:'What roles do your decision-makers hold?' },
   { key:'geography', label:'Geography',  question:'Where in the world are you looking?' },
   { key:'events',    label:'Events',     question:'What types of events fit your sales motion?' },
-  { key:'filters',   label:'Filters',    question:'Budget, dates, deal size & event scale?' },
+  { key:'filters',   label:'Filters',    question:'Dates and deal size for pricing estimates' },
 ]
 
 /* ── Pill selector ──────────────────────────────────────── */
@@ -149,6 +150,8 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
   const validate = (s) => {
     if (s === 0) {
       if (!form.company_name.trim()) return 'Please enter your company name.'
+      if (!form.email.trim()) return 'Please enter your work email.'
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Please enter a valid email address.'
       if (!form.company_description.trim()) return 'Please describe what your company does.'
     }
     if (s === 1 && form.target_industries.length === 0) return 'Select at least one target industry.'
@@ -172,8 +175,6 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
     if (err) return alert(err)
     onSubmit({
       ...form,
-      budget_usd:    form.budget_usd ? parseFloat(form.budget_usd) : null,
-      min_attendees: parseInt(form.min_attendees) || 0,
       date_from:     form.date_from || null,
       date_to:       form.date_to   || null,
     })
@@ -218,6 +219,12 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                   onChange={e=>set('company_name',e.target.value)}
                   onKeyDown={e=>e.key==='Enter'&&navigate(1)}
                   placeholder="e.g. Goavega, VVDN Technologies" />
+              </div>
+              <div className="icp-field">
+                <label className="icp-label">Work email <span className="icp-req">*</span></label>
+                <input className="icp-input" type="email" value={form.email}
+                  onChange={e=>set('email',e.target.value)}
+                  placeholder="name@company.com" />
               </div>
               <div className="icp-field">
                 <label className="icp-label">What you sell / do <span className="icp-req">*</span></label>
@@ -290,7 +297,7 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                   <DollarSign size={12} style={{ color:'var(--accent)' }} />
                   Average deal size (annual contract value)
                   <span style={{ fontSize:10, color:'var(--text-dim)', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
-                    — unlocks personalised meeting package pricing
+                    — used to calculate package and pipeline estimates
                   </span>
                 </label>
                 <div className="deal-size-grid">
@@ -308,7 +315,7 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
 
               <div className="section-divider" style={{ margin:'4px 0' }} />
 
-              {/* ── Dates & budget ── */}
+              {/* ── Dates ── */}
               <div className="icp-filter-grid">
                 <div className="icp-field">
                   <label className="icp-label">From date</label>
@@ -317,16 +324,6 @@ export default function ICPForm({ onSubmit, loading, companyData }) {
                 <div className="icp-field">
                   <label className="icp-label">To date</label>
                   <input type="date" className="icp-input" value={form.date_to} onChange={e=>set('date_to',e.target.value)} />
-                </div>
-                <div className="icp-field">
-                  <label className="icp-label">Max ticket / exhibitor fee (USD)</label>
-                  <input type="number" ref={inputRef} className="icp-input" value={form.budget_usd}
-                    onChange={e=>set('budget_usd',e.target.value)} placeholder="e.g. 2000" />
-                </div>
-                <div className="icp-field">
-                  <label className="icp-label">Min attendees</label>
-                  <input type="number" className="icp-input" value={form.min_attendees}
-                    onChange={e=>set('min_attendees',e.target.value)} />
                 </div>
               </div>
             </div>

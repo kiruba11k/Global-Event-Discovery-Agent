@@ -49,13 +49,12 @@ function Hero() {
           Find Events Where<br /><span className="hero-gradient">Your Prospects Live</span>
         </h1>
         <p className="hero-subtitle">
-          Feed us your ICP. Our multi-agent AI scans 12+ event sources, scores every event
-          against your ideal customer profile, and tells you exactly where to show up.
+          Scans 10,000 events and trade shows, scores every event against your customer profile, and tells you exactly where to show up.
         </p>
         <div className="hero-stats">
           <StatCounter value={12} suffix="+" label="Event Sources" />
           <div className="stat-divider" />
-          <StatCounter value={5000} suffix="+" label="Events Indexed" />
+          <StatCounter value={10000} suffix="+" label="Events Indexed" />
           <div className="stat-divider" />
           <StatCounter value={3} label="AI Ranking Layers" />
           <div className="stat-divider" />
@@ -66,7 +65,7 @@ function Hero() {
             { icon: Brain,       text: 'Groq LLM + Cross-Validation' },
             { icon: Globe,       text: 'Global Coverage — 20+ Countries' },
             { icon: TrendingUp,  text: 'ROI + Meeting Package Pricing' },
-            { icon: ShieldCheck, text: 'Cashback Guarantee' },
+            { icon: ShieldCheck, text: 'Cross-checked Event Fit' },
             { icon: Mail,        text: 'PDF Report via Email' },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="hero-feature"><Icon size={14} /><span>{text}</span></div>
@@ -262,7 +261,7 @@ export default function App() {
         <div className="footer-inner">
           <span>Powered by LeadStrategus · Multi-Agent Event Intelligence</span>
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="footer-cta">
-            <b>Schedule a Strategy Call</b> <ChevronRight size={18} />
+            <b>Book a Demo</b> <ChevronRight size={18} />
           </a>
         </div>
       </footer>

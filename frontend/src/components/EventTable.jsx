@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone, ShieldCheck, Info } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone, Info } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════
    PRICING MATRIX — matches internal pricing doc exactly
    Rows: meetings (5, 10, 15, 20)
    Cols: deal size category (low / medium / high / enterprise)
-   Unit: Indian Rupees Lakhs (₹L)
+   Unit: USD
    ═══════════════════════════════════════════════════════════ */
 const PRICING_MATRIX = {
-  low:        { 5: 2.25, 10: 3.75, 15: 5.00, 20: 6.50 },
-  medium:     { 5: 2.75, 10: 4.50, 15: 6.00, 20: 7.75 },
-  high:       { 5: 3.25, 10: 5.25, 15: 7.00, 20: 9.00 },
-  enterprise: { 5: 3.75, 10: 6.00, 15: 8.00, 20: 10.50 },
+  low:        { 5: 2700, 10: 4500, 15: 6000, 20: 7800 },
+  medium:     { 5: 3300, 10: 5400, 15: 7200, 20: 9300 },
+  high:       { 5: 3900, 10: 6300, 15: 8400, 20: 10800 },
+  enterprise: { 5: 4500, 10: 7200, 15: 9600, 20: 12600 },
 }
 
 const DEAL_LABELS = {
@@ -71,11 +71,12 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
           <span>{tierInfo.tag}</span>
           <span>LeadStrategus Meeting Packages — {tierInfo.tier}</span>
         </div>
-        {/* Cashback badge */}
-        <div className="cashback-badge">
-          <ShieldCheck size={12} />
-          <span>Cashback Guarantee</span>
-        </div>
+      </div>
+      <div className="pc-disclaimer" style={{ marginTop: 8, borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
+        <Info size={10} />
+        <span>
+          Pricing shown is an estimate; actual engagement fee may vary by event complexity, geography, GTM, and customer references.
+        </span>
       </div>
 
       {/* Deal size context */}
@@ -97,7 +98,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 
       {/* Selected package details */}
       <div className="pc-selected-card">
-        <div className="pc-selected-price">₹{prices[selected]}L</div>
+        <div className="pc-selected-price">${prices[selected].toLocaleString()}</div>
         <div className="pc-selected-desc">for {selected} guaranteed meetings at {eventName || 'this event'}</div>
         <div className="pc-pipeline-row">
           <div className="pc-pipe-stat">
@@ -135,7 +136,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
               return (
                 <tr key={m} className={selected === m ? 'pc-row-active' : ''} onClick={() => setSelected(m)}>
                   <td><strong>{m}</strong> meetings</td>
-                  <td className="pc-price-cell">₹{prices[m]}L</td>
+                  <td className="pc-price-cell">${prices[m].toLocaleString()}</td>
                   <td>{p.qualified} leads</td>
                   <td>${p.pipeline}</td>
                 </tr>
@@ -145,16 +146,22 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         </table>
       </div>
 
+      <div className="pc-table-wrap">
+        <div className="pc-table-label">What you get</div>
+        <ul style={{ margin: '8px 0 0 16px', fontSize: 12, color: 'var(--text)' }}>
+          <li>Pre-show ICP outreach to target attendees and buyers.</li>
+          <li>Meeting planning with calendar coordination and confirmations.</li>
+          <li>On-site support for introductions, logistics, and no-show recovery.</li>
+          <li>Post-event follow-up summary with lead quality notes.</li>
+        </ul>
+      </div>
+
       {/* CTA */}
       <div className="pc-cta-row">
         <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta">
           <Phone size={11} />
-          Get a Formal Quote
+          Get a Free Quote
         </a>
-        <div className="cashback-note">
-          <ShieldCheck size={11} />
-          <span>If we don't deliver the promised meetings, you get a cashback. No questions asked.</span>
-        </div>
       </div>
 
       {/* Disclaimer */}
@@ -234,7 +241,7 @@ function EventRow({ event, index, dealSizeCategory }) {
         {/* Price range column */}
         <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
           {pkgs.length > 0
-            ? `₹${prices[pkgs[0]]}L – ₹${prices[pkgs[pkgs.length-1]]}L`
+            ? `$${prices[pkgs[0]].toLocaleString()} – $${prices[pkgs[pkgs.length-1]].toLocaleString()}`
             : '—'}
         </td>
         <td style={{ textAlign: 'center' }}>
