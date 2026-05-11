@@ -5,24 +5,39 @@ services:
     rootDir: backend
     buildCommand: |
       apt-get install -y \
-        libpango-1.0-0 \
-        libpangoft2-1.0-0 \
-        libcairo2 \
-        libgdk-pixbuf2.0-0 \
-        libharfbuzz0b \
-        libffi-dev \
-        shared-mime-info \
-        2>/dev/null || true
+        libpango-1.0-0 libpangoft2-1.0-0 libcairo2 \
+        libgdk-pixbuf2.0-0 libharfbuzz0b libffi-dev \
+        shared-mime-info 2>/dev/null || true
       pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
     envVars:
-      # ── LLM ─────────────────────────────────────
+      # ── CRITICAL: DB path must match disk mountPath below ────
+      # Option A (SQLite, default): uncomment this line
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:////opt/render/project/src/backend/data/events.db
+
+      # Option B (PostgreSQL, recommended for reliability):
+      # 1. Create a PostgreSQL database in Render dashboard
+      # 2. Copy the "Internal Database URL" from the DB dashboard
+      # 3. Replace the line above with:
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: event-agent-db
+      #     property: connectionString
+      # 4. Also change the driver: postgresql+asyncpg://... (add asyncpg to requirements.txt)
+
+      # ── Tells database.py where the disk is mounted ─────────
+      - key: RENDER_DISK_PATH
+        value: /opt/render/project/src/backend
+
+      # ── LLM ──────────────────────────────────────────────────
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
         value: llama-3.3-70b-versatile
 
-      # ── Event APIs ───────────────────────────────
+      # ── Event APIs ───────────────────────────────────────────
       - key: TICKETMASTER_KEY
         sync: false
       - key: EVENTBRITE_TOKEN
@@ -30,32 +45,25 @@ services:
       - key: LUMA_API_KEY
         sync: false
 
-      # ── Email (Resend) ───────────────────────────
-      # Sign up free at resend.com — 3,000 emails/month
+      # ── Email ────────────────────────────────────────────────
       - key: RESEND_API_KEY
         sync: false
-      # Must be a domain verified in your Resend account
-      # For testing use: onboarding@resend.dev
       - key: RESEND_FROM_EMAIL
         value: reports@leadstrategus.com
 
-      # ── Frontend / CORS ──────────────────────────
+      # ── CORS ─────────────────────────────────────────────────
       - key: FRONTEND_ORIGIN
         sync: false
 
-      # ── Embedding (disabled — exceeds 512MB free tier RAM) ──
+      # ── Performance (free tier) ──────────────────────────────
       - key: ENABLE_SEMANTIC_SEARCH
         value: "false"
       - key: PRELOAD_INDEX_ON_STARTUP
         value: "false"
-
-      # ── Scoring (rules-only on free tier) ───────
       - key: COSINE_WEIGHT
         value: "0.0"
       - key: RULE_WEIGHT
         value: "1.0"
-
-      # ── Scraper tuning ───────────────────────────
       - key: SCRAPE_DELAY_SECONDS
         value: "2.5"
       - key: SCRAPE_TIMEOUT_SECONDS
@@ -63,12 +71,9 @@ services:
       - key: TOP_K_FOR_LLM
         value: "20"
 
-      # ── Database ─────────────────────────────────
-      - key: DATABASE_URL
-        value: sqlite+aiosqlite:///./events.db
-
     disk:
       name: events-db
+      # ⚠️  This MUST match RENDER_DISK_PATH and the path in DATABASE_URL above
       mountPath: /opt/render/project/src/backend
       sizeGB: 1
 
@@ -82,23 +87,25 @@ services:
       - key: VITE_API_URL
         sync: false
 
-# ─────────────────────────────────────────────────────────────
-# FREE-TIER DAILY SCRAPING STRATEGY
-# ─────────────────────────────────────────────────────────────
-# Render free tier spins down after 15 min of inactivity.
-# APScheduler inside the app fires at 02:00 UTC IF the app is awake.
-# To guarantee daily scraping even when idle, use ONE of:
+# ─────────────────────────────────────────────────────────────────────────────
+# HOW TO VERIFY THE DISK IS WORKING
+# After deploying, call: GET /health
+# You should see:
+#   "database_url": "sqlite+aiosqlite:////opt/render/project/src/backend/data/..."
+#   "render_env": true
+#   "disk_path": "/opt/render/project/src/backend"
+#   "total_events": 500+   ← after first full ingestion
 #
-# Option A — GitHub Actions (recommended, completely free):
-#   .github/workflows/daily_refresh.yml
-#   Set secret BACKEND_URL = https://your-app.onrender.com
-#   Pings /health to wake service, then POST /api/refresh
+# If total_events keeps resetting to ~53:
+#   → The disk is NOT attached. Go to Render Dashboard → your service
+#   → Disks tab → verify the disk shows as "Attached"
+#   → If not attached, click "Add Disk", set mount path to /opt/render/project/src/backend
 #
-# Option B — cron-job.org (free):
-#   Add a job: GET https://your-app.onrender.com/health every 10 min
-#   This keeps the service warm AND prevents spin-down
-#   Add a separate job: POST /api/refresh daily at 02:05 UTC
-#
-# Option C — Upgrade to Render Starter ($7/mo):
-#   No spin-down, APScheduler alone is sufficient
-# ─────────────────────────────────────────────────────────────
+# RECOMMENDED: Switch to PostgreSQL for true persistence:
+#   1. Render Dashboard → New → PostgreSQL (free tier)
+#   2. Copy "Internal Database URL"
+#   3. Set DATABASE_URL env var to: postgresql+asyncpg://[paste URL here]
+#      (replace the "postgresql://" prefix with "postgresql+asyncpg://")
+#   4. Add asyncpg to requirements.txt
+#   5. No disk needed — PostgreSQL is always persistent
+# ─────────────────────────────────────────────────────────────────────────────
