@@ -55,6 +55,7 @@ def _normalise_url(url: str) -> str:
 
 
 _db_url    = _normalise_url(settings.database_url)
+DATABASE_URL = _db_url
 _is_sqlite = _db_url.startswith("sqlite")
 
 # ── Engine kwargs ──────────────────────────────────────────────────
