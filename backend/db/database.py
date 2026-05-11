@@ -1,96 +1,81 @@
 """
-Database setup — FIXED for Render persistence.
+Database setup — SQLite (local dev) + PostgreSQL (production).
 
-Root cause of data loss:
-  DATABASE_URL = sqlite+aiosqlite:///./events.db
-  This stores the DB at CWD/events.db.
-  On Render, CWD at runtime may NOT be inside the mounted disk,
-  so every restart wipes the database.
+WHY THIS FILE WAS CHANGED
+─────────────────────────
+Render free tier has NO persistent disk. The `disk:` block in render.yaml
+requires a paid plan ($7/mo Starter). On free tier the SQLite file sits on
+ephemeral storage and is wiped on every restart / spin-down.
 
-Fix:
-  1. Detect whether we're on Render (RENDER env var is set automatically)
-  2. If on Render → use absolute path inside the mounted disk directory
-  3. If local → use CWD as before
-  4. Auto-create the data directory so it always exists
+RECOMMENDED SETUP (free, permanent)
+────────────────────────────────────
+1. Create a free account at https://neon.tech
+2. Create a new project (one click)
+3. Copy the connection string shown in the dashboard — it looks like:
+      postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+4. In Render → your backend service → Environment → add:
+      DATABASE_URL = <the string from step 3>
+5. Redeploy. Done. Data now persists forever across restarts and spin-downs.
 
-Render disk mount (render.yaml):
-  mountPath: /opt/render/project/src/backend
-  → DB lives at /opt/render/project/src/backend/data/events.db
-  → This path survives restarts and redeploys
+This module auto-detects the driver and normalises the URL so you never have
+to think about asyncpg vs aiosqlite differences.
 """
-import os
-from sqlalchemy.ext.asyncio import (
-    create_async_engine, AsyncSession, async_sessionmaker
-)
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from config import get_settings
 from models.event import Base as EventBase
-from models.company_profile import CompanyProfileORM  # registers table
+from models.company_profile import CompanyProfileORM  # registers table in metadata
 from loguru import logger
 
+settings = get_settings()
 
-def _resolve_database_url() -> str:
+
+# ── URL normalisation ──────────────────────────────────────────────
+
+def _normalise_url(url: str) -> str:
     """
-    Return a database URL with an absolute, persistent path.
+    Convert any DB URL to its async-driver form.
 
-    Priority:
-      1. DATABASE_URL env var if it's already an absolute path or postgres
-      2. RENDER detected → use mounted disk absolute path
-      3. Fallback → CWD relative (local dev)
+    postgres://…          → postgresql+asyncpg://…
+    postgresql://…        → postgresql+asyncpg://…   (if no driver specified)
+    sslmode=require       → ssl=require              (asyncpg syntax)
+    sqlite+aiosqlite://…  → unchanged
     """
-    raw = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./events.db")
+    # Heroku / Render / Neon / Supabase all emit "postgres://"
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://") and "+asyncpg" not in url and "+psycopg" not in url:
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    # PostgreSQL — always persistent, no path fix needed
-    if "postgresql" in raw or "postgres" in raw:
-        logger.info(f"Using PostgreSQL: {raw[:40]}...")
-        return raw
+    # asyncpg uses ?ssl=require, not ?sslmode=require
+    url = url.replace("sslmode=require", "ssl=require")
+    url = url.replace("sslmode=prefer", "ssl=prefer")
+    url = url.replace("sslmode=disable", "")
 
-    # Already an absolute SQLite path → use as-is
-    if "sqlite" in raw and "///" in raw:
-        after = raw.split("///", 1)[1]
-        if after.startswith("/"):
-            logger.info(f"Using absolute SQLite path: {after}")
-            return raw
-
-    # ── Render production environment ─────────────────────────
-    # Render sets the RENDER env var automatically on all services.
-    # The disk is mounted at RENDER_DISK_PATH (we set this in render.yaml env).
-    render_disk = os.environ.get(
-        "RENDER_DISK_PATH",
-        "/opt/render/project/src/backend"
-    )
-
-    if os.environ.get("RENDER") or os.path.exists(render_disk):
-        data_dir = os.path.join(render_disk, "data")
-        os.makedirs(data_dir, exist_ok=True)
-        db_path = os.path.join(data_dir, "events.db")
-        url = f"sqlite+aiosqlite:///{db_path}"
-        logger.info(f"Render mode — DB at absolute path: {db_path}")
-        return url
-
-    # ── Local development ──────────────────────────────────────
-    local_dir = os.path.abspath(
-        os.environ.get("LOCAL_DB_DIR", os.path.join(os.getcwd(), "data"))
-    )
-    os.makedirs(local_dir, exist_ok=True)
-    db_path = os.path.join(local_dir, "events.db")
-    url = f"sqlite+aiosqlite:///{db_path}"
-    logger.info(f"Local mode — DB at: {db_path}")
     return url
 
 
-# ── Build engine ───────────────────────────────────────────────
-DATABASE_URL = _resolve_database_url()
-IS_SQLITE    = "sqlite" in DATABASE_URL
+_db_url    = _normalise_url(settings.database_url)
+_is_sqlite = _db_url.startswith("sqlite")
 
-engine_kwargs: dict = {
-    "echo":         os.environ.get("DEBUG", "false").lower() == "true",
+# ── Engine kwargs ──────────────────────────────────────────────────
+
+_engine_kwargs: dict = {
+    "echo":          settings.debug,
     "pool_pre_ping": True,
 }
-if IS_SQLITE:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
-    # SQLite pragma tweaks for better concurrency and durability
-    from sqlalchemy import event as sa_event
 
-engine = create_async_engine(DATABASE_URL, **engine_kwargs)
+if _is_sqlite:
+    # SQLite: disable thread-safety guard (async is single-process safe)
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # PostgreSQL via asyncpg: tune pool for Render free tier (512 MB RAM)
+    _engine_kwargs["pool_size"]    = 5
+    _engine_kwargs["max_overflow"] = 5
+    _engine_kwargs["pool_timeout"] = 30
+    _engine_kwargs["pool_recycle"] = 300   # recycle connections every 5 min
+
+
+engine = create_async_engine(_db_url, **_engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -99,30 +84,11 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def init_db():
-    """Create all tables if they don't exist. Safe to call every startup."""
+async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(EventBase.metadata.create_all)
-
-    # Enable WAL mode for SQLite — much better concurrent read performance
-    # and prevents database locking during long ingestion runs
-    if IS_SQLITE:
-        async with AsyncSessionLocal() as session:
-            await session.execute(
-                __import__("sqlalchemy").text("PRAGMA journal_mode=WAL")
-            )
-            await session.execute(
-                __import__("sqlalchemy").text("PRAGMA synchronous=NORMAL")
-            )
-            await session.execute(
-                __import__("sqlalchemy").text("PRAGMA cache_size=-64000")   # 64MB cache
-            )
-            await session.execute(
-                __import__("sqlalchemy").text("PRAGMA temp_store=MEMORY")
-            )
-            await session.commit()
-
-    logger.info(f"Database initialised. URL: {DATABASE_URL[:60]}")
+    db_type = "SQLite (local)" if _is_sqlite else "PostgreSQL (persistent)"
+    logger.info(f"Database initialised [{db_type}] — events + company_profiles ready.")
 
 
 async def get_db():
