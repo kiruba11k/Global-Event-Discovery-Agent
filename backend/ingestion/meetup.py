@@ -145,8 +145,12 @@ class MeetupConnector(BaseConnector):
         combos = combos[:MAX_COMBOS_PER_RUN]
 
         import httpx
+        endpoint_unavailable = False
+
         async with httpx.AsyncClient(timeout=15) as client:
             for topic, city, country, lat, lon in combos:
+                if endpoint_unavailable:
+                    break
                 payload = {
                     "query": GQL_QUERY,
                     "variables": {"query": topic, "lat": lat, "lon": lon},
@@ -154,9 +158,17 @@ class MeetupConnector(BaseConnector):
                 try:
                     await asyncio.sleep(1.1)   # ~1 req/sec — polite rate limit
                     r = await client.post(GQL_URL, json=payload)
+                    if r.status_code == 404:
+                        endpoint_unavailable = True
+                        logger.warning("Meetup GraphQL endpoint returned 404; stopping Meetup fetch for this run.")
+                        break
                     r.raise_for_status()
                     data = r.json()
                 except Exception as e:
+                    if "404" in str(e):
+                        endpoint_unavailable = True
+                        logger.warning("Meetup endpoint appears unavailable (404); stopping Meetup fetch for this run.")
+                        break
                     logger.debug(f"Meetup {topic}/{city}: {e}")
                     continue
 
