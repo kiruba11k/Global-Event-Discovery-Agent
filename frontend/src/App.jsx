@@ -3,11 +3,11 @@ import toast, { Toaster } from 'react-hot-toast'
 import CompanyForm from './components/CompanyForm'
 import ICPForm from './components/ICPForm'
 import EventTable from './components/EventTable'
+import EmailReportModal from './components/EmailReportModal'
 import { api } from './api/client'
-import { Zap, Globe, Brain, TrendingUp, ChevronRight, Sparkles, ShieldCheck } from 'lucide-react'
+import { Zap, Globe, Brain, TrendingUp, ChevronRight, Sparkles, ShieldCheck, Mail } from 'lucide-react'
 import './App.css'
 
-/* ── Stats counter animation ───────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
   const [display, setDisplay] = useState(0)
   useEffect(() => {
@@ -33,9 +33,7 @@ function StatCounter({ value, suffix = '', label }) {
 function OrbBackground() {
   return (
     <div className="orb-container" aria-hidden>
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-      <div className="orb orb-3" />
+      <div className="orb orb-1" /><div className="orb orb-2" /><div className="orb orb-3" />
       <div className="grid-overlay" />
     </div>
   )
@@ -46,20 +44,16 @@ function Hero() {
     <header className="hero">
       <OrbBackground />
       <div className="hero-content">
-        <div className="hero-badge">
-          <Sparkles size={12} />
-          <span>AI-Powered Event Intelligence</span>
-        </div>
+        <div className="hero-badge"><Sparkles size={12} /><span>AI-Powered Event Intelligence</span></div>
         <h1 className="hero-title">
-          Find Events Where<br />
-          <span className="hero-gradient">Your Prospects Live</span>
+          Find Events Where<br /><span className="hero-gradient">Your Prospects Live</span>
         </h1>
         <p className="hero-subtitle">
-          Feed us your ICP. Our multi-agent AI scans 8+ event sources, scores every event
+          Feed us your ICP. Our multi-agent AI scans 12+ event sources, scores every event
           against your ideal customer profile, and tells you exactly where to show up.
         </p>
         <div className="hero-stats">
-          <StatCounter value={8} suffix="+" label="Event Sources" />
+          <StatCounter value={12} suffix="+" label="Event Sources" />
           <div className="stat-divider" />
           <StatCounter value={5000} suffix="+" label="Events Indexed" />
           <div className="stat-divider" />
@@ -70,14 +64,12 @@ function Hero() {
         <div className="hero-features">
           {[
             { icon: Brain,       text: 'Groq LLM + Cross-Validation' },
-            { icon: Globe,       text: 'Global Event Coverage' },
-            { icon: TrendingUp,  text: 'ROI Calculator Built-in' },
+            { icon: Globe,       text: 'Global Coverage — 20+ Countries' },
+            { icon: TrendingUp,  text: 'ROI + Meeting Package Pricing' },
             { icon: ShieldCheck, text: 'Cashback Guarantee' },
+            { icon: Mail,        text: 'PDF Report via Email' },
           ].map(({ icon: Icon, text }) => (
-            <div key={text} className="hero-feature">
-              <Icon size={14} />
-              <span>{text}</span>
-            </div>
+            <div key={text} className="hero-feature"><Icon size={14} /><span>{text}</span></div>
           ))}
         </div>
       </div>
@@ -97,20 +89,19 @@ function SectionLabel({ step, label, sublabel }) {
   )
 }
 
-/* ── Main App ───────────────────────────────────────────── */
 export default function App() {
-  const [loading, setLoading]               = useState(false)
-  const [results, setResults]               = useState([])
-  const [hasSearched, setHasSearched]       = useState(false)
-  const [profileId, setProfileId]           = useState('')
-  const [companyData, setCompanyData]       = useState(null)
-  const [companyProfileId, setCompanyProfileId] = useState(null)
-  const [stats, setStats]                   = useState(null)
-  const [dealSizeCategory, setDealSizeCategory] = useState('medium') // default
+  const [loading,            setLoading]            = useState(false)
+  const [results,            setResults]            = useState([])
+  const [hasSearched,        setHasSearched]        = useState(false)
+  const [profileId,          setProfileId]          = useState('')
+  const [companyData,        setCompanyData]        = useState(null)
+  const [companyProfileId,   setCompanyProfileId]   = useState(null)
+  const [stats,              setStats]              = useState(null)
+  const [dealSizeCategory,   setDealSizeCategory]   = useState('medium')
+  const [lastProfile,        setLastProfile]        = useState(null)
+  const [emailModalOpen,     setEmailModalOpen]     = useState(false)
 
-  useEffect(() => {
-    api.getStats().then(setStats).catch(() => {})
-  }, [])
+  useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
   const onCompanySave = async (data, deckFile) => {
     try {
@@ -127,11 +118,8 @@ export default function App() {
   }
 
   const onSearch = async (profile) => {
-    // Extract deal size for frontend ROI display — doesn't need to go to backend
-    if (profile.avg_deal_size_category) {
-      setDealSizeCategory(profile.avg_deal_size_category)
-    }
-
+    if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
+    setLastProfile(profile)
     setLoading(true)
     try {
       const payload = { profile }
@@ -144,16 +132,11 @@ export default function App() {
       setProfileId(res.profile_id || '')
       const goCount = displayEvents.filter(e => e.fit_verdict === 'GO').length
       if (displayEvents.length === 0) {
-        toast.error('Not found — no events match the selected date range.')
+        toast.error('No events found for the selected date range.')
       } else {
-        toast.success(
-          `Found ${displayEvents.length} events — ${goCount} are strong matches`,
-          { duration: 4000 }
-        )
+        toast.success(`Found ${displayEvents.length} events — ${goCount} strong matches`, { duration: 4000 })
       }
-      setTimeout(() => {
-        document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' })
-      }, 300)
+      setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
     } catch (err) {
       toast.error(err.message || 'Search failed')
     } finally {
@@ -163,6 +146,18 @@ export default function App() {
 
   const displayResults = results.filter(e => e.fit_verdict !== 'SKIP')
 
+  // Build profile summary to pass to the PDF
+  const profileSummary = {
+    company_name:        lastProfile?.company_name        || companyData?.company_name || '',
+    company_description: lastProfile?.company_description || companyData?.what_we_do   || '',
+    target_industries:   lastProfile?.target_industries   || [],
+    target_personas:     lastProfile?.target_personas     || [],
+    target_geographies:  lastProfile?.target_geographies  || [],
+    deal_size_category:  dealSizeCategory,
+    date_from:           lastProfile?.date_from || null,
+    date_to:             lastProfile?.date_to   || null,
+  }
+
   return (
     <div className="app">
       <Toaster
@@ -170,7 +165,7 @@ export default function App() {
         toastOptions={{
           style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
           success: { iconTheme: { primary: '#06b6d4', secondary: '#1e293b' } },
-          error: { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
+          error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
       />
 
@@ -186,31 +181,20 @@ export default function App() {
             </span>
             <ChevronRight size={12} />
             <span className="status-apis">
-              {Object.entries(stats.apis_configured || {})
-                .filter(([, v]) => v)
-                .map(([k]) => k)
-                .join(' · ')}
+              {Object.entries(stats.apis_configured || {}).filter(([, v]) => v).map(([k]) => k).join(' · ')}
             </span>
           </div>
         )}
 
-        {/* Step 1 — Company (Optional) */}
+        {/* Step 1 — Company */}
         <section className="form-section">
-          <SectionLabel
-            step="01"
-            label="Your Company"
-            sublabel="Optional · Upload your deck for deeper matching"
-          />
+          <SectionLabel step="01" label="Your Company" sublabel="Optional · Upload your deck for deeper matching" />
           <CompanyForm onSave={onCompanySave} saved={!!companyProfileId} />
         </section>
 
         {/* Step 2 — ICP */}
         <section className="form-section">
-          <SectionLabel
-            step="02"
-            label="Your ICP"
-            sublabel="Define who you sell to · include deal size for personalised pricing"
-          />
+          <SectionLabel step="02" label="Your ICP" sublabel="Define who you sell to · include deal size for personalised pricing" />
           <ICPForm onSubmit={onSearch} loading={loading} companyData={companyData} />
         </section>
 
@@ -220,9 +204,7 @@ export default function App() {
             <div className="results-header">
               <div>
                 <h2 className="results-title">Not found</h2>
-                <p className="results-sub">
-                  No events were found between the selected dates. Try a wider date range or different filters.
-                </p>
+                <p className="results-sub">No events matched the selected date range. Try wider dates or different filters.</p>
               </div>
             </div>
           </section>
@@ -235,22 +217,38 @@ export default function App() {
                 <h2 className="results-title">
                   <span className="results-count">{displayResults.length}</span> Events Ranked
                 </h2>
-                <p className="results-sub">
-                  Sorted by AI relevance · Expand any row for meeting packages & ROI analysis
-                </p>
+                <p className="results-sub">Sorted by AI relevance · Expand any row for meeting packages & ROI</p>
               </div>
-              <div className="results-pills">
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
                 {['GO', 'CONSIDER'].map(v => {
                   const count = displayResults.filter(e => e.fit_verdict === v).length
                   return (
                     <div key={v} className={`results-pill pill-${v.toLowerCase()}`}>
-                      <span>{v}</span>
-                      <span className="pill-count">{count}</span>
+                      <span>{v}</span><span className="pill-count">{count}</span>
                     </div>
                   )
                 })}
+                {/* ── Email PDF button ── */}
+                <button
+                  onClick={() => setEmailModalOpen(true)}
+                  style={{
+                    display:'inline-flex', alignItems:'center', gap:7,
+                    background:'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                    color:'#fff', border:'none', borderRadius:'var(--radius-sm)',
+                    padding:'8px 16px', fontSize:12, fontWeight:700,
+                    cursor:'pointer', fontFamily:'var(--font-display)',
+                    boxShadow:'0 3px 12px rgba(99,102,241,0.35)',
+                    transition:'all 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'none'}
+                >
+                  <Mail size={13} />
+                  Email PDF Report
+                </button>
               </div>
             </div>
+
             <EventTable
               events={displayResults}
               profileId={profileId}
@@ -268,6 +266,15 @@ export default function App() {
           </a>
         </div>
       </footer>
+
+      {/* Email PDF Modal */}
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        events={displayResults}
+        profile={profileSummary}
+        dealSizeCategory={dealSizeCategory}
+      />
     </div>
   )
 }
