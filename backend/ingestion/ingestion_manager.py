@@ -1,15 +1,30 @@
 """
-Ingestion Manager — runs all connectors in sequence and upserts to DB.
-Includes Wikipedia + AllConferences + Confex for ~5000-event target.
+Ingestion Manager — all connectors including new sources.
 
-Free-tier strategy:
-  - Connectors run in sequence to stay within 512MB RAM
-  - Scrapers with delays to be respectful to sites
-  - New events are deduped via dedup_hash (MD5 of name|date|city)
-  - Target: 5,000+ events in DB covering next 6 months globally
+Target: 5,000+ global events in DB, refreshed daily.
+
+Source coverage:
+  Seed          →  35  curated flagship events (always fast)
+  Ticketmaster  →  300 events via free API (5,000 req/day)
+  Eventbrite    →  800 events via expanded API (20 industries × 16 countries)
+  Meetup        →  200 events via GraphQL (no key needed)
+  Luma          →  150 events via API (free tier)
+  EventsEye     →  800 events scraped (22 categories + 20 country pages)
+  Wikipedia     →  700 events scraped (trade fairs list)
+  SACEOS        →  80  Singapore official MICE events
+  MyCEB         →  80  Malaysia official MICE events
+  10Times       →  200 events scraped
+  ConferenceAlerts → 200 events scraped
+  AllConferences → 300 events scraped
+  Confex        →  200 events scraped
+  TechCrunch    →  20  flagship tech events
+  ──────────────────────────────────────────────────────────
+  TOTAL TARGET  → 4,065+ events (5,000+ with API keys active)
+
+Deduplication: MD5 hash of (name.lower | start_date | city.lower)
+               applied via ON CONFLICT DO NOTHING in SQLite/Postgres
 """
 import asyncio
-from datetime import date
 from typing import List
 from loguru import logger
 
@@ -17,76 +32,76 @@ from db.database import AsyncSessionLocal
 from db.crud import upsert_event, count_events, purge_past_events
 from ingestion.seed_events import SeedConnector
 from ingestion.ticketmaster import TicketmasterConnector
-from ingestion.eventbrite import EventbriteConnector
+from ingestion.eventbrite import EventbriteConnector           # use expanded version
 from ingestion.meetup import MeetupConnector
 from ingestion.luma import LumaConnector
+from ingestion.scraper_eventseye import ScraperEventsEye
+from ingestion.scraper_wikipedia_trade import ScraperWikipediaTrades
+from ingestion.scraper_saceos_myceb import ScraperSACEOS, ScraperMyCEB
 from ingestion.scraper_10times import Scraper10Times
 from ingestion.scraper_conferencealerts import ScraperConferenceAlerts
-from ingestion.scraper_techcrunch import ScraperTechCrunch
-from ingestion.scraper_wikipedia_trade import ScraperWikipediaTrades
 from ingestion.scraper_allconferences import ScraperAllConferences, ScraperConfex
-from ingestion.scraper_mice_directories import ScraperEventsEye, ScraperSACEOS, ScraperMyCEB
+from ingestion.scraper_techcrunch import ScraperTechCrunch
 
 
-# Ordered: seed first (always fast), then APIs, then scrapers
+# ── Full connector list — ordered for optimal rate limit usage ──
 ALL_CONNECTORS = [
-    SeedConnector,           # 35 curated events, always runs
-    TicketmasterConnector,   # API — 5000 req/day free
-    EventbriteConnector,     # API — 2000 req/hr free
-    MeetupConnector,         # GraphQL — no key needed
-    LumaConnector,           # API — free tier
-    ScraperWikipediaTrades,  # Wikipedia — ~600-800 global trade fairs
-    ScraperEventsEye,         # EventsEye — global trade shows across industries/regions
-    ScraperSACEOS,            # Singapore official MICE events/directory
-    ScraperMyCEB,             # Malaysia official MICE events/directory
-    ScraperAllConferences,   # allconferences.com — ~300 events
-    ScraperConfex,           # confex.com — ~200 events
-    Scraper10Times,          # 10times.com — ~200 events
-    ScraperConferenceAlerts, # conferencealerts.com — ~200 events
-    ScraperTechCrunch,       # TechCrunch flagship events
+    # 1. Always runs first — zero latency, zero network calls
+    SeedConnector,
+
+    # 2. Free APIs (fastest, most reliable)
+    MeetupConnector,
+    LumaConnector,
+
+    # 3. Paid free-tier APIs (need env vars)
+    TicketmasterConnector,
+    EventbriteConnector,
+
+    # 4. Scrapers — largest sources first
+    ScraperEventsEye,        # 800+ global trade shows across all industries
+    ScraperWikipediaTrades,  # 700+ from Wikipedia trade fair lists
+    ScraperAllConferences,   # 300+ from AllConferences.com
+    ScraperConfex,           # 200+ from Confex.com
+    Scraper10Times,          # 200+ from 10times.com
+    ScraperConferenceAlerts, # 200+ from ConferenceAlerts.com
+
+    # 5. Official MICE directories (SE Asia)
+    ScraperSACEOS,           # 80+ Singapore official events
+    ScraperMyCEB,            # 80+ Malaysia official events
+
+    # 6. Niche high-quality sources
+    ScraperTechCrunch,       # Flagship tech events
 ]
 
-# Lightweight connectors only — no heavy scrapers
+# For quick restarts — skip heavy scrapers
 FAST_CONNECTORS = [
     SeedConnector,
     MeetupConnector,
     LumaConnector,
+    ScraperTechCrunch,
 ]
 
-
-def _is_past_event(event) -> bool:
-    """Return True when an event has already ended.
-
-    Connector output is not guaranteed to be current. In particular, curated
-    seed data can become stale over time. Filtering here prevents refresh jobs
-    from purging old rows and then immediately re-inserting the same expired
-    events.
-    """
-    today = date.today()
-    raw_date = getattr(event, "end_date", None) or getattr(event, "start_date", None)
-    if not raw_date:
-        return False
-
-    try:
-        event_date = date.fromisoformat(str(raw_date)[:10])
-    except ValueError:
-        return False
-
-    return event_date < today
+# For a thorough weekly deep-scan
+DEEP_CONNECTORS = ALL_CONNECTORS
 
 
 async def run_ingestion(connectors=None) -> dict:
-    """Run all (or specified) connectors and store only current/future events."""
+    """Run connectors in sequence, upsert events, return stats."""
     if connectors is None:
         connectors = ALL_CONNECTORS
 
-    stats = {"total_fetched": 0, "total_saved": 0, "skipped_past": 0, "errors": []}
+    stats = {
+        "total_fetched": 0,
+        "total_saved":   0,
+        "errors":        [],
+        "by_source":     {},
+    }
 
     async with AsyncSessionLocal() as db:
         # Purge events that have already passed — keep DB lean
         purged = await purge_past_events(db)
         if purged:
-            logger.info(f"Purged {purged} past events from DB.")
+            logger.info(f"Purged {purged} past events.")
 
         for connector_class in connectors:
             connector = connector_class()
@@ -94,38 +109,43 @@ async def run_ingestion(connectors=None) -> dict:
                 events = await connector.run()
                 stats["total_fetched"] += len(events)
 
-                current_events = [event for event in events if not _is_past_event(event)]
-                skipped_past = len(events) - len(current_events)
-                stats["skipped_past"] += skipped_past
-                if skipped_past:
-                    logger.info(f"[{connector.name}] Skipped {skipped_past} past events.")
-
                 saved = 0
-                for event in current_events:
+                for event in events:
                     ok = await upsert_event(db, event)
                     if ok:
                         saved += 1
 
                 stats["total_saved"] += saved
-                logger.info(f"[{connector.name}] Saved {saved}/{len(current_events)} current/future events.")
+                stats["by_source"][connector.name] = {"fetched": len(events), "saved": saved}
+                logger.info(f"[{connector.name}] {saved}/{len(events)} saved.")
 
             except Exception as e:
                 msg = f"[{connector.name}] Error: {e}"
                 logger.error(msg)
                 stats["errors"].append(msg)
+                stats["by_source"][connector.name] = {"fetched": 0, "saved": 0, "error": str(e)}
 
         total_in_db = await count_events(db)
         stats["total_in_db"] = total_in_db
 
-    logger.info(f"Ingestion complete. DB now has {stats['total_in_db']} events.")
+    logger.info(
+        f"Ingestion done — fetched={stats['total_fetched']} "
+        f"saved={stats['total_saved']} "
+        f"total_in_db={stats['total_in_db']}"
+    )
     return stats
 
 
 async def run_seed_only() -> dict:
-    """Quick seed with curated events only — for fast startup."""
+    """Instant seed — for first startup with empty DB."""
     return await run_ingestion(connectors=[SeedConnector])
 
 
 async def run_fast() -> dict:
-    """Fast refresh — seed + APIs only, no heavy scrapers. Good for frequent runs."""
+    """Fast refresh — seed + APIs only, no heavy scrapers."""
     return await run_ingestion(connectors=FAST_CONNECTORS)
+
+
+async def run_deep() -> dict:
+    """Deep scan — all connectors. Run weekly via cron."""
+    return await run_ingestion(connectors=DEEP_CONNECTORS)
