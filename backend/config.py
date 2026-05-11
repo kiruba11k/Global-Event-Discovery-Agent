@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     allevents_key: str = ""
     luma_api_key: str = ""
     serpapi_key: str = ""
+    seed_admin_token: str = ""
 
     # ── Scraping ─────────────────────────────────
     scrape_delay_seconds: float = 2.0

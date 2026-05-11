@@ -91,8 +91,13 @@ class EventbriteConnector(BaseConnector):
 
         headers = {"Authorization": f"Bearer {settings.eventbrite_token}"}
 
+        endpoint_unavailable = False
+
         async with httpx.AsyncClient(headers=headers, timeout=15) as client:
             for query in SEARCH_QUERIES:
+                if endpoint_unavailable:
+                    break
+
                 for city, lat, lon, country in CITY_COORDS:
                     await asyncio.sleep(1.2)  # stay under 2,000/hr rate limit
 
@@ -110,6 +115,10 @@ class EventbriteConnector(BaseConnector):
 
                     try:
                         r = await client.get(self.BASE, params=params)
+                        if r.status_code == 404:
+                            endpoint_unavailable = True
+                            logger.warning("Eventbrite endpoint returned 404; stopping Eventbrite fetch for this run.")
+                            break
                         if r.status_code == 429:
                             logger.warning("Eventbrite rate limited — pausing 60s")
                             await asyncio.sleep(60)
@@ -118,6 +127,10 @@ class EventbriteConnector(BaseConnector):
                         data = r.json()
                         req_ok += 1
                     except Exception as e:
+                        if "404" in str(e):
+                            endpoint_unavailable = True
+                            logger.warning("Eventbrite endpoint appears unavailable (404); stopping Eventbrite fetch for this run.")
+                            break
                         logger.debug(f"Eventbrite {query}/{city}: {e}")
                         req_err += 1
                         continue
