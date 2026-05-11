@@ -1,66 +1,51 @@
+# ── Web framework ────────────────────────────────────────────────────
 fastapi
 uvicorn[standard]==0.29.0
-sqlalchemy
-aiosqlite
-httpx
-pydantic
-pydantic-settings
-groq
-faiss-cpu
-sentence-transformers
-beautifulsoup4
-playwright
-python-multipart
-apscheduler
-python-dotenv
-pandas
-rapidfuzz
-tenacity
-loguru
 starlette
-pypdf
-apscheduler
-pytz
-fastapi
-uvicorn[standard]==0.29.0
+python-multipart
+
+# ── Database ─────────────────────────────────────────────────────────
 sqlalchemy
+# SQLite async driver (local development)
 aiosqlite
-httpx
+# PostgreSQL async driver (production — Neon / Supabase / Render PG)
+asyncpg
+
+# ── Config / env ─────────────────────────────────────────────────────
 pydantic
 pydantic-settings
+python-dotenv
 
-# LLM
+# ── LLM ──────────────────────────────────────────────────────────────
 groq
 
-# Embeddings (disabled on free tier by default)
+# ── Embeddings (disabled on free tier by default — uses >512 MB RAM) ─
 faiss-cpu
 sentence-transformers
 
-# Web scraping
+# ── Web scraping ─────────────────────────────────────────────────────
+httpx
 beautifulsoup4
 playwright
 
-# PDF generation — WeasyPrint (preferred, HTML→PDF)
-# Requires system libs: libpango libcairo libgdk-pixbuf
-# See render.yaml buildCommand for apt-get install
+# ── PDF generation (HTML → PDF) ──────────────────────────────────────
+# WeasyPrint requires system libs; see render.yaml buildCommand
 weasyprint
-
-# PDF fallback — pure Python, zero system deps, always works
+# Pure-Python fallback — zero system deps, always works
 fpdf2
 
-# Email delivery
+# ── PDF reading ───────────────────────────────────────────────────────
+pypdf
+
+# ── Email delivery ────────────────────────────────────────────────────
 resend
 
-# Scheduling
+# ── Scheduling ────────────────────────────────────────────────────────
 apscheduler
 pytz
 
-# Misc
-python-multipart
-python-dotenv
+# ── Utilities ────────────────────────────────────────────────────────
 pandas
 rapidfuzz
 tenacity
 loguru
-starlette
-pypdf
