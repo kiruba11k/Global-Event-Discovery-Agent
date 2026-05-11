@@ -1,38 +1,21 @@
 """
-Ingestion Manager — fixed version.
+Ingestion Manager — v3 (final).
 
-Root-cause fixes vs old version:
-  1. Uses batch_upsert_events() instead of per-event upsert → faster + accurate counts
-  2. Skips events with start_date < today BEFORE hitting the DB
-  3. purge_past_events() is NOT called during seed-only runs
-  4. purge_past_events() uses a 7-day grace window + never deletes Seed events
-  5. Stats now show accurate inserted vs duplicate-skipped counts
-
-Daily scraping coverage:
-  Seed          →  80+ curated events (guaranteed baseline, never purged)
-  Ticketmaster  →  300+ via free API
-  Eventbrite    →  800+ via expanded 30-query × 16-country matrix
-  Meetup        →  200+ via GraphQL (no key)
-  Luma          →  150+ via free API
-  EventsEye     →  800+ global trade shows (22 categories + 20 countries)
-  Wikipedia     →  700+ trade fair list
-  SACEOS        →  80+  Singapore official MICE
-  MyCEB         →  80+  Malaysia official MICE
-  10Times       →  200+
-  ConferenceAlerts → 200+
-  AllConferences → 300+
-  Confex        →  200+
-  TechCrunch    →  20+
-  ─────────────────────────────────
-  TARGET        →  4,100+ unique events (5,000+ with API keys)
+Critical fixes vs previous versions:
+  1. run_seed_only() passes do_purge=False AND skip_past=False
+     → seeds are never immediately deleted
+  2. run_ingestion() defaults skip_past=True
+     → events with start_date < today are silently dropped BEFORE DB write
+     → they never accumulate as "past" events waiting to be purged
+  3. do_purge=True uses 30-day grace (not 7) and never touches future events
+  4. Per-source stats logged after every run
 """
-import asyncio
 from datetime import date
 from typing import List, Optional
 from loguru import logger
 
 from db.database import AsyncSessionLocal
-from db.crud import batch_upsert_events, count_events, purge_past_events
+from db.crud import batch_upsert_events, count_events, purge_past_events, count_by_source
 from ingestion.seed_events import SeedConnector
 from ingestion.ticketmaster import TicketmasterConnector
 from ingestion.eventbrite import EventbriteConnector
@@ -48,24 +31,23 @@ from ingestion.scraper_techcrunch import ScraperTechCrunch
 
 
 ALL_CONNECTORS = [
-    SeedConnector,            # always first — guaranteed baseline
-    MeetupConnector,          # free GraphQL API
-    LumaConnector,            # free API
-    TicketmasterConnector,    # free tier API
-    EventbriteConnector,      # free tier API (expanded)
-    ScraperEventsEye,         # largest free scrape source
-    ScraperWikipediaTrades,   # Wikipedia trade fair lists
+    SeedConnector,            # 53+ curated events — guaranteed baseline
+    MeetupConnector,          # free, no key — 100-200 events/run
+    LumaConnector,            # free API — 80-150 events/run
+    TicketmasterConnector,    # needs TICKETMASTER_KEY
+    EventbriteConnector,      # needs EVENTBRITE_TOKEN (fixed lat/lon search)
+    ScraperWikipediaTrades,   # curated 30+ global events + dynamic scrape
+    ScraperEventsEye,         # 25+ curated + dynamic scrape
     ScraperAllConferences,    # allconferences.com
-    ScraperConfex,            # confex.com
-    Scraper10Times,           # 10times.com
+    Scraper10Times,           # 10times.com (may 403, skip gracefully)
     ScraperConferenceAlerts,  # conferencealerts.com
-    ScraperSACEOS,            # Singapore official MICE
-    ScraperMyCEB,             # Malaysia official MICE
-    ScraperTechCrunch,        # TechCrunch flagship
+    ScraperSACEOS,            # Singapore MICE official
+    ScraperMyCEB,             # Malaysia MICE official
+    ScraperTechCrunch,        # 6 flagship tech events
 ]
 
-FAST_CONNECTORS = [SeedConnector, MeetupConnector, LumaConnector]
-SEED_ONLY       = [SeedConnector]
+SEED_ONLY   = [SeedConnector]
+FAST        = [SeedConnector, MeetupConnector, LumaConnector, ScraperTechCrunch]
 
 
 async def run_ingestion(
@@ -74,40 +56,46 @@ async def run_ingestion(
     skip_past: bool = True,
 ) -> dict:
     """
-    Run connectors, insert new events, return detailed stats.
+    Run all connectors, persist new events, return detailed stats.
 
     Args:
-        connectors: list of connector classes to run (default: ALL_CONNECTORS)
-        do_purge:   if True, purge events older than 7 days first
-        skip_past:  if True, silently skip events whose start_date < today
+        connectors:  list of connector classes (default ALL_CONNECTORS)
+        do_purge:    delete events 30+ days old (default True)
+        skip_past:   drop events with start_date < today before DB write (default True)
     """
     if connectors is None:
         connectors = ALL_CONNECTORS
 
     today = date.today().isoformat()
     stats = {
-        "total_fetched":   0,
-        "total_inserted":  0,   # actually new rows
-        "total_skipped":   0,   # past-dated or duplicate
-        "errors":          [],
-        "by_source":       {},
-        "total_in_db":     0,
-        "run_date":        today,
+        "total_fetched":  0,
+        "total_inserted": 0,
+        "total_skipped":  0,
+        "errors":         [],
+        "by_source":      {},
+        "total_in_db":    0,
+        "run_date":       today,
     }
 
     async with AsyncSessionLocal() as db:
 
-        # ── Purge stale past events (never purges Seed events) ──────
+        # ── Optional purge of very old events ──────────────────
+        # grace_days=30 means only events that ended 30+ days ago
+        # AND whose start_date is also in the past are removed.
+        # Seed events are never purged.
         if do_purge:
-            purged = await purge_past_events(db, grace_days=7)
+            purged = await purge_past_events(db, grace_days=30)
             stats["purged"] = purged
 
-        # ── Run each connector ──────────────────────────────────────
+        before = await count_events(db)
+        stats["events_before_run"] = before
+
+        # ── Run each connector ──────────────────────────────────
         for connector_class in connectors:
             connector = connector_class()
             source    = connector.name
             try:
-                events = await connector.run()
+                events  = await connector.run()
                 fetched = len(events)
                 stats["total_fetched"] += fetched
 
@@ -122,46 +110,57 @@ async def run_ingestion(
                     "inserted": inserted,
                     "skipped":  skipped,
                 }
-                logger.info(
-                    f"[{source}] fetched={fetched} "
-                    f"inserted={inserted} skipped(past/dup)={skipped}"
-                )
+
+                if fetched > 0:
+                    logger.info(
+                        f"[{source:<22}] "
+                        f"fetched={fetched:<5} "
+                        f"inserted={inserted:<5} "
+                        f"skipped={skipped}"
+                    )
+                else:
+                    logger.debug(f"[{source}] fetched=0")
 
             except Exception as e:
-                msg = f"[{source}] Error: {e}"
+                msg = f"[{source}] {e}"
                 logger.error(msg)
                 stats["errors"].append(msg)
                 stats["by_source"][source] = {"error": str(e)}
 
         stats["total_in_db"] = await count_events(db)
+        by_src = await count_by_source(db)
+        stats["breakdown"] = by_src
 
     logger.info(
         f"Ingestion complete — "
         f"fetched={stats['total_fetched']} "
         f"inserted={stats['total_inserted']} "
-        f"total_in_db={stats['total_in_db']}"
+        f"total_in_db={stats['total_in_db']} "
+        f"(+{stats['total_in_db'] - before} net new)"
     )
+    for src, cnt in sorted(stats.get("breakdown", {}).items(), key=lambda x: -x[1]):
+        logger.info(f"  {src:<22} {cnt:>5} events in DB")
+
     return stats
 
 
 async def run_seed_only() -> dict:
     """
-    Insert curated seed events only.
-    Never purges existing events.
-    Fast — completes in < 1 second.
+    Insert curated seed events — fast, no purge, keeps past-dated seeds.
+    Call this ONLY when DB is completely empty.
     """
     return await run_ingestion(
         connectors=SEED_ONLY,
-        do_purge=False,   # ← critical: do NOT purge on seed runs
-        skip_past=False,  # ← seed events might have near-past dates; keep them
+        do_purge=False,    # never purge on seed run
+        skip_past=False,   # keep seeds even if dates are borderline
     )
 
 
 async def run_fast() -> dict:
-    """Fast refresh — seed + free APIs, no heavy scrapers."""
-    return await run_ingestion(connectors=FAST_CONNECTORS, do_purge=True)
+    """Quick refresh: seed + free APIs + TechCrunch. ~30 seconds."""
+    return await run_ingestion(connectors=FAST, do_purge=False)
 
 
 async def run_deep() -> dict:
-    """Full refresh — all connectors."""
+    """Full deep scan — all connectors. Takes 3-10 minutes."""
     return await run_ingestion(connectors=ALL_CONNECTORS, do_purge=True)
