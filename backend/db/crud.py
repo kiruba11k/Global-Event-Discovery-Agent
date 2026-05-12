@@ -238,6 +238,19 @@ async def count_events(db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
+async def count_by_source(db: AsyncSession) -> dict[str, int]:
+    """
+    Return event counts grouped by source_platform.
+    """
+    result = await db.execute(
+        select(EventORM.source_platform, func.count(EventORM.id)).group_by(
+            EventORM.source_platform
+        )
+    )
+    rows = result.all()
+    return {source or "unknown": count for source, count in rows}
+
+
 async def purge_past_events(db: AsyncSession, grace_days: int = 7) -> int:
     """
     Delete events whose end_date is older than `grace_days` days ago.
