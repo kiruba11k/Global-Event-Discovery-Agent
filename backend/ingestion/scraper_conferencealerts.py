@@ -1,22 +1,30 @@
-"""Scraper — conferencealerts.com"""
-import asyncio, re, httpx
+"""Scraper — conferencealerts.com advanced search."""
+import asyncio
+import re
+from urllib.parse import quote_plus, urljoin
+
+import httpx
 from bs4 import BeautifulSoup
-from typing import List
-from models.event import EventCreate
-from ingestion.base_connector import BaseConnector
-from config import get_settings
 from loguru import logger
+
+from config import get_settings
+from ingestion.base_connector import BaseConnector
+from models.event import EventCreate
 
 settings = get_settings()
 
-CATEGORY_URLS = [
-    ("computer-science",        "https://conferencealerts.com/topic-listing?topic=computer-science"),
-    ("artificial-intelligence", "https://conferencealerts.com/topic-listing?topic=artificial-intelligence"),
-    ("finance",                 "https://conferencealerts.com/topic-listing?topic=finance"),
-    ("healthcare",              "https://conferencealerts.com/topic-listing?topic=health-sciences"),
-    ("management",              "https://conferencealerts.com/topic-listing?topic=management"),
-    ("engineering",             "https://conferencealerts.com/topic-listing?topic=engineering"),
-]
+SEARCH_TERMS = (
+    "computer science",
+    "artificial intelligence",
+    "machine learning",
+    "data science",
+    "software engineering",
+    "cyber security",
+    "cloud computing",
+    "healthcare technology",
+    "fintech",
+    "management",
+)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; EventBot/1.0; research)",
@@ -24,75 +32,106 @@ HEADERS = {
 }
 
 MONTHS = {
-    "january":"01","february":"02","march":"03","april":"04","may":"05","june":"06",
-    "july":"07","august":"08","september":"09","october":"10","november":"11","december":"12",
-    "jan":"01","feb":"02","mar":"03","apr":"04","jun":"06","jul":"07","aug":"08",
-    "sep":"09","oct":"10","nov":"11","dec":"12",
+    "january": "01", "february": "02", "march": "03", "april": "04", "may": "05", "june": "06",
+    "july": "07", "august": "08", "september": "09", "october": "10", "november": "11", "december": "12",
 }
 
 
-def _parse_date(text: str) -> str:
-    text = text.strip().lower()
-    iso = re.search(r"(\d{4}-\d{2}-\d{2})", text)
-    if iso: return iso.group(1)
-    m = re.search(r"(\w+)\s+(\d{1,2})[,\s\-–]+(\d{4})", text)
-    if m: return f"{m.group(3)}-{MONTHS.get(m.group(1)[:3],'01')}-{m.group(2).zfill(2)}"
-    m2 = re.search(r"(\d{1,2})[–\-]?\d{0,2}\s+(\w+),?\s+(\d{4})", text)
-    if m2: return f"{m2.group(3)}-{MONTHS.get(m2.group(2)[:3],'01')}-{m2.group(1).zfill(2)}"
-    return ""
+def _parse_month_header(header_text: str) -> tuple[str, str]:
+    text = (header_text or "").strip().lower()
+    m = re.search(r"([a-z]+)\s+(\d{4})", text)
+    if not m:
+        return "", ""
+    month = MONTHS.get(m.group(1), "")
+    year = m.group(2)
+    return year, month
+
+
+def _parse_event_date(day_text: str, month_header: str) -> str:
+    year, month = _parse_month_header(month_header)
+    if not year or not month:
+        return ""
+    day_match = re.search(r"(\d{1,2})", day_text or "")
+    if not day_match:
+        return ""
+    return f"{year}-{month}-{day_match.group(1).zfill(2)}"
 
 
 class ScraperConferenceAlerts(BaseConnector):
     name = "ConferenceAlerts"
 
-    async def fetch(self) -> List[EventCreate]:
-        all_events: List[EventCreate] = []
+    async def fetch(self) -> list[EventCreate]:
+        all_events: list[EventCreate] = []
         seen = set()
 
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-            for category, url in CATEGORY_URLS:
+        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=20) as client:
+            for term in SEARCH_TERMS:
+                url = f"https://conferencealerts.com/advanced-search?q={quote_plus(term)}"
                 await asyncio.sleep(settings.scrape_delay_seconds)
                 try:
                     r = await client.get(url)
                     r.raise_for_status()
                 except Exception as e:
-                    logger.debug(f"ConferenceAlerts {category}: {e}")
+                    logger.debug(f"ConferenceAlerts {term}: {e}")
                     continue
 
                 soup = BeautifulSoup(r.text, "html.parser")
-                rows = soup.select("table tr, .conference-list li, .conf-item") or soup.select("div.event")
+                results_root = soup.select_one("div.ca-search-results")
+                if not results_root:
+                    logger.debug(f"ConferenceAlerts {term}: no results root")
+                    continue
 
-                for row in rows[:25]:
-                    try:
-                        name_el = row.select_one("a.conf-title, td a, h3 a, .title a, a[href*='conference']")
-                        if not name_el: continue
-                        name = name_el.get_text(strip=True)
-                        link = name_el.get("href", "")
-                        if not link.startswith("http"):
-                            link = "https://conferencealerts.com" + link
-                        date_el = row.select_one(".date, td.dates, .conf-date, time")
-                        start_date = _parse_date(date_el.get_text(strip=True) if date_el else "")
-                        if not start_date: continue
-                        loc_el = row.select_one(".location, td.venue, .conf-venue, .place")
-                        location = loc_el.get_text(strip=True) if loc_el else ""
-                        parts = [p.strip() for p in location.split(",")]
-                        city = parts[0] if parts else ""
-                        country = parts[-1] if len(parts) > 1 else ""
-                        dh = self.make_hash(name, start_date, city)
-                        if dh in seen: continue
-                        seen.add(dh)
-                        all_events.append(EventCreate(
-                            id=self.make_id(), source_platform="ConferenceAlerts",
-                            source_url=link, dedup_hash=dh, name=name,
-                            description=f"Professional conference in {category} sourced from ConferenceAlerts.",
-                            start_date=start_date, end_date=start_date, city=city, country=country,
-                            category=category, industry_tags=category,
-                            audience_personas="researchers,academics,professionals,industry leaders",
-                            est_attendees=200, ticket_price_usd=0.0,
-                            price_description="See website", registration_url=link,
-                        ))
-                    except Exception as e:
-                        logger.debug(f"ConferenceAlerts row parse: {e}")
+                for month_block in results_root.select("div.mb-4"):
+                    month_header = month_block.select_one("h2")
+                    month_text = month_header.get_text(strip=True) if month_header else ""
+
+                    for row in month_block.select("div.py-2.border-bottom")[:40]:
+                        try:
+                            link_el = row.select_one("a[href*='show-event']")
+                            if not link_el:
+                                continue
+                            name = link_el.get_text(" ", strip=True)
+                            link = urljoin("https://conferencealerts.com/", link_el.get("href", "").strip())
+
+                            day_el = row.select_one("div.fw-bold")
+                            start_date = _parse_event_date(day_el.get_text(strip=True) if day_el else "", month_text)
+                            if not start_date:
+                                continue
+
+                            city_el = row.select_one("span.fw-medium")
+                            country_el = row.select_one("span[style*='color:#198754']")
+                            city = city_el.get_text(strip=True) if city_el else ""
+                            country = country_el.get_text(strip=True) if country_el else ""
+
+                            mode_el = row.select_one("span.badge")
+                            mode = mode_el.get_text(" ", strip=True).lower() if mode_el else ""
+
+                            dedup_hash = self.make_hash(name, start_date, city)
+                            if dedup_hash in seen:
+                                continue
+                            seen.add(dedup_hash)
+
+                            all_events.append(EventCreate(
+                                id=self.make_id(),
+                                source_platform="ConferenceAlerts",
+                                source_url=link,
+                                dedup_hash=dedup_hash,
+                                name=name,
+                                description=f"ConferenceAlerts advanced search result for '{term}'.",
+                                start_date=start_date,
+                                end_date=start_date,
+                                city=city,
+                                country=country,
+                                category=term,
+                                industry_tags=term,
+                                audience_personas="researchers,academics,professionals,industry leaders",
+                                est_attendees=200,
+                                ticket_price_usd=0.0,
+                                price_description=(f"Mode: {mode}" if mode else "See website"),
+                                registration_url=link,
+                            ))
+                        except Exception as e:
+                            logger.debug(f"ConferenceAlerts row parse ({term}): {e}")
 
         logger.info(f"ConferenceAlerts: {len(all_events)} events.")
         return all_events

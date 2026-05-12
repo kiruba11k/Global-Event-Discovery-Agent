@@ -42,6 +42,7 @@ from relevance.groq_ranker import rank_with_groq
 
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
+from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
 
 from config import get_settings
 from loguru import logger
@@ -52,6 +53,12 @@ settings = get_settings()
 _last_results: dict = {}
 
 _seed_10times_status: dict = {
+    "running": False,
+    "last_result": None,
+    "last_error": None,
+}
+
+_seed_conferencealerts_status: dict = {
     "running": False,
     "last_result": None,
     "last_error": None,
@@ -642,6 +649,60 @@ async def get_seed_10times_status(
     _require_seed_token(x_seed_token)
 
     return _seed_10times_status
+
+
+
+
+@router.post("/seed-conferencealerts")
+async def seed_conferencealerts_events(
+    background_tasks: BackgroundTasks,
+    limit_events: int = Query(1000, ge=1, le=5000),
+    dry_run: bool = Query(False),
+    x_seed_token: str | None = Header(default=None),
+):
+    _require_seed_token(x_seed_token)
+
+    if _seed_conferencealerts_status["running"]:
+        raise HTTPException(status_code=409, detail="A conferencealerts seed job is already running.")
+
+    config = ConferenceAlertsSeedConfig(limit_events=limit_events, dry_run=dry_run)
+    _seed_conferencealerts_status.update({
+        "running": True,
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "last_error": None,
+        "requested_config": {"limit_events": limit_events, "dry_run": dry_run},
+    })
+
+    background_tasks.add_task(_do_seed_conferencealerts, config)
+    return {
+        "message": "ConferenceAlerts seed started. Check /api/seed-conferencealerts/status.",
+        "requested_config": _seed_conferencealerts_status["requested_config"],
+    }
+
+
+@router.get("/seed-conferencealerts/status")
+async def get_seed_conferencealerts_status(x_seed_token: str | None = Header(default=None)):
+    _require_seed_token(x_seed_token)
+    return _seed_conferencealerts_status
+
+
+async def _do_seed_conferencealerts(config: ConferenceAlertsSeedConfig):
+    logger.info("Background conferencealerts seed started...")
+    try:
+        result = await run_conferencealerts_seed(config)
+        _seed_conferencealerts_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_result": result,
+            "last_error": None,
+        })
+    except Exception as exc:
+        _seed_conferencealerts_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_error": str(exc),
+        })
+        logger.exception(f"Background conferencealerts seed failed: {exc}")
 
 
 async def _do_seed_10times(config: CrawlConfig):
