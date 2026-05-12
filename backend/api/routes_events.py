@@ -142,21 +142,29 @@ def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
 
 
 def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
-    name = _norm(row.get("name"))
-    start_date = _norm(row.get("start_date"))
-    if not _parse_date(start_date):
-        raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
+    normalized_row = {_norm(str(k)).lower(): v for k, v in row.items() if k is not None}
+
+    name = _norm(normalized_row.get("name"))
+    start_date = _norm(normalized_row.get("start_date"))
+    end_date = _norm(normalized_row.get("end_date"))
+
+    # Be tolerant with partial CSVs: if start_date is missing but end_date is valid, use end_date.
+    if not start_date and _parse_date(end_date):
+        start_date = end_date
 
     if not name or not start_date:
         raise ValueError(f"row {row_number}: 'name' and 'start_date' are required")
 
-    event_id = _norm(row.get("id")) or str(uuid.uuid4())
-    city = _norm(row.get("city"))
-    country = _norm(row.get("country"))
-    source_url = _norm(row.get("source_url"))
-    website = _norm(row.get("website"))
+    if not _parse_date(start_date):
+        raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
 
-    related_industries = _norm(row.get("related_industries"))
+    event_id = _norm(normalized_row.get("id")) or str(uuid.uuid4())
+    city = _norm(normalized_row.get("city"))
+    country = _norm(normalized_row.get("country"))
+    source_url = _norm(normalized_row.get("source_url"))
+    website = _norm(normalized_row.get("website"))
+
+    related_industries = _norm(normalized_row.get("related_industries"))
 
     return EventCreate(
         id=event_id,
@@ -164,11 +172,11 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         source_platform="CSV_UPLOAD",
         source_url=source_url or website or f"csv://upload/{event_id}",
         name=name,
-        description=_norm(row.get("description")),
+        description=_norm(normalized_row.get("description")),
         industry_tags=related_industries,
         start_date=start_date,
-        end_date=_norm(row.get("end_date")) or start_date,
-        venue_name=_norm(row.get("venue")),
+        end_date=end_date or start_date,
+        venue_name=_norm(normalized_row.get("venue")),
         city=city,
         country=country,
         registration_url=website,
@@ -485,10 +493,9 @@ async def upload_events_csv(
         text = raw.decode("latin-1")
 
     reader = csv.DictReader(io.StringIO(text))
-    required = {"name", "start_date"}
-    missing = [c for c in required if c not in (reader.fieldnames or [])]
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing)}")
+    normalized_headers = {_norm(h).lower() for h in (reader.fieldnames or []) if h}
+    if "name" not in normalized_headers:
+        raise HTTPException(status_code=400, detail="Missing required columns: name")
 
     parsed: list[EventCreate] = []
     errors: list[str] = []
