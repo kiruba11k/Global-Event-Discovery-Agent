@@ -409,7 +409,16 @@ async def crawl(cfg: CrawlConfig) -> list[EventCreate]:
     return list(by_hash.values())
 
 
-async def run_eventseye_seed(cfg: CrawlConfig) -> dict:
+async def run_eventseye_seed(
+    cfg: CrawlConfig | None = None,
+    *,
+    dry_run: bool | None = None,
+) -> dict:
+    if cfg is None:
+        cfg = CrawlConfig()
+    if dry_run is not None:
+        cfg.dry_run = dry_run
+
     started = datetime.now(UTC)
     logger.info(f"EventsEye seed started (max_pages={cfg.max_pages}, dry_run={cfg.dry_run})")
 
