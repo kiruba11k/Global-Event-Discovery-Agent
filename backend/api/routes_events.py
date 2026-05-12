@@ -584,6 +584,18 @@ def _require_seed_token(x_seed_token: str | None) -> None:
         )
 
 
+
+
+@router.post("/seed-eventseye")
+async def seed_eventseye_events(
+    x_seed_token: str | None = Header(default=None),
+):
+    """Protected manual EventsEye seed run (writes to configured DATABASE_URL DB)."""
+    _require_seed_token(x_seed_token)
+    result = await run_eventseye_seed()
+    return {"message": "EventsEye seed finished.", "result": result}
+
+
 # ─────────────────────────────────────────────────────────────
 # POST /api/seed-10times
 # ─────────────────────────────────────────────────────────────
