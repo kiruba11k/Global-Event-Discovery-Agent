@@ -146,6 +146,8 @@ TITLE_SELECTORS = (
     "a.event-title",
     "td.event-title",
     "a[href*='/e']",
+    "[data-ga-label]",
+    "[data-name]",
 )
 
 DATE_SELECTORS = (
@@ -270,6 +272,21 @@ def parse_date(text: str) -> tuple[str, str, int]:
     return "", "", 1
 
 
+def parse_date_from_card(card: BeautifulSoup) -> tuple[str, str, int]:
+    date_node = card.select_one("[data-start-date]")
+    if date_node:
+        start_raw = normalize_space(str(date_node.get("data-start-date") or "")).replace("/", "-")
+        end_raw = normalize_space(str(date_node.get("data-end-date") or "")).replace("/", "-")
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", start_raw):
+            end = end_raw if re.fullmatch(r"\d{4}-\d{2}-\d{2}", end_raw) else start_raw
+            try:
+                duration = max(1, (datetime.fromisoformat(end) - datetime.fromisoformat(start_raw)).days + 1)
+            except ValueError:
+                duration = 1
+            return start_raw, end, duration
+    return parse_date(first_text(card, DATE_SELECTORS) or card.get_text(" ", strip=True))
+
+
 def parse_location(text: str) -> tuple[str, str, str]:
     cleaned = normalize_space(text)
     if not cleaned:
@@ -300,6 +317,18 @@ def event_link_from_card(card: BeautifulSoup) -> str:
         href = anchor.get("href", "")
         if href and not href.startswith("#"):
             return canonical_url(absolute_10times_url(href))
+
+    onclick = str(card.get("onclick") or "")
+    match = re.search(r"window\.open\('([^']+)'", onclick)
+    if match:
+        return canonical_url(absolute_10times_url(match.group(1)))
+
+    clickable = card.select_one("[onclick*='window.open']")
+    if clickable:
+        onclick = str(clickable.get("onclick") or "")
+        match = re.search(r"window\.open\('([^']+)'", onclick)
+        if match:
+            return canonical_url(absolute_10times_url(match.group(1)))
     return BASE_URL
 
 
@@ -410,8 +439,7 @@ def parse_event_cards(html: str, listing_url: str) -> list[EventCreate]:
         name = first_text(card, TITLE_SELECTORS)
         if not name or len(name) < 3 or name.lower() in {"events", "trade shows", "conferences"}:
             continue
-        date_text = first_text(card, DATE_SELECTORS) or text
-        start_date, end_date, duration_days = parse_date(date_text)
+        start_date, end_date, duration_days = parse_date_from_card(card)
         if not start_date:
             continue
         location_text = first_text(card, LOCATION_SELECTORS)
@@ -447,23 +475,27 @@ def discover_listing_urls(html: str) -> set[str]:
     return urls
 
 
-async def fetch_text(client: httpx.AsyncClient, url: str, config: CrawlConfig, semaphore: asyncio.Semaphore) -> str:
+async def fetch_text(client: httpx.AsyncClient, url: str, config: CrawlConfig, semaphore: asyncio.Semaphore) -> tuple[str, int | None]:
     async with semaphore:
         await asyncio.sleep(config.delay_seconds + random.uniform(0, 0.6))
         try:
             response = await client.get(url, timeout=config.timeout_seconds)
             response.raise_for_status()
-            return response.text
+            return response.text, response.status_code
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            logger.debug(f"Fetch failed for {url}: {exc}")
+            return "", status
         except Exception as exc:
             logger.debug(f"Fetch failed for {url}: {exc}")
-            return ""
+            return "", None
 
 
 async def collect_listing_urls(client: httpx.AsyncClient, config: CrawlConfig) -> list[str]:
     semaphore = asyncio.Semaphore(config.concurrency)
     discovered = set(SEED_LISTING_URLS) | set(MAJOR_COUNTRY_LISTINGS)
     tasks = [fetch_text(client, url, config, semaphore) for url in INDEX_URLS]
-    for html in await asyncio.gather(*tasks):
+    for html, _status in await asyncio.gather(*tasks):
         if html:
             discovered.update(discover_listing_urls(html))
     logger.info(f"Discovered {len(discovered)} candidate 10times listing URLs.")
@@ -481,7 +513,12 @@ async def crawl_events(config: CrawlConfig) -> list[EventCreate]:
         for index in range(0, len(page_urls), config.concurrency):
             batch = page_urls[index : index + config.concurrency]
             pages = await asyncio.gather(*(fetch_text(client, url, config, semaphore) for url in batch))
-            for url, html in zip(batch, pages):
+            forbidden_count = sum(1 for _html, status in pages if status == 403)
+            if forbidden_count == len(batch):
+                logger.warning("10Times crawl is fully blocked by 403 responses for this batch; stopping early to avoid useless retries.")
+                break
+
+            for url, (html, _status) in zip(batch, pages):
                 if not html:
                     continue
                 for event in parse_event_cards(html, url):
