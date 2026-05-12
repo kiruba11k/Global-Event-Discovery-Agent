@@ -11,7 +11,6 @@ Plus: curated fallback of confirmed EventsEye-listed events with real URLs.
 """
 import asyncio, re, httpx
 from bs4 import BeautifulSoup
-from datetime import date
 from typing import List
 from models.event import EventCreate
 from ingestion.base_connector import BaseConnector
@@ -261,7 +260,6 @@ class ScraperEventsEye(BaseConnector):
     async def fetch(self) -> List[EventCreate]:
         events: List[EventCreate] = []
         seen:   set               = set()
-        today   = date.today().isoformat()
 
         # Try dynamic scraping first
         async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True) as client:
@@ -273,8 +271,6 @@ class ScraperEventsEye(BaseConnector):
 
         # Always add curated fallback (guaranteed quality events)
         for ev in EVENTSEYE_CURATED:
-            if ev["start"] < today:
-                continue
             dh = self.make_hash(ev["name"], ev["start"], ev["city"])
             if dh in seen:
                 continue
