@@ -43,7 +43,7 @@ from relevance.groq_ranker import rank_with_groq
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
-
+from scripts.seed_eventseye_global import run_eventseye_seed
 from config import get_settings
 from loguru import logger
 
