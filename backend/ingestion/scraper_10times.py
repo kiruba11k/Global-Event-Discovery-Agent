@@ -19,10 +19,24 @@ CATEGORIES = [
     ("energy",     "https://10times.com/energy"),
 ]
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9",
-}
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+]
+
+
+def build_headers() -> dict:
+    return {
+        "User-Agent": USER_AGENTS[hash(asyncio.get_running_loop().time()) % len(USER_AGENTS)],
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "DNT": "1",
+        "Referer": "https://10times.com",
+        "Origin": "https://10times.com",
+    }
 
 MONTHS = {
     "jan":"01","feb":"02","mar":"03","apr":"04","may":"05","jun":"06",
@@ -87,7 +101,10 @@ class Scraper10Times(BaseConnector):
         events = []
         try:
             await asyncio.sleep(settings.scrape_delay_seconds)
-            r = await client.get(url, timeout=settings.scrape_timeout_seconds)
+            r = await client.get(url, timeout=settings.scrape_timeout_seconds, headers=build_headers())
+            if r.status_code == 403:
+                await asyncio.sleep(settings.scrape_delay_seconds + 1.0)
+                r = await client.get(url, timeout=settings.scrape_timeout_seconds, headers=build_headers())
             r.raise_for_status()
         except Exception as e:
             logger.debug(f"10Times {category}: {e}")
@@ -126,7 +143,7 @@ class Scraper10Times(BaseConnector):
 
     async def fetch(self) -> List[EventCreate]:
         all_events: List[EventCreate] = []
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True) as client:
+        async with httpx.AsyncClient(headers=build_headers(), follow_redirects=True, http2=True) as client:
             for category, url in CATEGORIES:
                 evs = await self._scrape_category(client, category, url)
                 all_events.extend(evs)

@@ -28,6 +28,7 @@ import random
 import re
 import sys
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,13 +52,19 @@ from models.event import EventCreate  # noqa: E402
 BASE_URL = "https://10times.com"
 SOURCE_PLATFORM = "10Times"
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+USER_AGENTS = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+)
+
+BASE_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "DNT": "1",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 INDEX_URLS = (
@@ -456,6 +463,21 @@ def parse_event_cards(html: str, listing_url: str) -> list[EventCreate]:
     return events
 
 
+
+def build_request_headers(url: str, referer: str | None = None) -> dict[str, str]:
+    headers = dict(BASE_HEADERS)
+    headers["User-Agent"] = random.choice(USER_AGENTS)
+    headers["Referer"] = referer or BASE_URL
+    headers["Origin"] = BASE_URL
+    return headers
+
+
+def merge_cookie_headers(headers: dict[str, str], cookies: Mapping[str, str] | None) -> dict[str, str]:
+    merged = dict(headers)
+    if cookies:
+        merged["Cookie"] = "; ".join(f"{key}={value}" for key, value in cookies.items())
+    return merged
+
 def discover_listing_urls(html: str) -> set[str]:
     soup = BeautifulSoup(html, "html.parser")
     urls: set[str] = set()
@@ -478,17 +500,35 @@ def discover_listing_urls(html: str) -> set[str]:
 async def fetch_text(client: httpx.AsyncClient, url: str, config: CrawlConfig, semaphore: asyncio.Semaphore) -> tuple[str, int | None]:
     async with semaphore:
         await asyncio.sleep(config.delay_seconds + random.uniform(0, 0.6))
-        try:
-            response = await client.get(url, timeout=config.timeout_seconds)
-            response.raise_for_status()
-            return response.text, response.status_code
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            logger.debug(f"Fetch failed for {url}: {exc}")
-            return "", status
-        except Exception as exc:
-            logger.debug(f"Fetch failed for {url}: {exc}")
-            return "", None
+        last_status: int | None = None
+        headers = build_request_headers(url)
+
+        for attempt in range(3):
+            try:
+                response = await client.get(url, timeout=config.timeout_seconds, headers=headers)
+                if response.status_code == 403 and attempt < 2:
+                    last_status = 403
+                    backoff = (attempt + 1) * (config.delay_seconds + random.uniform(0.8, 1.6))
+                    await asyncio.sleep(backoff)
+                    headers = merge_cookie_headers(build_request_headers(url, referer=BASE_URL), response.cookies)
+                    logger.debug(f"403 for {url}; retrying with rotated headers (attempt {attempt + 2}/3).")
+                    continue
+                response.raise_for_status()
+                return response.text, response.status_code
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code if exc.response is not None else None
+                last_status = status
+                logger.debug(f"Fetch failed for {url}: {exc}")
+                if status == 403 and attempt < 2:
+                    await asyncio.sleep((attempt + 1) * (config.delay_seconds + random.uniform(0.8, 1.6)))
+                    headers = build_request_headers(url, referer=BASE_URL)
+                    continue
+                return "", status
+            except Exception as exc:
+                logger.debug(f"Fetch failed for {url}: {exc}")
+                return "", None
+
+        return "", last_status
 
 
 async def collect_listing_urls(client: httpx.AsyncClient, config: CrawlConfig) -> list[str]:
@@ -505,7 +545,7 @@ async def collect_listing_urls(client: httpx.AsyncClient, config: CrawlConfig) -
 async def crawl_events(config: CrawlConfig) -> list[EventCreate]:
     events_by_hash: dict[str, EventCreate] = {}
     limits = httpx.Limits(max_connections=max(1, config.concurrency), max_keepalive_connections=max(1, config.concurrency))
-    async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, limits=limits) as client:
+    async with httpx.AsyncClient(headers=build_request_headers(BASE_URL), follow_redirects=True, limits=limits, http2=True) as client:
         listing_urls = await collect_listing_urls(client, config)
         semaphore = asyncio.Semaphore(config.concurrency)
         page_urls = [make_page_url(url, page) for url in listing_urls for page in range(1, config.max_pages_per_listing + 1)]
