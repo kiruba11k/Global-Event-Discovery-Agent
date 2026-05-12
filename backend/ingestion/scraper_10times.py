@@ -51,6 +51,38 @@ class Scraper10Times(BaseConnector):
         parts = [p.strip() for p in text.split(",")]
         return parts[0] if parts else "", parts[-1] if len(parts) > 1 else ""
 
+    def _date_from_card(self, card) -> str:
+        date_node = card.select_one("[data-start-date]")
+        if date_node:
+            raw = str(date_node.get("data-start-date") or "").strip().replace("/", "-")
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+                return raw
+        date_el = card.select_one(".event-date, .dates, time, .date-range, td.date, [class*='date']")
+        return self._parse_date(date_el.get_text(strip=True) if date_el else "")
+
+    def _link_from_card(self, card) -> str:
+        preferred = card.select_one("a.event-title[href], a[href*='/e'][href], h2 a[href], h3 a[href]")
+        if preferred and preferred.get("href"):
+            href = preferred.get("href", "")
+            return href if href.startswith("http") else f"https://10times.com{href}"
+
+        data_url_el = card.select_one("[data-url]")
+        if data_url_el and data_url_el.get("data-url"):
+            href = data_url_el.get("data-url", "")
+            return href if href.startswith("http") else f"https://10times.com{href}"
+
+        clickable = card.select_one("[onclick*='window.open']")
+        if clickable:
+            onclick = str(clickable.get("onclick") or "")
+            match = re.search(r"window\.open\('([^']+)'", onclick)
+            if match:
+                href = match.group(1)
+                return href if href.startswith("http") else f"https://10times.com{href}"
+
+        any_link = card.select_one("a[href]")
+        href = any_link.get("href", "") if any_link else ""
+        return href if href.startswith("http") else f"https://10times.com{href}" if href else "https://10times.com"
+
     async def _scrape_category(self, client, category, url) -> List[EventCreate]:
         events = []
         try:
@@ -67,14 +99,11 @@ class Scraper10Times(BaseConnector):
 
         for card in cards[:20]:
             try:
-                name_el = card.select_one("h2, h3, .event-name, a.event-title, td.event-title")
+                name_el = card.select_one("h2, h3, .event-name, a.event-title, td.event-title, [data-ga-label], [data-name]")
                 name = name_el.get_text(strip=True) if name_el else ""
                 if not name: continue
-                link_el = card.select_one("a[href]")
-                href = link_el.get("href", "") if link_el else ""
-                link = href if href.startswith("http") else f"https://10times.com{href}"
-                date_el = card.select_one(".event-date, .dates, time, .date-range, td.date")
-                start_date = self._parse_date(date_el.get_text(strip=True) if date_el else "")
+                link = self._link_from_card(card)
+                start_date = self._date_from_card(card)
                 if not start_date: continue
                 loc_el = card.select_one(".location, .venue, .city, td.location")
                 city, country = self._parse_location(loc_el.get_text(strip=True) if loc_el else "")
