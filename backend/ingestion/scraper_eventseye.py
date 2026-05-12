@@ -256,6 +256,7 @@ class ScraperEventsEye(BaseConnector):
         if not working_root:
             logger.debug("EventsEye: no working root URL found — using curated list")
             return events
+        return event
 
     async def fetch(self) -> List[EventCreate]:
         events: List[EventCreate] = []
