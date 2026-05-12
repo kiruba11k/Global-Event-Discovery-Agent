@@ -51,6 +51,7 @@ from models.event import EventCreate  # noqa: E402
 
 BASE_URL = "https://10times.com"
 SOURCE_PLATFORM = "10Times"
+JINA_AI_PROXY = "https://r.jina.ai/http://"
 
 USER_AGENTS = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -528,6 +529,19 @@ async def fetch_text(client: httpx.AsyncClient, url: str, config: CrawlConfig, s
                 logger.debug(f"Fetch failed for {url}: {exc}")
                 return "", None
 
+        # Fallback path: use a read-only proxy mirror that can often fetch
+        # anti-bot-protected pages from environments that 10times blocks.
+        proxy_url = f"{JINA_AI_PROXY}{url.replace('https://', '').replace('http://', '')}"
+        try:
+            proxy_headers = {"Accept": "text/plain, text/markdown;q=0.9, */*;q=0.8"}
+            proxy_response = await client.get(proxy_url, timeout=config.timeout_seconds * 1.5, headers=proxy_headers)
+            if proxy_response.is_success and proxy_response.text.strip():
+                logger.debug(f"Fetched {url} via proxy fallback {proxy_url}.")
+                return proxy_response.text, 200
+            last_status = proxy_response.status_code
+        except Exception as exc:
+            logger.debug(f"Proxy fallback failed for {url}: {exc}")
+
         return "", last_status
 
 
@@ -555,8 +569,10 @@ async def crawl_events(config: CrawlConfig) -> list[EventCreate]:
             pages = await asyncio.gather(*(fetch_text(client, url, config, semaphore) for url in batch))
             forbidden_count = sum(1 for _html, status in pages if status == 403)
             if forbidden_count == len(batch):
-                logger.warning("10Times crawl is fully blocked by 403 responses for this batch; stopping early to avoid useless retries.")
-                break
+                logger.warning(
+                    "10Times returned 403 for entire batch; continuing to next batch in case specific listing paths are blocked unevenly."
+                )
+                continue
 
             for url, (html, _status) in zip(batch, pages):
                 if not html:
