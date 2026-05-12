@@ -144,6 +144,8 @@ def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
 def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
     name = _norm(row.get("name"))
     start_date = _norm(row.get("start_date"))
+    if not _parse_date(start_date):
+        raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
 
     if not name or not start_date:
         raise ValueError(f"row {row_number}: 'name' and 'start_date' are required")
@@ -154,6 +156,8 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
     source_url = _norm(row.get("source_url"))
     website = _norm(row.get("website"))
 
+    related_industries = _norm(row.get("related_industries"))
+
     return EventCreate(
         id=event_id,
         dedup_hash=_csv_dedup_hash(name, start_date, city, country),
@@ -161,6 +165,7 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         source_url=source_url or website or f"csv://upload/{event_id}",
         name=name,
         description=_norm(row.get("description")),
+        industry_tags=related_industries,
         start_date=start_date,
         end_date=_norm(row.get("end_date")) or start_date,
         venue_name=_norm(row.get("venue")),
@@ -463,7 +468,10 @@ async def upload_events_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload CSV and permanently upsert rows into DATABASE_URL DB with dedup by hash."""
+    """Upload CSV and permanently upsert rows into DATABASE_URL DB with dedup by hash.
+
+    Supported headers include: id,name,start_date,end_date,venue,city,country,description,related_industries,website,source_url
+    """
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a .csv file")
 
