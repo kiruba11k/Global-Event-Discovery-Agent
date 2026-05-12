@@ -18,7 +18,7 @@ UPDATED:
 """
 
 import io, json, uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Iterable, Optional
 
 from fastapi import (
@@ -59,6 +59,13 @@ _seed_10times_status: dict = {
 }
 
 _seed_conferencealerts_status: dict = {
+    "running": False,
+    "last_result": None,
+    "last_error": None,
+}
+
+
+_seed_global_status: dict = {
     "running": False,
     "last_result": None,
     "last_error": None,
@@ -740,3 +747,95 @@ async def _do_seed_10times(config: CrawlConfig):
         })
 
         logger.exception(f"Background 10times seed failed: {exc}")
+
+
+@router.post("/seed-global")
+async def seed_all_global_sources(
+    background_tasks: BackgroundTasks,
+    limit_events_10times: int = Query(2000, ge=1, le=10000),
+    max_pages_per_listing: int = Query(15, ge=1, le=60),
+    concurrency: int = Query(2, ge=1, le=3),
+    delay_seconds: float = Query(2.0, ge=0.0, le=30.0),
+    timeout_seconds: float = Query(30.0, ge=1.0, le=90.0),
+    limit_events_conferencealerts: int = Query(5000, ge=1, le=10000),
+    dry_run: bool = Query(False),
+    x_seed_token: str | None = Header(default=None),
+):
+    """Run 10Times + ConferenceAlerts + EventsEye seeding as one protected admin action."""
+    _require_seed_token(x_seed_token)
+
+    if _seed_global_status["running"]:
+        raise HTTPException(status_code=409, detail="A global seed job is already running.")
+
+    _seed_global_status.update({
+        "running": True,
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "last_error": None,
+        "requested_config": {
+            "limit_events_10times": limit_events_10times,
+            "max_pages_per_listing": max_pages_per_listing,
+            "concurrency": concurrency,
+            "delay_seconds": delay_seconds,
+            "timeout_seconds": timeout_seconds,
+            "limit_events_conferencealerts": limit_events_conferencealerts,
+            "dry_run": dry_run,
+        },
+    })
+
+    background_tasks.add_task(
+        _do_seed_global,
+        CrawlConfig(
+            max_pages_per_listing=max_pages_per_listing,
+            limit_events=limit_events_10times,
+            concurrency=concurrency,
+            delay_seconds=delay_seconds,
+            timeout_seconds=timeout_seconds,
+            dry_run=dry_run,
+        ),
+        ConferenceAlertsSeedConfig(limit_events=limit_events_conferencealerts, dry_run=dry_run),
+        dry_run,
+    )
+
+    return {
+        "message": "Global seed started. Check /api/seed-global/status.",
+        "requested_config": _seed_global_status["requested_config"],
+    }
+
+
+@router.get("/seed-global/status")
+async def get_seed_global_status(x_seed_token: str | None = Header(default=None)):
+    _require_seed_token(x_seed_token)
+    return _seed_global_status
+
+
+async def _do_seed_global(
+    times_config: CrawlConfig,
+    conferencealerts_config: ConferenceAlertsSeedConfig,
+    dry_run: bool,
+):
+    logger.info("Background global seed started...")
+    started_at = datetime.utcnow().isoformat() + "Z"
+    try:
+        ten_times = await run_10times_seed(times_config)
+        conferencealerts = await run_conferencealerts_seed(conferencealerts_config)
+        eventseye = await run_eventseye_seed(dry_run=dry_run)
+
+        _seed_global_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_error": None,
+            "last_result": {
+                "started_at": started_at,
+                "10times": ten_times,
+                "conferencealerts": conferencealerts,
+                "eventseye": eventseye,
+            },
+        })
+        logger.info(f"Background global seed done: {_seed_global_status['last_result']}")
+    except Exception as exc:
+        _seed_global_status.update({
+            "running": False,
+            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "last_error": str(exc),
+        })
+        logger.exception(f"Background global seed failed: {exc}")
