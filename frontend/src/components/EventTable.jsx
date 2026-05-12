@@ -1,27 +1,32 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, TrendingUp, Phone, Info } from 'lucide-react'
+import {
+  ExternalLink, ChevronDown, ChevronUp, ArrowUpDown,
+  TrendingUp, Phone, Info, CheckCircle2, Users,
+  CalendarCheck, ClipboardList, Headphones, Mail,
+  AlertTriangle,
+} from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════
-   PRICING MATRIX — matches internal pricing doc exactly
+   PRICING MATRIX — USD
    Rows: meetings (5, 10, 15, 20)
    Cols: deal size category (low / medium / high / enterprise)
-   Unit: USD
    ═══════════════════════════════════════════════════════════ */
 const PRICING_MATRIX = {
-  low:        { 5: 2700, 10: 4500, 15: 6000, 20: 7800 },
-  medium:     { 5: 3300, 10: 5400, 15: 7200, 20: 9300 },
-  high:       { 5: 3900, 10: 6300, 15: 8400, 20: 10800 },
-  enterprise: { 5: 4500, 10: 7200, 15: 9600, 20: 12600 },
+  low:        { 5: 2700,  10: 4500,  15: 6000,  20: 7800  },
+  medium:     { 5: 3300,  10: 5400,  15: 7200,  20: 9300  },
+  high:       { 5: 3900,  10: 6300,  15: 8400,  20: 10800 },
+  enterprise: { 5: 4500,  10: 7200,  15: 9600,  20: 12600 },
 }
 
 const DEAL_LABELS = {
-  low:        'Low (<$10K)',
-  medium:     'Medium ($10K–$25K)',
-  high:       'High ($25K–$75K)',
-  enterprise: 'Enterprise (>$75K)',
+  low:        'Low (<$10K ACV)',
+  medium:     'Medium ($10K–$25K ACV)',
+  high:       'High ($25K–$75K ACV)',
+  enterprise: 'Enterprise (>$75K ACV)',
 }
 
-/* Based on event attendance, how many meeting packages to offer */
+const fmt = (n) => `$${n.toLocaleString('en-US')}`
+
 function getAvailablePackages(attendees) {
   const n = parseInt(attendees) || 0
   if (n >= 5000) return [5, 10, 15, 20]
@@ -33,30 +38,128 @@ function getAvailablePackages(attendees) {
 
 function getEventTier(attendees) {
   const n = parseInt(attendees) || 0
-  if (n >= 10000) return { tier: 'Flagship Event', tag: '🏟️' }
-  if (n >= 5000)  return { tier: 'Large Event',    tag: '🎯' }
-  if (n >= 3000)  return { tier: 'Mid-Large Event',tag: '📊' }
-  if (n >= 1000)  return { tier: 'Mid Event',      tag: '🤝' }
-  if (n > 0)      return { tier: 'Boutique Event', tag: '💎' }
+  if (n >= 10000) return { tier: 'Flagship Event',  tag: '🏟️' }
+  if (n >= 5000)  return { tier: 'Large Event',     tag: '🎯' }
+  if (n >= 3000)  return { tier: 'Mid-Large Event', tag: '📊' }
+  if (n >= 1000)  return { tier: 'Mid Event',       tag: '🤝' }
+  if (n > 0)      return { tier: 'Boutique Event',  tag: '💎' }
   return null
 }
 
-/* ── Pipeline value estimate ──────────────────────────────── */
 function estimatePipeline(meetings, dealSizeCategory) {
   const midpoints = { low: 5000, medium: 17500, high: 50000, enterprise: 100000 }
-  const mid = midpoints[dealSizeCategory] || midpoints.medium
-  const qualified = Math.round(meetings * 0.4)  // 40% qualify
-  const closed    = Math.round(qualified * 0.25) // 25% close rate
-  const pipeline  = (qualified * mid * 0.5).toLocaleString()  // pipeline value
-  return { qualified, closed, pipeline, mid }
+  const mid       = midpoints[dealSizeCategory] || midpoints.medium
+  const qualified = Math.round(meetings * 0.4)
+  const closed    = Math.round(qualified * 0.25)
+  const pipeline  = Math.round(qualified * mid * 0.5).toLocaleString('en-US')
+  return { qualified, closed, pipeline }
 }
 
-/* ── ROI / Pricing card ─────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   WHAT'S INCLUDED — appears before package selection & CTA
+   ───────────────────────────────────────────────────────── */
+const INCLUSIONS = [
+  {
+    icon: Users,
+    title: 'Pre-show ICP outreach',
+    desc:  'We research and contact your exact target accounts 3–4 weeks before the event, generating confirmed interest before you step on site.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Confirmed meeting scheduling',
+    desc:  'Every meeting is booked, confirmed, and placed on your calendar. No cold walks, no guesswork — only qualified decision-makers.',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Pre-meeting briefs',
+    desc:  'You receive a detailed profile of each attendee — company, role, pain points, conversation starters — before you walk into the room.',
+  },
+  {
+    icon: Headphones,
+    title: 'On-site coordination',
+    desc:  'A dedicated LeadStrategus rep manages logistics on the day: keeps meetings on track, handles no-shows, reschedules when needed.',
+  },
+  {
+    icon: Mail,
+    title: 'Post-event follow-up',
+    desc:  'Meeting summaries, warm email introductions, and deal-momentum support delivered within 48 hours of the event closing.',
+  },
+]
+
+function WhatIsIncluded() {
+  return (
+    <div style={{
+      background: '#f8faff',
+      border: '1px solid #dce6f3',
+      borderRadius: 10,
+      padding: '16px 18px',
+      marginBottom: 16,
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: 'var(--text-dim)',
+        textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12,
+      }}>
+        What's included in every package
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {INCLUSIONS.map(({ icon: Icon, title, desc }) => (
+          <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 7,
+              background: 'linear-gradient(135deg,var(--accent-glow),var(--accent-glow2))',
+              border: '1px solid rgba(6,182,212,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Icon size={13} style={{ color: 'var(--accent)' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>
+                {title}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.55 }}>
+                {desc}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────
+   PROMINENT PRICING DISCLAIMER
+   ───────────────────────────────────────────────────────── */
+function PricingDisclaimer({ dealSizeCategory }) {
+  const label = DEAL_LABELS[dealSizeCategory] || DEAL_LABELS.medium
+  return (
+    <div style={{
+      display: 'flex', gap: 10, alignItems: 'flex-start',
+      background: '#fffbeb',
+      border: '1.5px solid rgba(245,158,11,0.4)',
+      borderRadius: 8, padding: '12px 14px',
+      marginTop: 14, marginBottom: 4,
+    }}>
+      <AlertTriangle size={15} style={{ color: 'var(--consider)', flexShrink: 0, marginTop: 1 }} />
+      <div style={{ fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
+        <strong>Pricing shown is an estimate.</strong>{' '}
+        Actual engagement fee may vary by event complexity, geography, GTM motion, and customer
+        references. Pipeline projections assume a 40% qualification rate and 25% close rate
+        on your stated deal size ({label}). Request a formal quote for binding pricing and SLA terms.
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────
+   PRICING CARD
+   ───────────────────────────────────────────────────────── */
 function PricingCard({ attendees, eventName, dealSizeCategory }) {
-  const packages   = getAvailablePackages(attendees)
-  const tierInfo   = getEventTier(attendees)
-  const category   = dealSizeCategory || 'medium'
-  const prices     = PRICING_MATRIX[category] || PRICING_MATRIX.medium
+  const packages  = getAvailablePackages(attendees)
+  const tierInfo  = getEventTier(attendees)
+  const category  = dealSizeCategory || 'medium'
+  const prices    = PRICING_MATRIX[category] || PRICING_MATRIX.medium
   const [selected, setSelected] = useState(packages[Math.floor(packages.length / 2)] || packages[0])
 
   if (!tierInfo || packages.length === 0) return null
@@ -65,24 +168,31 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 
   return (
     <div className="pricing-card">
+
       {/* Header */}
       <div className="pc-header">
         <div className="pc-title">
           <span>{tierInfo.tag}</span>
           <span>LeadStrategus Meeting Packages — {tierInfo.tier}</span>
         </div>
+        <div style={{
+          fontSize: 10, fontWeight: 700, color: 'var(--text-dim)',
+          background: 'rgba(255,255,255,0.7)', border: '1px solid var(--border)',
+          padding: '4px 10px', borderRadius: 100,
+        }}>
+          Pricing in USD · {DEAL_LABELS[category]}
+        </div>
       </div>
-      <div className="pc-disclaimer" style={{ marginTop: 8, borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' }}>
-        <Info size={10} />
-        <span>
-          Pricing shown is an estimate; actual engagement fee may vary by event complexity, geography, GTM, and customer references.
-        </span>
-      </div>
+
+      {/* What's included — BEFORE packages & CTA */}
+      <WhatIsIncluded />
 
       {/* Deal size context */}
       <div className="pc-deal-label">
-        Pricing for <strong>{DEAL_LABELS[category]}</strong> deals
-        {!dealSizeCategory && <span className="pc-hint"> — select deal size in ICP for personalised pricing</span>}
+        Package pricing for <strong>{DEAL_LABELS[category]}</strong> deals
+        {!dealSizeCategory && (
+          <span className="pc-hint"> — select deal size in ICP for personalised pricing</span>
+        )}
       </div>
 
       {/* Package selector pills */}
@@ -98,8 +208,10 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 
       {/* Selected package details */}
       <div className="pc-selected-card">
-        <div className="pc-selected-price">${prices[selected].toLocaleString()}</div>
-        <div className="pc-selected-desc">for {selected} guaranteed meetings at {eventName || 'this event'}</div>
+        <div className="pc-selected-price">{fmt(prices[selected])}</div>
+        <div className="pc-selected-desc">
+          for {selected} guaranteed meetings at {eventName || 'this event'}
+        </div>
         <div className="pc-pipeline-row">
           <div className="pc-pipe-stat">
             <span className="pc-pipe-val">{pipe.qualified}</span>
@@ -113,30 +225,32 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
           <div className="pc-pipe-sep" />
           <div className="pc-pipe-stat">
             <span className="pc-pipe-val">{pipe.closed}</span>
-            <span className="pc-pipe-label">Expected closed deals</span>
+            <span className="pc-pipe-label">Expected closes</span>
           </div>
         </div>
       </div>
 
       {/* All packages reference table */}
       <div className="pc-table-wrap">
-        <div className="pc-table-label">Full package comparison</div>
+        <div className="pc-table-label">Full package comparison — all prices in USD</div>
         <table className="pc-table">
           <thead>
             <tr>
-              <th>Meetings</th>
-              <th>Investment</th>
-              <th>Qualified Leads</th>
-              <th>Est. Pipeline</th>
+              <th>Meetings guaranteed</th>
+              <th>Investment (USD)</th>
+              <th>Qualified leads</th>
+              <th>Est. pipeline</th>
             </tr>
           </thead>
           <tbody>
             {packages.map(m => {
               const p = estimatePipeline(m, category)
               return (
-                <tr key={m} className={selected === m ? 'pc-row-active' : ''} onClick={() => setSelected(m)}>
+                <tr key={m}
+                  className={selected === m ? 'pc-row-active' : ''}
+                  onClick={() => setSelected(m)}>
                   <td><strong>{m}</strong> meetings</td>
-                  <td className="pc-price-cell">${prices[m].toLocaleString()}</td>
+                  <td className="pc-price-cell">{fmt(prices[m])}</td>
                   <td>{p.qualified} leads</td>
                   <td>${p.pipeline}</td>
                 </tr>
@@ -146,39 +260,46 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         </table>
       </div>
 
-      <div className="pc-table-wrap">
-        <div className="pc-table-label">What you get</div>
-        <ul style={{ margin: '8px 0 0 16px', fontSize: 12, color: 'var(--text)' }}>
-          <li>Pre-show ICP outreach to target attendees and buyers.</li>
-          <li>Meeting planning with calendar coordination and confirmations.</li>
-          <li>On-site support for introductions, logistics, and no-show recovery.</li>
-          <li>Post-event follow-up summary with lead quality notes.</li>
-        </ul>
-      </div>
+      {/* Prominent disclaimer — before CTA */}
+      <PricingDisclaimer dealSizeCategory={category} />
 
-      {/* CTA */}
-      <div className="pc-cta-row">
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta">
+      {/* CTA row */}
+      <div className="pc-cta-row" style={{ marginTop: 14 }}>
+        <a
+          href="https://leadstrategus.com/contact/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="roi-cta"
+        >
           <Phone size={11} />
           Get a Free Quote
         </a>
-      </div>
-
-      {/* Disclaimer */}
-      <div className="pc-disclaimer">
-        <Info size={10} />
-        <span>
-          Pricing shown is indicative and based on the internal LeadStrategus pricing matrix v1.
-          Actual engagement fees may vary by event complexity, geography, and specific requirements.
-          Pipeline estimates assume a 40% qualification rate and 25% close rate on your stated deal size ({DEAL_LABELS[category]}).
-          Please request a formal quote for firm pricing and SLA terms.
-        </span>
+        <a
+          href="https://leadstrategus.com/contact/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'transparent',
+            border: '1.5px solid var(--accent-2)',
+            color: 'var(--accent-2)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '9px 18px',
+            fontSize: 12, fontWeight: 700,
+            textDecoration: 'none',
+            transition: 'all 0.2s',
+          }}
+        >
+          Book a Demo
+        </a>
       </div>
     </div>
   )
 }
 
-/* ── Link ───────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Helpers
+   ───────────────────────────────────────────────────────── */
 function ELink({ href, text }) {
   if (!href) return <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
   return (
@@ -188,19 +309,19 @@ function ELink({ href, text }) {
   )
 }
 
-/* ── Verdict badge ──────────────────────────────────────── */
 function Verdict({ v }) {
   const cls = { GO: 'verdict-go', CONSIDER: 'verdict-consider', SKIP: 'verdict-skip' }
   const dot = { GO: '●', CONSIDER: '◆', SKIP: '○' }
   return (
     <span className={`verdict-badge ${cls[v] || ''}`}>
-      <span>{dot[v] || '○'}</span>
-      {v}
+      <span>{dot[v] || '○'}</span>{v}
     </span>
   )
 }
 
-/* ── Event row ──────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   EVENT ROW
+   ───────────────────────────────────────────────────────── */
 function EventRow({ event, index, dealSizeCategory }) {
   const [open, setOpen] = useState(false)
   const industries = (event.industry || '').split(',').filter(Boolean)
@@ -211,7 +332,7 @@ function EventRow({ event, index, dealSizeCategory }) {
   return (
     <>
       <tr
-        className={`${open ? 'expanded' : ''}`}
+        className={open ? 'expanded' : ''}
         onClick={() => setOpen(o => !o)}
         style={{ animationDelay: `${index * 30}ms` }}
       >
@@ -234,20 +355,20 @@ function EventRow({ event, index, dealSizeCategory }) {
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        {/* Meetings column */}
         <td style={{ fontSize: 11, textAlign: 'center' }}>
-          {pkgs.length > 0 ? `${pkgs[0]}–${pkgs[pkgs.length-1]}` : '—'}
+          {pkgs.length > 0 ? `${pkgs[0]}–${pkgs[pkgs.length - 1]}` : '—'}
         </td>
-        {/* Price range column */}
         <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
           {pkgs.length > 0
-            ? `$${prices[pkgs[0]].toLocaleString()} – $${prices[pkgs[pkgs.length-1]].toLocaleString()}`
+            ? `${fmt(prices[pkgs[0]])} – ${fmt(prices[pkgs[pkgs.length - 1]])}`
             : '—'}
         </td>
         <td style={{ textAlign: 'center' }}>
-          <button className={`expand-toggle ${open ? 'open' : ''}`}
-            onClick={(e)=>{e.stopPropagation(); setOpen(o=>!o)}}
-            aria-label={open ? 'Collapse details' : 'Expand details'}>
+          <button
+            className={`expand-toggle ${open ? 'open' : ''}`}
+            onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+            aria-label={open ? 'Collapse details' : 'Expand details'}
+          >
             {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </td>
@@ -279,11 +400,13 @@ function EventRow({ event, index, dealSizeCategory }) {
                     {personas.map((p, i) => (
                       <span key={i} className="persona-chip">{p.trim()}</span>
                     ))}
-                    {personas.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>}
+                    {personas.length === 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Pricing */}
+                {/* Ticket price */}
                 <div>
                   <div className="expand-block-label">Ticket price / entry fee</div>
                   <div className="expand-block-text">{event.pricing || '—'}</div>
@@ -293,9 +416,9 @@ function EventRow({ event, index, dealSizeCategory }) {
                 <div>
                   <div className="expand-block-label">Links</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <ELink href={event.event_link} text="Register / Event Page" />
+                    <ELink href={event.event_link}    text="Register / Event Page" />
                     {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
-                    {event.agenda_link && <ELink href={event.agenda_link} text="Agenda" />}
+                    {event.agenda_link   && <ELink href={event.agenda_link}   text="Agenda"   />}
                   </div>
                   {event.sponsors && (
                     <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
@@ -327,15 +450,17 @@ function EventRow({ event, index, dealSizeCategory }) {
   )
 }
 
-/* ── Main table ─────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   MAIN TABLE
+   ───────────────────────────────────────────────────────── */
 export default function EventTable({ events, dealSizeCategory }) {
   const [filter, setFilter] = useState('ALL')
-  const [sort, setSort] = useState({ key: 'relevance_score', dir: 'desc' })
+  const [sort,   setSort]   = useState({ key: 'relevance_score', dir: 'desc' })
 
-  const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
-  const VERDICT_ORDER = { GO: 0, CONSIDER: 1 }
-  const filtered = displayEvents.filter(e => filter === 'ALL' || e.fit_verdict === filter)
-  const sorted = [...filtered].sort((a, b) => {
+  const displayEvents  = events.filter(e => e.fit_verdict !== 'SKIP')
+  const VERDICT_ORDER  = { GO: 0, CONSIDER: 1 }
+  const filtered       = displayEvents.filter(e => filter === 'ALL' || e.fit_verdict === filter)
+  const sorted         = [...filtered].sort((a, b) => {
     let av = a[sort.key], bv = b[sort.key]
     if (sort.key === 'fit_verdict') { av = VERDICT_ORDER[av] ?? 3; bv = VERDICT_ORDER[bv] ?? 3 }
     return sort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
@@ -345,27 +470,27 @@ export default function EventTable({ events, dealSizeCategory }) {
     setSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }))
 
   const counts = {
-    ALL: displayEvents.length,
-    GO: displayEvents.filter(e => e.fit_verdict === 'GO').length,
-    CONSIDER: displayEvents.filter(e => e.fit_verdict === 'CONSIDER').length,
+    ALL:     displayEvents.length,
+    GO:      displayEvents.filter(e => e.fit_verdict === 'GO').length,
+    CONSIDER:displayEvents.filter(e => e.fit_verdict === 'CONSIDER').length,
   }
 
   const filterConfig = [
-    { key: 'ALL', cls: '' },
-    { key: 'GO', cls: 'active-go' },
-    { key: 'CONSIDER', cls: 'active-consider' },
+    { key: 'ALL',     cls: '' },
+    { key: 'GO',      cls: 'active-go' },
+    { key: 'CONSIDER',cls: 'active-consider' },
   ]
 
   const COLS = [
-    { label: '#',               key: null,             center: true, width: 40  },
-    { label: 'Event',           key: 'event_name'                               },
-    { label: 'Date',            key: 'date'                                     },
-    { label: 'Location',        key: null                                       },
-    { label: 'Industry',        key: null                                       },
-    { label: 'Verdict',         key: 'fit_verdict',    center: true             },
-    { label: 'Meetings Range',  key: null,             center: true             },
-    { label: 'Package Cost',    key: null,             center: true             },
-    { label: '',                key: null,             width: 42, center: true  },
+    { label: '#',              key: null,            center: true, width: 40  },
+    { label: 'Event',          key: 'event_name'                              },
+    { label: 'Date',           key: 'date'                                    },
+    { label: 'Location',       key: null                                      },
+    { label: 'Industry',       key: null                                      },
+    { label: 'Verdict',        key: 'fit_verdict',   center: true             },
+    { label: 'Meetings Range', key: null,            center: true             },
+    { label: 'Package (USD)',  key: null,            center: true             },
+    { label: '',               key: null,            width: 42, center: true  },
   ]
 
   return (
@@ -383,14 +508,20 @@ export default function EventTable({ events, dealSizeCategory }) {
             </button>
           ))}
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {dealSizeCategory && (
-            <span style={{ fontSize:10, background:'var(--accent-glow)', border:'1px solid rgba(6,182,212,0.3)', color:'var(--accent)', padding:'3px 10px', borderRadius:100, fontWeight:700 }}>
+            <span style={{
+              fontSize: 10,
+              background: 'var(--accent-glow)',
+              border: '1px solid rgba(6,182,212,0.3)',
+              color: 'var(--accent)',
+              padding: '3px 10px', borderRadius: 100, fontWeight: 700,
+            }}>
               {DEAL_LABELS[dealSizeCategory]}
             </span>
           )}
           <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-            Expand any row for pricing & AI analysis
+            Expand any row for package details &amp; AI analysis
           </div>
         </div>
       </div>
@@ -404,12 +535,16 @@ export default function EventTable({ events, dealSizeCategory }) {
                 <th
                   key={i}
                   onClick={() => col.key && toggleSort(col.key)}
-                  style={{ width: col.width, textAlign: col.center ? 'center' : 'left', cursor: col.key ? 'pointer' : 'default' }}
+                  style={{
+                    width: col.width,
+                    textAlign: col.center ? 'center' : 'left',
+                    cursor: col.key ? 'pointer' : 'default',
+                  }}
                 >
                   {col.key ? (
                     <div className="th-inner" style={{ justifyContent: col.center ? 'center' : 'flex-start' }}>
                       {col.label}
-                      {col.key && <ArrowUpDown size={9} style={{ opacity: 0.5 }} />}
+                      <ArrowUpDown size={9} style={{ opacity: 0.5 }} />
                     </div>
                   ) : col.label}
                 </th>
@@ -433,33 +568,59 @@ export default function EventTable({ events, dealSizeCategory }) {
         </table>
       </div>
 
-      {/* Bottom CTA */}
+      {/* Bottom bar */}
       {displayEvents.length > 0 && (
         <div style={{
           padding: '14px 20px', borderTop: '1px solid var(--border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: 10, background: 'linear-gradient(135deg,#f7fbff,#f0f4ff)'
+          flexWrap: 'wrap', gap: 10,
+          background: 'linear-gradient(135deg,#f7fbff,#f0f4ff)',
         }}>
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
               <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
-              {counts.GO} strong matches · Pricing shown for {DEAL_LABELS[dealSizeCategory || 'medium']} deals
+              {counts.GO} strong matches · All package pricing in USD
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'var(--go)', fontWeight:600 }}>
-              <ShieldCheck size={12} />
-              Cashback guarantee on all packages
+            <div style={{
+              fontSize: 10, color: '#92400e',
+              background: '#fffbeb',
+              border: '1px solid rgba(245,158,11,0.35)',
+              padding: '3px 10px', borderRadius: 100,
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              <AlertTriangle size={9} />
+              Prices are estimates — request a quote for firm fees
             </div>
           </div>
-          <a
-            href="https://leadstrategus.com/contact/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="roi-cta"
-            style={{ fontSize: 11 }}
-          >
-            <Phone size={10} />
-            Get Strategy Consultation
-          </a>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a
+              href="https://leadstrategus.com/contact/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="roi-cta"
+              style={{ fontSize: 11 }}
+            >
+              <Phone size={10} />
+              Get a Free Quote
+            </a>
+            <a
+              href="https://leadstrategus.com/contact/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: 'transparent',
+                border: '1.5px solid var(--accent-2)',
+                color: 'var(--accent-2)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '7px 14px',
+                fontSize: 11, fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              Book a Demo
+            </a>
+          </div>
         </div>
       )}
     </div>
