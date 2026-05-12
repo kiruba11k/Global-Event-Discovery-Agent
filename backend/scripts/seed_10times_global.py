@@ -602,16 +602,19 @@ async def run_10times_seed(config: CrawlConfig) -> dict:
     logger.info(f"Starting standalone 10times global crawl at {started.isoformat()}")
     events = await crawl_events(config)
     parsed = len(events)
+    today = datetime.now(UTC).date().isoformat()
+    upcoming_events = [event for event in events if event.start_date and event.start_date >= today]
     logger.info(f"Parsed {parsed} unique 10times events after in-memory deduplication.")
+    logger.info(f"Upcoming events retained: {len(upcoming_events)} (start_date >= {today}).")
 
     if config.dry_run:
-        for event in events[:10]:
+        for event in upcoming_events[:10]:
             logger.info(f"DRY RUN sample: {event.start_date} | {event.name} | {event.city}, {event.country} | {event.source_url}")
         logger.info("Dry run complete; database was not modified.")
         saved = 0
     else:
-        saved = await seed_database(events)
-        logger.info(f"Seeder complete. Upsert attempted for {saved}/{parsed} events; DB unique constraint ignores duplicate dedup_hash values.")
+        saved = await seed_database(upcoming_events)
+        logger.info(f"Seeder complete. Upsert attempted for {saved}/{len(upcoming_events)} upcoming events; DB unique constraint ignores duplicate dedup_hash values.")
 
     finished = datetime.now(UTC)
     return {
@@ -619,6 +622,7 @@ async def run_10times_seed(config: CrawlConfig) -> dict:
         "finished_at": finished.isoformat(),
         "duration_seconds": round((finished - started).total_seconds(), 2),
         "parsed_events": parsed,
+        "upcoming_events": len(upcoming_events),
         "saved_events": saved,
         "dry_run": config.dry_run,
         "limit_events": config.limit_events,

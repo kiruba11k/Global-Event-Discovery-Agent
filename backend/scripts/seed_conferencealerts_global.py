@@ -5,7 +5,7 @@ import argparse
 import asyncio
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -43,6 +43,9 @@ async def run_conferencealerts_seed(config: ConferenceAlertsSeedConfig) -> dict:
 
     if config.limit_events:
         events = events[: config.limit_events]
+
+    today = date.today().isoformat()
+    events = [e for e in events if getattr(e, "start_date", "") and e.start_date >= today]
 
     saved = 0
     if not config.dry_run:
