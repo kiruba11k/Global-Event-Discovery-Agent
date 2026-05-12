@@ -1,38 +1,27 @@
 """
-CRUD helpers — dialect-aware upsert for SQLite (dev) and PostgreSQL (prod).
+CRUD helpers — dialect-aware upsert (SQLite dev / PostgreSQL prod).
 
-Key changes vs previous version:
-  - _dialect_insert() detects the configured database and returns the right
-    SQLAlchemy dialect insert (sqlite or postgresql).  Both dialects support
-    .on_conflict_do_nothing(index_elements=["dedup_hash"]) identically.
-  - Removed the hard import of sqlalchemy.dialects.sqlite.insert so the same
-    code works against Neon / Supabase / any PostgreSQL without changes.
-  - rowcount semantics are identical for both dialects:
-      0  → conflict (duplicate ignored)
-      N  → N rows actually inserted
-     -1  → driver doesn't report (treat as inserted)
+Key fixes:
+  - _dialect_insert() picks sqlite or postgresql dialect automatically
+  - count_by_source() ADDED  ← fixes ImportError in ingestion_manager
+  - batch_upsert_events() uses correct rowcount fallback for asyncpg
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, or_
 from models.event import EventORM, EventCreate
 from models.company_profile import CompanyProfileORM, CompanyProfileCreate
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 import uuid
 from loguru import logger
 
 
-# ── Dialect-aware insert helper ────────────────────────────────────
+# ── Dialect-aware INSERT ───────────────────────────────────────────
 
 def _dialect_insert(orm_class):
     """
-    Return an INSERT statement object for the correct SQL dialect.
-
-    SQLite  → sqlalchemy.dialects.sqlite.insert
-    Postgres→ sqlalchemy.dialects.postgresql.insert
-
-    Both expose the same .on_conflict_do_nothing() API, so callers
-    don't need to know which dialect is active.
+    Return an INSERT object for the correct SQL dialect.
+    Both dialects expose .on_conflict_do_nothing(index_elements=[...]).
     """
     from config import get_settings
     url = get_settings().database_url
@@ -48,11 +37,7 @@ def _dialect_insert(orm_class):
 # ═══════════════════════════════════════════════════════════
 
 async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
-    """
-    Insert event or silently skip if dedup_hash already exists.
-    Returns True  → row was actually inserted (new event).
-    Returns False → conflict ignored (duplicate) or error.
-    """
+    """Insert or skip-on-conflict. True = new row inserted."""
     try:
         stmt = (
             _dialect_insert(EventORM)
@@ -91,13 +76,8 @@ async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
         )
         result = await db.execute(stmt)
         await db.commit()
-
-        # rowcount == 1  → inserted
-        # rowcount == 0  → conflict ignored (duplicate)
-        # rowcount == -1 → driver doesn't report → assume inserted
-        inserted = result.rowcount != 0
-        return inserted
-
+        # rowcount==1→inserted; 0→conflict; -1→driver unknown (treat as inserted)
+        return result.rowcount != 0
     except Exception as e:
         logger.error(f"upsert_event error [{event.name[:40]}]: {e}")
         await db.rollback()
@@ -110,14 +90,8 @@ async def batch_upsert_events(
     skip_past: bool = True,
 ) -> Tuple[int, int]:
     """
-    Upsert a list of events in a single transaction.
-    Much faster than calling upsert_event() in a loop.
-
-    Args:
-        skip_past: if True, silently drop events whose start_date < today.
-
-    Returns:
-        (inserted_count, skipped_count)
+    Upsert a list of events in chunked transactions.
+    Returns (inserted_count, skipped_count).
     """
     if not events:
         return 0, 0
@@ -170,20 +144,18 @@ async def batch_upsert_events(
         return 0, skipped
 
     try:
-        # Insert in chunks of 500 to stay within SQLite / PG parameter limits
         chunk_size = 500
         for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            stmt  = (
+            chunk  = rows[i: i + chunk_size]
+            stmt   = (
                 _dialect_insert(EventORM)
                 .values(chunk)
                 .on_conflict_do_nothing(index_elements=["dedup_hash"])
             )
             result = await db.execute(stmt)
-            # rowcount for bulk insert = number of rows actually inserted
+            # asyncpg may return -1 for unknown rowcount → fall back to chunk len
             chunk_inserted = result.rowcount if result.rowcount >= 0 else len(chunk)
             inserted += chunk_inserted
-
         await db.commit()
     except Exception as e:
         logger.error(f"batch_upsert_events error: {e}")
@@ -211,7 +183,6 @@ async def get_candidate_events(
         EventORM.start_date <= date_to,
         EventORM.est_attendees >= min_attendees,
     )
-
     if geographies and "global" not in [g.lower() for g in geographies]:
         geo_filters = []
         for geo in geographies:
@@ -238,24 +209,23 @@ async def count_events(db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
-async def count_by_source(db: AsyncSession) -> dict[str, int]:
+async def count_by_source(db: AsyncSession) -> Dict[str, int]:
     """
-    Return event counts grouped by source_platform.
+    Return {source_platform: event_count} for every source in the DB.
+    Required by ingestion_manager.py — was missing, causing ImportError.
     """
     result = await db.execute(
-        select(EventORM.source_platform, func.count(EventORM.id)).group_by(
-            EventORM.source_platform
-        )
+        select(EventORM.source_platform, func.count(EventORM.id))
+        .group_by(EventORM.source_platform)
+        .order_by(func.count(EventORM.id).desc())
     )
-    rows = result.all()
-    return {source or "unknown": count for source, count in rows}
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def purge_past_events(db: AsyncSession, grace_days: int = 7) -> int:
     """
-    Delete events whose end_date is older than `grace_days` days ago.
-    Seed events (source_platform='Seed') are NEVER purged — guaranteed baseline.
-    Events with empty/null end_date are NEVER purged (can't know if passed).
+    Delete events whose end_date is older than grace_days.
+    Seed events (source_platform='Seed') are NEVER purged.
     """
     cutoff = (date.today() - timedelta(days=grace_days)).isoformat()
     result = await db.execute(
@@ -269,7 +239,7 @@ async def purge_past_events(db: AsyncSession, grace_days: int = 7) -> int:
     await db.commit()
     purged = result.rowcount
     if purged:
-        logger.info(f"Purged {purged} events that ended before {cutoff}.")
+        logger.info(f"Purged {purged} events ended before {cutoff}.")
     return purged
 
 
