@@ -25,6 +25,7 @@ sentence-transformers
 
 # ── Web scraping ─────────────────────────────────────────────────────
 httpx
+httpx[http2]
 beautifulsoup4
 playwright
 
