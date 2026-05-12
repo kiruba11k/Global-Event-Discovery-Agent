@@ -44,6 +44,11 @@ EVENTSEYE_ROOTS = [
     "https://www.eventseye.com/trade-shows/",
 ]
 
+EVENTSEYE_LOCATION_URLS = [
+    "https://www.eventseye.com/fairs/c1_trade-shows_india.html",
+    "https://www.eventseye.com/fairs/c1_trade-shows_indonesia.html",
+]
+
 MONTHS = {
     "jan":"01","feb":"02","mar":"03","apr":"04","may":"05","jun":"06",
     "jul":"07","aug":"08","sep":"09","oct":"10","nov":"11","dec":"12",
@@ -251,106 +256,6 @@ class ScraperEventsEye(BaseConnector):
         if not working_root:
             logger.debug("EventsEye: no working root URL found — using curated list")
             return events
-
-        root_url, root_html = working_root
-        soup = BeautifulSoup(root_html, "html.parser")
-
-        # Step 2: discover category/listing links from navigation
-        discovered_links = set()
-        for a in soup.select("a[href]"):
-            href = a.get("href", "")
-            if not href:
-                continue
-            # Normalize URL
-            if href.startswith("/"):
-                href = f"https://www.eventseye.com{href}"
-            elif not href.startswith("http"):
-                href = f"{root_url.rstrip('/')}/{href.lstrip('/')}"
-            # Keep only EventsEye fair listing pages
-            if "eventseye.com/fairs/" in href and href.endswith(".html"):
-                discovered_links.add(href)
-
-        logger.info(f"EventsEye: discovered {len(discovered_links)} listing pages")
-
-        # Step 3: scrape each discovered page
-        for page_url in list(discovered_links)[:20]:
-            try:
-                await asyncio.sleep(2.5)
-                r = await client.get(page_url, timeout=12)
-                r.raise_for_status()
-            except Exception as e:
-                logger.debug(f"EventsEye page {page_url}: {e}")
-                continue
-
-            page_soup = BeautifulSoup(r.text, "html.parser")
-            rows = (
-                page_soup.select("table.fair-list tr, tr.fair-row") or
-                page_soup.select("div.fair-item, div.event-card") or
-                page_soup.select("table tr")[1:]
-            )
-
-            for row in rows[:30]:
-                try:
-                    name_el = (
-                        row.select_one("td.fair-name a, td a.fair-link") or
-                        row.select_one("a[href*='/fairs/f']")
-                    )
-                    if not name_el:
-                        continue
-                    name = name_el.get_text(strip=True)
-                    if not name or len(name) < 4:
-                        continue
-
-                    href = name_el.get("href", "")
-                    link = href if href.startswith("http") else f"https://www.eventseye.com{href}"
-
-                    # Find date in remaining cells
-                    cells     = row.find_all(["td", "th"])
-                    date_text = ""
-                    for cell in cells:
-                        txt = cell.get_text(strip=True)
-                        if re.search(r"\d{4}", txt) and re.search(
-                            r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{2}[-/]\d{2})",
-                            txt, re.I
-                        ):
-                            date_text = txt
-                            break
-
-                    start_date = _parse_date(date_text)
-                    if not start_date:
-                        continue
-
-                    city    = ""
-                    country = ""
-                    for cell in cells:
-                        txt = cell.get_text(strip=True)
-                        if 3 < len(txt) < 50 and not re.search(r"\d{4}", txt):
-                            parts = [p.strip() for p in txt.split(",")]
-                            city    = parts[0]
-                            country = parts[-1] if len(parts) > 1 else ""
-                            break
-
-                    dh = self.make_hash(name, start_date, city)
-                    if dh in seen:
-                        continue
-                    seen.add(dh)
-
-                    events.append(EventCreate(
-                        id=self.make_id(), source_platform="EventsEye",
-                        source_url=link, dedup_hash=dh, name=name,
-                        description=f"Global trade fair sourced from EventsEye.com.",
-                        start_date=start_date, end_date=start_date,
-                        city=city, country=country,
-                        category="trade show",
-                        industry_tags="trade show,conference,business",
-                        audience_personas="executives,trade buyers,industry professionals",
-                        est_attendees=2000, ticket_price_usd=0.0,
-                        price_description="See website", registration_url=link,
-                    ))
-                except Exception:
-                    pass
-
-        return events
 
     async def fetch(self) -> List[EventCreate]:
         events: List[EventCreate] = []
