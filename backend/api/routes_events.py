@@ -17,7 +17,7 @@ UPDATED:
 - Preserved seed-10times functionality from old version
 """
 
-import io, json, uuid
+import csv, hashlib, io, json, uuid
 from datetime import date, datetime
 from typing import Iterable, Optional
 
@@ -31,11 +31,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.database import get_db
 from db.crud import (
     get_candidate_events, get_all_events, get_event_by_id, count_events,
-    create_company_profile, get_company_profile,
+    create_company_profile, get_company_profile, batch_upsert_events,
 )
 
 from models.icp_profile import SearchRequest, SearchResponse, CompanyContext
 from models.company_profile import CompanyProfileCreate
+from models.event import EventCreate
 
 from relevance.scorer import score_candidates
 from relevance.groq_ranker import rank_with_groq
@@ -128,6 +129,50 @@ def _apply_result_mix(ranked: Iterable) -> list:
 # ─────────────────────────────────────────────────────────────
 # PDF extraction
 # ─────────────────────────────────────────────────────────────
+
+
+
+def _norm(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
+    raw = "|".join([_norm(name).lower(), _norm(start_date), _norm(city).lower(), _norm(country).lower()])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
+    name = _norm(row.get("name"))
+    start_date = _norm(row.get("start_date"))
+    if not _parse_date(start_date):
+        raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
+
+    if not name or not start_date:
+        raise ValueError(f"row {row_number}: 'name' and 'start_date' are required")
+
+    event_id = _norm(row.get("id")) or str(uuid.uuid4())
+    city = _norm(row.get("city"))
+    country = _norm(row.get("country"))
+    source_url = _norm(row.get("source_url"))
+    website = _norm(row.get("website"))
+
+    related_industries = _norm(row.get("related_industries"))
+
+    return EventCreate(
+        id=event_id,
+        dedup_hash=_csv_dedup_hash(name, start_date, city, country),
+        source_platform="CSV_UPLOAD",
+        source_url=source_url or website or f"csv://upload/{event_id}",
+        name=name,
+        description=_norm(row.get("description")),
+        industry_tags=related_industries,
+        start_date=start_date,
+        end_date=_norm(row.get("end_date")) or start_date,
+        venue_name=_norm(row.get("venue")),
+        city=city,
+        country=country,
+        registration_url=website,
+    )
 
 def _extract_pdf_text(file_bytes: bytes) -> str:
     try:
@@ -414,6 +459,62 @@ async def search_events(
         events=[r.model_dump() for r in ranked],
         generated_at=datetime.utcnow().isoformat() + "Z",
     )
+
+
+
+
+@router.post("/events/upload-csv")
+async def upload_events_csv(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload CSV and permanently upsert rows into DATABASE_URL DB with dedup by hash.
+
+    Supported headers include: id,name,start_date,end_date,venue,city,country,description,related_industries,website,source_url
+    """
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded CSV is empty")
+
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    required = {"name", "start_date"}
+    missing = [c for c in required if c not in (reader.fieldnames or [])]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing)}")
+
+    parsed: list[EventCreate] = []
+    errors: list[str] = []
+    for idx, row in enumerate(reader, start=2):
+        try:
+            parsed.append(_parse_csv_event_row(row, idx))
+        except ValueError as exc:
+            errors.append(str(exc))
+
+    if not parsed:
+        raise HTTPException(status_code=400, detail={"message": "No valid rows in CSV", "errors": errors[:20]})
+
+    inserted, skipped = await batch_upsert_events(db, parsed, skip_past=False)
+    total = await count_events(db)
+
+    return {
+        "message": "CSV processed and persisted to DATABASE_URL.",
+        "filename": file.filename,
+        "rows_read": len(parsed) + len(errors),
+        "valid_rows": len(parsed),
+        "inserted": inserted,
+        "duplicates_or_skipped": max(0, len(parsed) - inserted) + skipped,
+        "invalid_rows": len(errors),
+        "errors_preview": errors[:20],
+        "total_events_in_db": total,
+    }
 
 
 # ─────────────────────────────────────────────────────────────
