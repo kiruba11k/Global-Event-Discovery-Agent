@@ -30,10 +30,9 @@ async def seed_database(events):
     inserted = 0
     async with AsyncSessionLocal() as db:
         for e in events:
-            _, created = await upsert_event(db, e)
+            created = await upsert_event(db, e)
             if created:
                 inserted += 1
-        await db.commit()
     return inserted
 
 
