@@ -422,6 +422,21 @@ async def search_events(
             limit=300,
         )
 
+    if len(candidates) < 5 and profile.target_industries:
+        logger.warning(
+            "Still too few candidates after seed run; broadening search "
+            "by temporarily removing industry pre-filter."
+        )
+        candidates = await get_candidate_events(
+            db=db,
+            geographies=profile.target_geographies,
+            industries=[],
+            date_from=profile.date_from,
+            date_to=profile.date_to,
+            min_attendees=0,
+            limit=300,
+        )
+
     # Hard date filter
     candidates = [
         event for event in candidates
