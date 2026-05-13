@@ -163,6 +163,33 @@ def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
+def _csv_int(row: dict, *keys: str, default: int = 0) -> int:
+    value = _csv_value(row, *keys)
+    if not value:
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _csv_float(row: dict, *keys: str, default: float = 0.0) -> float:
+    value = _csv_value(row, *keys)
+    if not value:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _csv_bool(row: dict, *keys: str, default: bool = False) -> bool:
+    value = _csv_value(row, *keys).lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "y"}
+
+
 def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
     normalized_row = {_norm(str(k)).lower().lstrip("﻿"): v for k, v in row.items() if k is not None}
 
@@ -194,21 +221,36 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         country = country or fallback_country
 
     related_industries = _csv_value(normalized_row, "related_industries", "industry_tags", "industries")
+    csv_source = _csv_value(normalized_row, "source", "source_platform")
 
     return EventCreate(
         id=event_id,
         dedup_hash=_csv_dedup_hash(name, start_date, city, country),
-        source_platform="CSV_UPLOAD",
+        source_platform=csv_source or "CSV_UPLOAD",
         source_url=source_url or website or f"csv://upload/{event_id}",
         name=name,
         description=_csv_value(normalized_row, "description", "summary"),
+        short_summary=_csv_value(normalized_row, "short_summary"),
+        edition_number=_csv_value(normalized_row, "edition_number", "edition"),
         industry_tags=related_industries,
+        audience_personas=_csv_value(normalized_row, "audience_personas", "buyer_persona"),
         start_date=start_date,
         end_date=end_date or start_date,
+        duration_days=_csv_int(normalized_row, "duration_days", default=1),
         venue_name=_csv_value(normalized_row, "venue", "event_venues", "venue_name"),
+        address=_csv_value(normalized_row, "address"),
         city=city,
         country=country,
+        is_virtual=_csv_bool(normalized_row, "is_virtual"),
+        is_hybrid=_csv_bool(normalized_row, "is_hybrid"),
+        est_attendees=_csv_int(normalized_row, "est_attendees", "attendees"),
+        category=_csv_value(normalized_row, "category"),
+        ticket_price_usd=_csv_float(normalized_row, "ticket_price_usd", "price_usd"),
+        price_description=_csv_value(normalized_row, "price_description", "pricing"),
         registration_url=website,
+        sponsors=_csv_value(normalized_row, "sponsors"),
+        speakers_url=_csv_value(normalized_row, "speakers_url"),
+        agenda_url=_csv_value(normalized_row, "agenda_url"),
     )
 
 def _extract_pdf_text(file_bytes: bytes) -> str:
