@@ -85,9 +85,22 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+async def _ensure_events_columns(conn) -> None:
+    """Best-effort lightweight schema evolution for existing deployments."""
+    statements = [
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS event_cities TEXT",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS event_venues TEXT",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS related_industries TEXT",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS website VARCHAR",
+    ]
+    for stmt in statements:
+        await conn.exec_driver_sql(stmt)
+
+
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(EventBase.metadata.create_all)
+        await _ensure_events_columns(conn)
     db_type = "SQLite (local)" if _is_sqlite else "PostgreSQL (persistent)"
     logger.info(f"Database initialised [{db_type}] — events + company_profiles ready.")
 
