@@ -188,7 +188,18 @@ async def get_candidate_events(
         for geo in geographies:
             geo_filters.append(EventORM.country.ilike(f"%{geo}%"))
             geo_filters.append(EventORM.city.ilike(f"%{geo}%"))
+            geo_filters.append(EventORM.event_cities.ilike(f"%{geo}%"))
         stmt = stmt.where(or_(*geo_filters))
+
+    if industries:
+        industry_filters = []
+        for industry in industries:
+            industry_filters.append(EventORM.related_industries.ilike(f"%{industry}%"))
+            industry_filters.append(EventORM.industry_tags.ilike(f"%{industry}%"))
+            industry_filters.append(EventORM.category.ilike(f"%{industry}%"))
+            industry_filters.append(EventORM.name.ilike(f"%{industry}%"))
+            industry_filters.append(EventORM.description.ilike(f"%{industry}%"))
+        stmt = stmt.where(or_(*industry_filters))
 
     result = await db.execute(stmt.limit(limit))
     return list(result.scalars().all())

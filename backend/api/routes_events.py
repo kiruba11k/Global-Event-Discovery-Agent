@@ -40,6 +40,7 @@ from models.event import EventCreate
 
 from relevance.scorer import score_candidates
 from relevance.groq_ranker import rank_with_groq
+from enrichment.serp_enricher import enrich_events_batch
 
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
@@ -506,6 +507,11 @@ async def search_events(
     }
 
     # ── Step 4: Groq ranking ─────────────────────────────
+    enrichments = await enrich_events_batch(
+        events=top_events,
+        serpapi_key=settings.serpapi_key,
+        max_enrich=min(7, len(top_events)),
+    )
 
     ranked = await rank_with_groq(
         events=top_events,
@@ -514,6 +520,7 @@ async def search_events(
         pre_tiers=pre_tiers,
         pre_details=pre_details,
         company_ctx=company_ctx,
+        enrichments=enrichments,
     )
 
     ranked.sort(key=lambda r: -r.relevance_score)
