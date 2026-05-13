@@ -69,6 +69,10 @@ async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
                 sponsors=event.sponsors,
                 speakers_url=event.speakers_url,
                 agenda_url=event.agenda_url,
+                event_cities=event.event_cities,
+                event_venues=event.event_venues,
+                related_industries=event.related_industries,
+                website=event.website,
                 ingested_at=datetime.utcnow(),
                 last_verified_at=datetime.utcnow(),
             )
@@ -136,6 +140,10 @@ async def batch_upsert_events(
             sponsors=event.sponsors,
             speakers_url=event.speakers_url,
             agenda_url=event.agenda_url,
+            event_cities=event.event_cities,
+            event_venues=event.event_venues,
+            related_industries=event.related_industries,
+            website=event.website,
             ingested_at=datetime.utcnow(),
             last_verified_at=datetime.utcnow(),
         ))
