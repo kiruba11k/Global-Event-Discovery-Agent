@@ -136,17 +136,39 @@ def _norm(value: str | None) -> str:
     return (value or "").strip()
 
 
+def _csv_value(row: dict, *keys: str) -> str:
+    for key in keys:
+        value = row.get(key)
+        if _norm(value):
+            return _norm(value)
+    return ""
+
+
+def _split_city_country(raw_location: str) -> tuple[str, str]:
+    cleaned = _norm(raw_location)
+    if not cleaned:
+        return "", ""
+    if "(" in cleaned and ")" in cleaned:
+        city = cleaned.split("(", 1)[0].strip(" -,")
+        country = cleaned.split("(", 1)[1].split(")", 1)[0].strip()
+        return city, country
+    if "," in cleaned:
+        city, country = [part.strip() for part in cleaned.split(",", 1)]
+        return city, country
+    return cleaned, ""
+
+
 def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
     raw = "|".join([_norm(name).lower(), _norm(start_date), _norm(city).lower(), _norm(country).lower()])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
-    normalized_row = {_norm(str(k)).lower(): v for k, v in row.items() if k is not None}
+    normalized_row = {_norm(str(k)).lower().lstrip("﻿"): v for k, v in row.items() if k is not None}
 
-    name = _norm(normalized_row.get("name"))
-    start_date = _norm(normalized_row.get("start_date"))
-    end_date = _norm(normalized_row.get("end_date"))
+    name = _csv_value(normalized_row, "name", "event_name", "title")
+    start_date = _csv_value(normalized_row, "start_date", "start", "from_date")
+    end_date = _csv_value(normalized_row, "end_date", "end", "to_date")
 
     # Be tolerant with partial CSVs: if start_date is missing but end_date is valid, use end_date.
     if not start_date and _parse_date(end_date):
@@ -158,13 +180,20 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
     if not _parse_date(start_date):
         raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
 
-    event_id = _norm(normalized_row.get("id")) or str(uuid.uuid4())
-    city = _norm(normalized_row.get("city"))
-    country = _norm(normalized_row.get("country"))
-    source_url = _norm(normalized_row.get("source_url"))
-    website = _norm(normalized_row.get("website"))
+    event_id = _csv_value(normalized_row, "id", "event_id") or str(uuid.uuid4())
+    source_url = _csv_value(normalized_row, "source_url", "url")
+    website = _csv_value(normalized_row, "website", "registration_url")
 
-    related_industries = _norm(normalized_row.get("related_industries"))
+    city = _csv_value(normalized_row, "city")
+    country = _csv_value(normalized_row, "country")
+    event_cities = _csv_value(normalized_row, "event_cities", "event_city", "location")
+
+    if (not city or not country) and event_cities:
+        fallback_city, fallback_country = _split_city_country(event_cities)
+        city = city or fallback_city
+        country = country or fallback_country
+
+    related_industries = _csv_value(normalized_row, "related_industries", "industry_tags", "industries")
 
     return EventCreate(
         id=event_id,
@@ -172,11 +201,11 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         source_platform="CSV_UPLOAD",
         source_url=source_url or website or f"csv://upload/{event_id}",
         name=name,
-        description=_norm(normalized_row.get("description")),
+        description=_csv_value(normalized_row, "description", "summary"),
         industry_tags=related_industries,
         start_date=start_date,
         end_date=end_date or start_date,
-        venue_name=_norm(normalized_row.get("venue")),
+        venue_name=_csv_value(normalized_row, "venue", "event_venues", "venue_name"),
         city=city,
         country=country,
         registration_url=website,
