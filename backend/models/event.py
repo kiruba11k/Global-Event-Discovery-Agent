@@ -1,5 +1,7 @@
 """
-Event models — updated RankedEvent to include est_attendees for ROI calculator.
+Event ORM — updated to include extra columns that EventsEye / external
+seed scripts insert (event_cities, event_venues, related_industries, website).
+All new columns are nullable so existing rows without them don't break.
 """
 from __future__ import annotations
 from datetime import datetime
@@ -18,7 +20,7 @@ class EventORM(Base):
 
     id               = Column(String, primary_key=True)
     source_platform  = Column(String, nullable=False)
-    source_url       = Column(String, nullable=False)
+    source_url       = Column(String, nullable=False, default="")
     dedup_hash       = Column(String, unique=True, index=True)
 
     name             = Column(String, nullable=False, index=True)
@@ -32,6 +34,7 @@ class EventORM(Base):
     timezone         = Column(String, default="UTC")
     is_annual        = Column(Boolean, default=False)
 
+    # ── Core location ──────────────────────────────────────────
     venue_name       = Column(String, default="")
     address          = Column(String, default="")
     city             = Column(String, default="", index=True)
@@ -41,23 +44,43 @@ class EventORM(Base):
     is_virtual       = Column(Boolean, default=False)
     is_hybrid        = Column(Boolean, default=False)
 
+    # ── Extended location (EventsEye / external sources) ───────
+    # e.g. "Jakarta (Indonesia)" or "Frankfurt am Main (Germany)"
+    event_cities     = Column(Text, nullable=True, default="")
+    # e.g. "Messe Frankfurt, Hall 8"
+    event_venues     = Column(Text, nullable=True, default="")
+
+    # ── Audience ───────────────────────────────────────────────
     est_attendees    = Column(Integer, default=0)
     est_buyer_orgs   = Column(Integer, default=0)
     vip_count        = Column(Integer, default=0)
     exhibitor_count  = Column(Integer, default=0)
     speaker_count    = Column(Integer, default=0)
 
+    # ── Classification ─────────────────────────────────────────
     category         = Column(String, default="")
     industry_tags    = Column(Text, default="")
-    audience_personas = Column(Text, default="")
+    audience_personas= Column(Text, default="")
 
+    # ── Extended industry tags (EventsEye / external) ──────────
+    # e.g. "Adhesion, Paints and Coating Technologies, Plastics, Rubber"
+    related_industries = Column(Text, nullable=True, default="")
+
+    # ── Pricing & registration ─────────────────────────────────
     ticket_price_usd      = Column(Float, default=0.0)
     price_description     = Column(String, default="")
     registration_url      = Column(String, default="")
+
+    # ── Official website (separate from registration URL) ───────
+    # EventsEye often provides the event's own website separately
+    website               = Column(String, nullable=True, default="")
+
+    # ── Extra detail ───────────────────────────────────────────
     sponsors              = Column(Text, default="")
     speakers_url          = Column(String, default="")
     agenda_url            = Column(String, default="")
 
+    # ── Relevance (computed at query time, not stored long-term) ─
     relevance_score  = Column(Float, default=0.0)
     relevance_tier   = Column(String, default="")
     rationale        = Column(Text, default="")
@@ -66,6 +89,10 @@ class EventORM(Base):
     last_verified_at = Column(DateTime, default=datetime.utcnow)
     confidence_score = Column(Float, default=0.8)
 
+
+# ─────────────────────────────────────────────────────────────
+# Pydantic schemas
+# ─────────────────────────────────────────────────────────────
 
 class EventBase(BaseModel):
     name: str
@@ -93,6 +120,11 @@ class EventBase(BaseModel):
     speakers_url: str = ""
     agenda_url: str = ""
     edition_number: str = ""
+    # Extended columns (optional — populated by some sources)
+    event_cities: str = ""
+    event_venues: str = ""
+    related_industries: str = ""
+    website: str = ""
 
 
 class EventCreate(EventBase):
@@ -112,7 +144,7 @@ class EventRead(EventBase):
 
 
 class RankedEvent(BaseModel):
-    """What the API returns to the frontend."""
+    """What the API returns to the frontend after ranking."""
     id: str
     event_name: str
     date: str
@@ -124,11 +156,15 @@ class RankedEvent(BaseModel):
     buyer_persona: str
     pricing: str
     pricing_link: str
-    fit_verdict: str                    # GO / CONSIDER / SKIP
+    fit_verdict: str                 # GO / CONSIDER / SKIP
     verdict_notes: str
     sponsors: str
     speakers_link: str
     agenda_link: str
     relevance_score: float
     source_platform: str
-    est_attendees: int = 0              # ← used by frontend ROI calculator
+    est_attendees: int = 0
+    # Enrichment flags (set True when SerpAPI filled a missing field)
+    enriched_attendees:   bool = False
+    enriched_price:       bool = False
+    enriched_description: bool = False
