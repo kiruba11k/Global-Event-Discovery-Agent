@@ -3,13 +3,11 @@ import {
   ExternalLink, ChevronDown, ChevronUp, ArrowUpDown,
   TrendingUp, Phone, Info, CheckCircle2, Users,
   CalendarCheck, ClipboardList, Headphones, Mail,
-  AlertTriangle,
+  AlertTriangle, Search,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════
    PRICING MATRIX — USD
-   Rows: meetings (5, 10, 15, 20)
-   Cols: deal size category (low / medium / high / enterprise)
    ═══════════════════════════════════════════════════════════ */
 const PRICING_MATRIX = {
   low:        { 5: 2700,  10: 4500,  15: 6000,  20: 7800  },
@@ -27,13 +25,17 @@ const DEAL_LABELS = {
 
 const fmt = (n) => `$${n.toLocaleString('en-US')}`
 
+/**
+ * Returns available meeting packages based on attendee count.
+ * Always returns at least [5] so a pricing card is always shown.
+ */
 function getAvailablePackages(attendees) {
   const n = parseInt(attendees) || 0
   if (n >= 5000) return [5, 10, 15, 20]
   if (n >= 3000) return [5, 10, 15]
   if (n >= 1000) return [5, 10]
-  if (n > 0)     return [5]
-  return []
+  // For events with unknown or small attendance, show starter package only
+  return [5]
 }
 
 function getEventTier(attendees) {
@@ -43,7 +45,8 @@ function getEventTier(attendees) {
   if (n >= 3000)  return { tier: 'Mid-Large Event', tag: '📊' }
   if (n >= 1000)  return { tier: 'Mid Event',       tag: '🤝' }
   if (n > 0)      return { tier: 'Boutique Event',  tag: '💎' }
-  return null
+  // No attendee data — still show pricing
+  return { tier: 'Trade Show / Event', tag: '📅' }
 }
 
 function estimatePipeline(meetings, dealSizeCategory) {
@@ -56,7 +59,7 @@ function estimatePipeline(meetings, dealSizeCategory) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   WHAT'S INCLUDED — appears before package selection & CTA
+   WHAT'S INCLUDED
    ───────────────────────────────────────────────────────── */
 const INCLUSIONS = [
   {
@@ -128,9 +131,6 @@ function WhatIsIncluded() {
   )
 }
 
-/* ─────────────────────────────────────────────────────────
-   PROMINENT PRICING DISCLAIMER
-   ───────────────────────────────────────────────────────── */
 function PricingDisclaimer({ dealSizeCategory }) {
   const label = DEAL_LABELS[dealSizeCategory] || DEAL_LABELS.medium
   return (
@@ -153,16 +153,17 @@ function PricingDisclaimer({ dealSizeCategory }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   PRICING CARD
+   PRICING CARD — shown for every event that has a GO/CONSIDER verdict
    ───────────────────────────────────────────────────────── */
 function PricingCard({ attendees, eventName, dealSizeCategory }) {
-  const packages  = getAvailablePackages(attendees)
-  const tierInfo  = getEventTier(attendees)
-  const category  = dealSizeCategory || 'medium'
-  const prices    = PRICING_MATRIX[category] || PRICING_MATRIX.medium
-  const [selected, setSelected] = useState(packages[Math.floor(packages.length / 2)] || packages[0])
+  const n        = parseInt(attendees) || 0
+  const packages = getAvailablePackages(n)
+  const tierInfo = getEventTier(n)
+  const category = dealSizeCategory || 'medium'
+  const prices   = PRICING_MATRIX[category] || PRICING_MATRIX.medium
+  const noAttendeeData = n === 0
 
-  if (!tierInfo || packages.length === 0) return null
+  const [selected, setSelected] = useState(packages[0])
 
   const pipe = estimatePipeline(selected, category)
 
@@ -184,7 +185,22 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         </div>
       </div>
 
-      {/* What's included — BEFORE packages & CTA */}
+      {/* Notice when no attendee data */}
+      {noAttendeeData && (
+        <div style={{
+          display: 'flex', gap: 8, alignItems: 'flex-start',
+          background: 'rgba(6,182,212,0.05)',
+          border: '1px solid rgba(6,182,212,0.2)',
+          borderRadius: 8, padding: '10px 14px', marginBottom: 8,
+          fontSize: 11, color: 'var(--text-sub)',
+        }}>
+          <Info size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
+          Attendee numbers not available for this event — showing starter package.
+          Contact us for a tailored quote based on confirmed event size.
+        </div>
+      )}
+
+      {/* What's included */}
       <WhatIsIncluded />
 
       {/* Deal size context */}
@@ -260,15 +276,13 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         </table>
       </div>
 
-      {/* Prominent disclaimer — before CTA */}
       <PricingDisclaimer dealSizeCategory={category} />
 
       {/* CTA row */}
       <div className="pc-cta-row" style={{ marginTop: 14 }}>
         <a
           href="https://leadstrategus.com/contact/"
-          target="_blank"
-          rel="noopener noreferrer"
+          target="_blank" rel="noopener noreferrer"
           className="roi-cta"
         >
           <Phone size={11} />
@@ -276,8 +290,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         </a>
         <a
           href="https://leadstrategus.com/contact/"
-          target="_blank"
-          rel="noopener noreferrer"
+          target="_blank" rel="noopener noreferrer"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             background: 'transparent',
@@ -300,11 +313,21 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 /* ─────────────────────────────────────────────────────────
    Helpers
    ───────────────────────────────────────────────────────── */
+/**
+ * Returns true if the URL looks like a Google search fallback.
+ * Used to display the link text differently.
+ */
+function isSearchFallback(url) {
+  return url && url.startsWith('https://www.google.com/search')
+}
+
 function ELink({ href, text }) {
   if (!href) return <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
+  const isSearch = isSearchFallback(href)
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="expand-link">
-      {text} <ExternalLink size={10} />
+    <a href={href} target="_blank" rel="noopener noreferrer" className="expand-link"
+      title={isSearch ? 'No direct link available — opens Google search' : undefined}>
+      {isSearch ? <><Search size={10} /> Search for Event Page</> : <>{text} <ExternalLink size={10} /></>}
     </a>
   )
 }
@@ -328,6 +351,7 @@ function EventRow({ event, index, dealSizeCategory }) {
   const personas   = (event.buyer_persona || '').split(',').filter(Boolean)
   const pkgs       = getAvailablePackages(event.est_attendees)
   const prices     = PRICING_MATRIX[dealSizeCategory || 'medium'] || PRICING_MATRIX.medium
+  const noAtt      = !event.est_attendees
 
   return (
     <>
@@ -356,12 +380,15 @@ function EventRow({ event, index, dealSizeCategory }) {
           <Verdict v={event.fit_verdict} />
         </td>
         <td style={{ fontSize: 11, textAlign: 'center' }}>
-          {pkgs.length > 0 ? `${pkgs[0]}–${pkgs[pkgs.length - 1]}` : '—'}
+          {/* Always show 5 meetings as minimum */}
+          {noAtt
+            ? <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>5 (min)</span>
+            : `${pkgs[0]}–${pkgs[pkgs.length - 1]}`
+          }
         </td>
         <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
-          {pkgs.length > 0
-            ? `${fmt(prices[pkgs[0]])} – ${fmt(prices[pkgs[pkgs.length - 1]])}`
-            : '—'}
+          {/* Always show at least the 5-meeting price */}
+          {fmt(prices[5])} {pkgs.length > 1 ? `– ${fmt(prices[pkgs[pkgs.length - 1]])}` : ''}
         </td>
         <td style={{ textAlign: 'center' }}>
           <button
@@ -396,14 +423,15 @@ function EventRow({ event, index, dealSizeCategory }) {
                 {/* Personas */}
                 <div>
                   <div className="expand-block-label">Buyer Personas</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {personas.map((p, i) => (
-                      <span key={i} className="persona-chip">{p.trim()}</span>
-                    ))}
-                    {personas.length === 0 && (
-                      <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>
-                    )}
-                  </div>
+                  {personas.length > 0 ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {personas.map((p, i) => (
+                        <span key={i} className="persona-chip">{p.trim()}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>
+                  )}
                 </div>
 
                 {/* Ticket price */}
@@ -416,7 +444,7 @@ function EventRow({ event, index, dealSizeCategory }) {
                 <div>
                   <div className="expand-block-label">Links</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <ELink href={event.event_link}    text="Register / Event Page" />
+                    <ELink href={event.event_link} text="Register / Event Page" />
                     {event.speakers_link && <ELink href={event.speakers_link} text="Speakers" />}
                     {event.agenda_link   && <ELink href={event.agenda_link}   text="Agenda"   />}
                   </div>
@@ -433,14 +461,12 @@ function EventRow({ event, index, dealSizeCategory }) {
                   <div className="ai-rationale-text">"{event.verdict_notes}"</div>
                 </div>
 
-                {/* Pricing Card — full width */}
-                {event.est_attendees > 0 && (
-                  <PricingCard
-                    attendees={event.est_attendees}
-                    eventName={event.event_name}
-                    dealSizeCategory={dealSizeCategory}
-                  />
-                )}
+                {/* Pricing Card — always shown for GO/CONSIDER events */}
+                <PricingCard
+                  attendees={event.est_attendees}
+                  eventName={event.event_name}
+                  dealSizeCategory={dealSizeCategory}
+                />
               </div>
             </div>
           </td>
@@ -595,8 +621,7 @@ export default function EventTable({ events, dealSizeCategory }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <a
               href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer"
               className="roi-cta"
               style={{ fontSize: 11 }}
             >
@@ -605,8 +630,7 @@ export default function EventTable({ events, dealSizeCategory }) {
             </a>
             <a
               href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 background: 'transparent',
