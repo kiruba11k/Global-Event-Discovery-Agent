@@ -214,12 +214,20 @@ def build_fallback_rationale(
     geo_matched  = detail.get("geo_matched", "")
     att_tier     = detail.get("attendee_tier", "")
     score_pct    = int(score * 100)
+    event_industries = _clean_tags(
+        getattr(event, "related_industries", "") or event.industry_tags or event.category or ""
+    )
 
     ind_sentence = (
         f"{event_name} covers {_join_natural(ind_matched[:3])}, aligning with your target market."
         if ind_matched else
-        f"{event_name} covers topics outside your core focus of "
-        f"{_join_natural((profile.target_industries or [])[:3])}."
+        (
+            f"{event_name} is focused on {event_industries}, which is outside your core target industries "
+            f"({_join_natural((profile.target_industries or [])[:3])})."
+            if event_industries else
+            f"{event_name} does not provide enough industry evidence to confirm alignment with "
+            f"{_join_natural((profile.target_industries or [])[:3])}."
+        )
     )
 
     event_personas   = _clean_tags(event.audience_personas or "")
