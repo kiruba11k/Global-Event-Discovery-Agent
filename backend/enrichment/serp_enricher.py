@@ -234,6 +234,21 @@ async def enrich_event(
         result["event_link"] = best_link
         result["website"] = best_link
 
+    # Keep compact, per-event search evidence for the ranking LLM so it can
+    # extract final display fields from actual SerpAPI results instead of
+    # guessing from the customer's ICP. Do not expose the full SerpAPI payload.
+    if full_text.strip():
+        result["serpapi_text"] = full_text[:2500]
+    if data.get("organic_results"):
+        result["serpapi_results"] = [
+            {
+                "title": str(item.get("title", ""))[:180],
+                "link": str(item.get("link", ""))[:500],
+                "snippet": str(item.get("snippet", ""))[:350],
+            }
+            for item in data.get("organic_results", [])[:5]
+        ]
+
     personas = _infer_personas(f"{event_name} {full_text}")
     if personas:
         result["audience_personas"] = personas
