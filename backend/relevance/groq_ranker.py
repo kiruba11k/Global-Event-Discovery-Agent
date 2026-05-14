@@ -12,7 +12,7 @@ import json
 import asyncio
 from typing import List, Dict, Optional
 from loguru import logger
-
+import re
 from groq import Groq
 from pydantic import BaseModel, ValidationError, field_validator
 
@@ -91,13 +91,63 @@ def _get_place(event: EventORM) -> str:
     return ", ".join(parts)
 
 
-def _get_link(event: EventORM) -> str:
-    """Return best available link."""
-    return (
-        getattr(event, "website", "") or
-        event.registration_url or
-        event.source_url or ""
-    )
+def _get_link(event: EventORM, enrichments: dict = None) -> str:
+    """Return best available event-specific link."""
+    enrichments = enrichments or {}
+    enriched_link = enrichments.get("event_link", "") or enrichments.get("website", "")
+    db_link = getattr(event, "website", "") or event.registration_url or ""
+    source_link = event.source_url or ""
+
+    # Uploaded CSVs often arrive with a shared/source URL. When SerpAPI finds
+    # an event-specific page, prefer that enriched link for CSV rows.
+    if (event.source_platform or "").upper() == "CSV_UPLOAD" and enriched_link:
+        return enriched_link
+    if "example.com/event/" in db_link or "example.com/event/" in source_link:
+        return enriched_link or db_link or source_link
+    return db_link or enriched_link or source_link
+
+
+def _get_personas(event: EventORM, enrichments: dict = None) -> str:
+    enrichments = enrichments or {}
+    return event.audience_personas or enrichments.get("audience_personas", "") or ""
+
+
+def _is_generic_text(text: str) -> bool:
+    return (text or "").strip().lower() in {"", "see website", "see event website", "—", "-"}
+
+
+def _event_evidence_text(event: EventORM) -> str:
+    return " ".join(filter(None, [
+        event.name or "",
+        event.description or "",
+        event.short_summary or "",
+        _get_industry(event),
+        event.audience_personas or "",
+        event.category or "",
+    ])).lower()
+
+
+def _looks_hallucinated(result: GroqEventResult, event: EventORM, profile: ICPProfile, detail: dict) -> bool:
+    """Catch rationales that incorrectly project the client's ICP onto the event."""
+    notes = (result.verdict_notes or "").lower()
+    if not notes:
+        return True
+    blocked_phrases = ("event.industry_tags", "profile.target", "icp field")
+    if any(phrase in notes for phrase in blocked_phrases):
+        return True
+
+    event_text = _event_evidence_text(event)
+    matched = {str(x).lower() for x in detail.get("industry_matched", [])}
+    for industry in profile.target_industries or []:
+        tokens = [t for t in re.split(r"[^a-z0-9]+", industry.lower()) if len(t) > 2]
+        if not tokens:
+            continue
+        mentioned = any(t in notes for t in tokens) or industry.lower() in notes
+        evidenced = any(t in event_text for t in tokens) or industry.lower() in matched
+        negated = any(f"not {t}" in notes or f"outside {t}" in notes for t in tokens)
+        if mentioned and not evidenced and not negated:
+            return True
+    return False
 
 
 def _get_description(event: EventORM) -> str:
@@ -180,6 +230,8 @@ RULES:
 WRITING RULES:
   ✅ Write like a smart sales analyst. Mention specific industries, job titles, locations.
   ✅ Explain WHY it's relevant (or not) in terms of sales opportunity.
+  ✅ Use ONLY event facts shown in EVENTS TO EVALUATE. If an event is about kitchen/bath, construction, healthcare, etc., describe that event category exactly.
+  ❌ Do NOT force the client's target industry onto the event. Never say an event covers AI/ML, technology, fintech, etc. unless those words are present in the event facts.
   ❌ NEVER use code terms like "event.industry_tags", "profile.target_personas", "ICP field"
   ❌ NEVER be generic ("great networking opportunity")
 
@@ -230,7 +282,7 @@ def _event_to_dict(
         "est_attendees":      att,
         "category":           event.category,
         "industry_focus":     industry,
-        "typical_attendees":  event.audience_personas or "",
+        "typical_attendees":  _get_personas(event, enrichments),
         "organizer":          getattr(event, "organizer", "") or "",
         "pricing":            _get_pricing(event, enrichments),
         "pre_relevance_score":  pre_score,
@@ -313,6 +365,7 @@ async def rank_with_groq(
     pre_details: Dict[str, dict],
     company_ctx: Optional[CompanyContext] = None,
     enrichments: Dict[str, dict] = None,   # ← SerpAPI enrichments keyed by event.id
+    deal_size_category: str = "medium",
 ) -> List[RankedEvent]:
 
     enrichments = enrichments or {}
@@ -395,9 +448,16 @@ async def rank_with_groq(
 
         if event.id in groq_results and event.id not in hallucinated:
             gr        = groq_results[event.id]
-            verdict   = gr.fit_verdict
-            rationale = gr.verdict_notes
-            key_nums  = gr.key_numbers or _build_key_numbers(event, ev_enrich)
+            if _looks_hallucinated(gr, event, profile, detail):
+                logger.warning(f"Replacing hallucinated rationale for {event.id}: {gr.verdict_notes[:120]}")
+                verdict   = tier
+                rationale = build_fallback_rationale(event, profile, detail, score, tier)
+                key_nums  = _build_key_numbers(event, ev_enrich)
+            else:
+                verdict   = gr.fit_verdict
+                rationale = gr.verdict_notes
+                key_nums  = gr.key_numbers if not _is_generic_text(gr.key_numbers) else _build_key_numbers(event, ev_enrich)
+
         else:
             verdict   = tier
             rationale = build_fallback_rationale(event, profile, detail, score, tier)
@@ -419,13 +479,13 @@ async def rank_with_groq(
                  if event.end_date and event.end_date != event.start_date else "")
             ),
             place=_get_place(event),
-            event_link=_get_link(event),
+            event_link=_get_link(event,ev_enrich),
             what_its_about=about,
             key_numbers=key_nums,
             industry=_get_industry(event),
-            buyer_persona=event.audience_personas or "",
+            buyer_persona=_get_personas(event, ev_enrich),
             pricing=_get_pricing(event, ev_enrich),
-            pricing_link=_get_link(event),
+            pricing_link=_get_link(event,ev_enrich),
             fit_verdict=verdict,
             verdict_notes=rationale,
             sponsors=event.sponsors or "",
@@ -435,7 +495,7 @@ async def rank_with_groq(
             source_platform=event.source_platform,
             est_attendees=ev_enrich.get("est_attendees", 0) if not event.est_attendees else event.est_attendees,
             organizer=getattr(event, "organizer", "") or "",
-            website=_get_link(event),
+            website=_get_link(event,ev_enrich),
             serpapi_enriched=bool(ev_enrich),
         ))
 
