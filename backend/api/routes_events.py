@@ -40,7 +40,6 @@ from models.event import EventCreate
 
 from relevance.scorer import score_candidates
 from relevance.groq_ranker import rank_with_groq
-from enrichment.serp_enricher import enrich_events_batch
 
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
@@ -103,10 +102,21 @@ def _within_requested_dates(event, date_from, date_to) -> bool:
 
 
 def _apply_result_mix(ranked: Iterable) -> list:
-    selected = list(ranked)[:RESULT_LIMIT]
-    for idx, event in enumerate(selected):
-        event.fit_verdict = "GO" if idx < GO_RESULT_COUNT else "CONSIDER"
-    return selected
+    """
+    Return up to RESULT_LIMIT events, GO first then CONSIDER.
+    SKIP events are excluded.
+    Groq's actual verdict is preserved — we never force-assign GO/CONSIDER.
+    """
+    all_ranked  = list(ranked)
+    go_events       = [r for r in all_ranked if r.fit_verdict == "GO"]
+    consider_events = [r for r in all_ranked if r.fit_verdict == "CONSIDER"]
+ 
+    # Fill with GO first, then CONSIDER
+    selected_go      = go_events[:GO_RESULT_COUNT]
+    remaining_slots  = RESULT_LIMIT - len(selected_go)
+    selected_consider= consider_events[:remaining_slots]
+ 
+    return selected_go + selected_consider
 
 
 # ─────────────────────────────────────────────────────────────
@@ -117,35 +127,31 @@ def _apply_result_mix(ranked: Iterable) -> list:
 
 def _norm(value: str | None) -> str:
     return (value or "").strip()
-
-
+ 
 def _csv_value(row: dict, *keys: str) -> str:
     for key in keys:
         value = row.get(key)
         if _norm(value):
             return _norm(value)
     return ""
-
-
+ 
 def _split_city_country(raw_location: str) -> tuple[str, str]:
     cleaned = _norm(raw_location)
     if not cleaned:
         return "", ""
     if "(" in cleaned and ")" in cleaned:
-        city = cleaned.split("(", 1)[0].strip(" -,")
+        city    = cleaned.split("(", 1)[0].strip(" -,")
         country = cleaned.split("(", 1)[1].split(")", 1)[0].strip()
         return city, country
     if "," in cleaned:
-        city, country = [part.strip() for part in cleaned.split(",", 1)]
+        city, country = [p.strip() for p in cleaned.split(",", 1)]
         return city, country
     return cleaned, ""
-
-
+ 
 def _csv_dedup_hash(name: str, start_date: str, city: str, country: str) -> str:
     raw = "|".join([_norm(name).lower(), _norm(start_date), _norm(city).lower(), _norm(country).lower()])
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
-
-
+ 
 def _csv_int(row: dict, *keys: str, default: int = 0) -> int:
     value = _csv_value(row, *keys)
     if not value:
@@ -154,8 +160,7 @@ def _csv_int(row: dict, *keys: str, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
-
-
+ 
 def _csv_float(row: dict, *keys: str, default: float = 0.0) -> float:
     value = _csv_value(row, *keys)
     if not value:
@@ -164,78 +169,83 @@ def _csv_float(row: dict, *keys: str, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
-
-
+ 
 def _csv_bool(row: dict, *keys: str, default: bool = False) -> bool:
     value = _csv_value(row, *keys).lower()
     if not value:
         return default
     return value in {"1", "true", "yes", "y"}
-
-
+ 
+ 
 def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
-    normalized_row = {_norm(str(k)).lower().lstrip("﻿"): v for k, v in row.items() if k is not None}
-
-    name = _csv_value(normalized_row, "name", "event_name", "title")
+    normalized_row = {_norm(str(k)).lower().lstrip("\ufeff"): v for k, v in row.items() if k is not None}
+ 
+    name       = _csv_value(normalized_row, "name", "event_name", "title")
     start_date = _csv_value(normalized_row, "start_date", "start", "from_date")
-    end_date = _csv_value(normalized_row, "end_date", "end", "to_date")
-
-    # Be tolerant with partial CSVs: if start_date is missing but end_date is valid, use end_date.
+    end_date   = _csv_value(normalized_row, "end_date", "end", "to_date")
+ 
     if not start_date and _parse_date(end_date):
         start_date = end_date
-
+ 
     if not name or not start_date:
         raise ValueError(f"row {row_number}: 'name' and 'start_date' are required")
-
     if not _parse_date(start_date):
-        raise ValueError(f"row {row_number}: invalid start_date '{start_date}' (expected YYYY-MM-DD)")
-
-    event_id = _csv_value(normalized_row, "id", "event_id") or str(uuid.uuid4())
+        raise ValueError(f"row {row_number}: invalid start_date '{start_date}'")
+ 
+    event_id   = _csv_value(normalized_row, "id", "event_id") or str(uuid.uuid4())
     source_url = _csv_value(normalized_row, "source_url", "url")
-    website = _csv_value(normalized_row, "website", "registration_url")
-
-    city = _csv_value(normalized_row, "city")
-    country = _csv_value(normalized_row, "country")
-    event_cities = _csv_value(normalized_row, "event_cities", "event_city", "location")
-
+ 
+    # ── Prefer "website" column for the official event URL ──────────
+    # This becomes registration_url AND website so _get_link() can find it.
+    website_url = _csv_value(normalized_row, "website", "registration_url", "event_url", "link")
+ 
+    city        = _csv_value(normalized_row, "city")
+    country     = _csv_value(normalized_row, "country")
+    event_cities= _csv_value(normalized_row, "event_cities", "event_city", "location")
+ 
     if (not city or not country) and event_cities:
         fallback_city, fallback_country = _split_city_country(event_cities)
-        city = city or fallback_city
+        city    = city    or fallback_city
         country = country or fallback_country
-
-    related_industries = _csv_value(normalized_row, "related_industries", "industry_tags", "industries")
-    csv_source = _csv_value(normalized_row, "source", "source_platform")
-
+ 
+    related_industries = _csv_value(normalized_row, "related_industries", "industry_tags", "industries", "industry")
+    csv_source         = _csv_value(normalized_row, "source", "source_platform")
+ 
     return EventCreate(
         id=event_id,
         dedup_hash=_csv_dedup_hash(name, start_date, city, country),
         source_platform=csv_source or "CSV_UPLOAD",
-        source_url=source_url or website or f"csv://upload/{event_id}",
+        # source_url: prefer actual URL, fall back to marker (not csv://)
+        source_url=source_url or website_url or f"https://example.com/event/{event_id}",
         name=name,
         description=_csv_value(normalized_row, "description", "summary"),
         short_summary=_csv_value(normalized_row, "short_summary"),
         edition_number=_csv_value(normalized_row, "edition_number", "edition"),
         industry_tags=related_industries,
-        audience_personas=_csv_value(normalized_row, "audience_personas", "buyer_persona"),
+        related_industries=related_industries,
+        audience_personas=_csv_value(normalized_row, "audience_personas", "buyer_persona", "personas"),
         start_date=start_date,
         end_date=end_date or start_date,
         duration_days=_csv_int(normalized_row, "duration_days", default=1),
         venue_name=_csv_value(normalized_row, "venue", "event_venues", "venue_name"),
+        event_venues=_csv_value(normalized_row, "event_venues", "venue"),
+        event_cities=event_cities or f"{city}, {country}".strip(", "),
         address=_csv_value(normalized_row, "address"),
         city=city,
         country=country,
         is_virtual=_csv_bool(normalized_row, "is_virtual"),
         is_hybrid=_csv_bool(normalized_row, "is_hybrid"),
-        est_attendees=_csv_int(normalized_row, "est_attendees", "attendees"),
+        est_attendees=_csv_int(normalized_row, "est_attendees", "attendees", "expected_attendance"),
         category=_csv_value(normalized_row, "category"),
         ticket_price_usd=_csv_float(normalized_row, "ticket_price_usd", "price_usd"),
         price_description=_csv_value(normalized_row, "price_description", "pricing"),
-        registration_url=website,
+        registration_url=website_url,   # official event URL
+        website=website_url,            # stored in BOTH fields so _get_link() finds it
         sponsors=_csv_value(normalized_row, "sponsors"),
         speakers_url=_csv_value(normalized_row, "speakers_url"),
         agenda_url=_csv_value(normalized_row, "agenda_url"),
     )
-
+ 
 def _extract_pdf_text(file_bytes: bytes) -> str:
     try:
         import pypdf, io as _io
@@ -282,28 +292,21 @@ async def save_company_profile(
         "deck_chars":     len(deck_text),
     }
 
-
 # ─────────────────────────────────────────────────────────────
 # GET /api/company-profile/{id}
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/company-profile/{profile_id}")
-async def fetch_company_profile(
-    profile_id: str, db: AsyncSession = Depends(get_db)
-):
+async def fetch_company_profile(profile_id: str, db: AsyncSession = Depends(get_db)):
     cp = await get_company_profile(db, profile_id)
     if not cp:
         raise HTTPException(status_code=404, detail="Company profile not found.")
     return {
-        "id":           cp.id,
-        "company_name": cp.company_name,
-        "founded_year": cp.founded_year,
-        "location":     cp.location,
-        "what_we_do":   cp.what_we_do,
-        "what_we_need": cp.what_we_need,
-        "deck_filename":cp.deck_filename,
-        "has_deck":     bool(cp.deck_text),
+        "id": cp.id, "company_name": cp.company_name, "founded_year": cp.founded_year,
+        "location": cp.location, "what_we_do": cp.what_we_do, "what_we_need": cp.what_we_need,
+        "deck_filename": cp.deck_filename, "has_deck": bool(cp.deck_text),
     }
+ 
 
 
 # ─────────────────────────────────────────────────────────────
@@ -311,40 +314,39 @@ async def fetch_company_profile(
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/search", response_model=SearchResponse)
-async def search_events(
-    request: SearchRequest,
-    db: AsyncSession = Depends(get_db),
-):
+async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_db)):
     profile    = request.profile
     profile_id = str(uuid.uuid4())
+ 
+    # FIX 3: read avg_deal_size_category from profile (now in ICPProfile model)
+    deal_size_category = profile.avg_deal_size_category or "medium"
+ 
     logger.info(
         f"Search: {profile.company_name} | "
         f"industries={profile.target_industries} | "
-        f"geo={profile.target_geographies}"
+        f"geo={profile.target_geographies} | "
+        f"deal_size={deal_size_category}"
     )
  
-    # ── Resolve company context ──────────────────────────
+    # ── Resolve company context ──────────────────────────────────────
     company_ctx: CompanyContext | None = request.company_context
     if request.company_profile_id and not company_ctx:
         cp = await get_company_profile(db, request.company_profile_id)
         if cp:
             company_ctx = CompanyContext(
-                company_name=cp.company_name,
-                founded_year=cp.founded_year,
-                location=cp.location,
-                what_we_do=cp.what_we_do,
-                what_we_need=cp.what_we_need,
-                deck_text=cp.deck_text,
+                company_name=cp.company_name, founded_year=cp.founded_year,
+                location=cp.location, what_we_do=cp.what_we_do,
+                what_we_need=cp.what_we_need, deck_text=cp.deck_text,
             )
  
-    # ── Step 1: DB filter ────────────────────────────────
+    # ── Step 1: DB filter — searches city, country AND event_cities ──
     candidates = await get_candidate_events(
         db=db,
         geographies=profile.target_geographies,
         industries=profile.target_industries,
         date_from=profile.date_from,
         date_to=profile.date_to,
-        min_attendees=profile.min_attendees or 0,
+        min_attendees=0,   # don't pre-filter by attendees; SerpAPI fills gaps
         limit=300,
     )
  
@@ -362,34 +364,26 @@ async def search_events(
         )
  
     # Hard date filter
-    candidates = [
-        e for e in candidates
-        if _within_requested_dates(e, profile.date_from, profile.date_to)
-    ]
+    candidates = [e for e in candidates if _within_requested_dates(e, profile.date_from, profile.date_to)]
  
     if not candidates:
         logger.info("No candidates in requested date range.")
         _last_results[profile_id] = []
         return SearchResponse(
-            profile_id=profile_id,
-            company_name=profile.company_name,
-            total_found=0,
-            events=[],
+            profile_id=profile_id, company_name=profile.company_name,
+            total_found=0, events=[],
             generated_at=datetime.utcnow().isoformat() + "Z",
         )
  
     logger.info(f"Candidates after date filter: {len(candidates)}")
  
-    # ── Step 2: Semantic search (optional) ───────────────
+    # ── Step 2: Semantic search (optional) ──────────────────────────
     cosine_scores: dict = {}
     if settings.enable_semantic_search:
         try:
-            from relevance.embedder import (
-                build_profile_text, search_similar,
-                add_events_to_index, get_index,
-            )
-            profile_text = build_profile_text(profile)
-            idx          = get_index()
+            from relevance.embedder import build_profile_text, search_similar, add_events_to_index, get_index
+            profile_text  = build_profile_text(profile)
+            idx           = get_index()
             if idx.ntotal == 0:
                 add_events_to_index(candidates)
             similar       = search_similar(profile_text, top_k=100)
@@ -397,62 +391,52 @@ async def search_events(
         except Exception as e:
             logger.warning(f"Semantic search error: {e}")
  
-    # ── Step 3: Hybrid scoring ───────────────────────────
+    # ── Step 3: Hybrid scoring ───────────────────────────────────────
     scored = score_candidates(candidates, profile, cosine_scores)
     top    = scored[:settings.top_k_for_llm]
  
-    top_events  = [e for e, _, _, _  in top]
-    pre_scores  = {e.id: s          for e, s, _, _ in top}
-    pre_tiers   = {e.id: t          for e, _, t, _ in top}
-    pre_details = {e.id: d          for e, _, _, d in top}
+    top_events  = [e for e, _, _, _ in top]
+    pre_scores  = {e.id: s for e, s, _, _ in top}
+    pre_tiers   = {e.id: t for e, _, t, _ in top}
+    pre_details = {e.id: d for e, _, _, d in top}
  
-    # ── Step 4: SerpAPI enrichment ───────────────────────
-    # Fill missing attendees / price / description for top events.
-    # Only fires when fields are genuinely missing. Max 5 API calls.
+    # ── Step 4: SerpAPI enrichment — FIX 2: correct import + function ─
     enrichments: dict = {}
     if settings.serpapi_key:
         try:
-            from enrichment.serpapi_enricher import batch_enrich
-            enrichments = await batch_enrich(
-                events         = top_events,
-                serpapi_key    = settings.serpapi_key,
-                max_enrichments= 5,
+            from enrichment.serp_enricher import enrich_events_batch   # ← FIXED
+            enrichments = await enrich_events_batch(
+                events     = top_events,
+                serpapi_key= settings.serpapi_key,
+                max_enrich = 7,
             )
             if enrichments:
-                logger.info(
-                    f"SerpAPI enriched {len(enrichments)} events "
-                    f"({sum(len(v) for v in enrichments.values())} fields total)."
-                )
+                filled_fields = sum(len(v) for v in enrichments.values())
+                logger.info(f"SerpAPI enriched {len(enrichments)} events ({filled_fields} fields).")
         except Exception as e:
             logger.warning(f"SerpAPI enrichment error (non-fatal): {e}")
  
-    # ── Step 5: Groq ranking ─────────────────────────────
+    # ── Step 5: Groq ranking ─────────────────────────────────────────
     ranked = await rank_with_groq(
-        events      = top_events,
-        profile     = profile,
-        pre_scores  = pre_scores,
-        pre_tiers   = pre_tiers,
-        pre_details = pre_details,
-        company_ctx = company_ctx,
-        enrichments = enrichments,    # ← pass enrichments to ranker
+        events=top_events, profile=profile,
+        pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
+        company_ctx=company_ctx, enrichments=enrichments,
+        deal_size_category=deal_size_category,
     )
  
     ranked.sort(key=lambda r: -r.relevance_score)
+ 
+    # FIX 1: use the fixed _apply_result_mix that respects Groq verdicts
     ranked = _apply_result_mix(ranked)
     _last_results[profile_id] = ranked
  
     go_n  = sum(1 for r in ranked if r.fit_verdict == "GO")
     con_n = sum(1 for r in ranked if r.fit_verdict == "CONSIDER")
-    enr_n = sum(1 for r in ranked if r.serpapi_enriched)
-    logger.info(
-        f"Search done: {len(ranked)} results | "
-        f"GO={go_n} CONSIDER={con_n} | "
-        f"SerpAPI-enriched={enr_n}"
-    )
+    enr_n = sum(1 for r in ranked if getattr(r, "serpapi_enriched", False))
+    logger.info(f"Search done: {len(ranked)} results | GO={go_n} CONSIDER={con_n} | SerpAPI-enriched={enr_n}")
  
     return SearchResponse(
-        profile_id=profile_id,
-        company_name=profile.company_name,
+        profile_id=profile_id, company_name=profile.company_name,
         total_found=len(ranked),
         events=[r.model_dump() for r in ranked],
         generated_at=datetime.utcnow().isoformat() + "Z",
@@ -461,60 +445,48 @@ async def search_events(
 
 
 
-
 @router.post("/events/upload-csv")
-async def upload_events_csv(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Upload CSV and permanently upsert rows into DATABASE_URL DB with dedup by hash.
-
-    Supported headers include: id,name,start_date,end_date,venue,city,country,description,related_industries,website,source_url
-    """
+async def upload_events_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a .csv file")
-
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Uploaded CSV is empty")
-
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         text = raw.decode("latin-1")
-
+ 
     reader = csv.DictReader(io.StringIO(text))
     normalized_headers = {_norm(h).lower() for h in (reader.fieldnames or []) if h}
     if "name" not in normalized_headers:
-        raise HTTPException(status_code=400, detail="Missing required columns: name")
-
+        raise HTTPException(status_code=400, detail="Missing required column: name")
+ 
     parsed: list[EventCreate] = []
-    errors: list[str] = []
+    errors: list[str]         = []
     for idx, row in enumerate(reader, start=2):
         try:
             parsed.append(_parse_csv_event_row(row, idx))
         except ValueError as exc:
             errors.append(str(exc))
-
+ 
     if not parsed:
-        raise HTTPException(status_code=400, detail={"message": "No valid rows in CSV", "errors": errors[:20]})
-
+        raise HTTPException(status_code=400, detail={"message": "No valid rows", "errors": errors[:20]})
+ 
     inserted, skipped = await batch_upsert_events(db, parsed, skip_past=False)
-    total = await count_events(db)
-
+    total             = await count_events(db)
     return {
-        "message": "CSV processed and persisted to DATABASE_URL.",
-        "filename": file.filename,
-        "rows_read": len(parsed) + len(errors),
-        "valid_rows": len(parsed),
-        "inserted": inserted,
+        "message":               "CSV processed and persisted to DATABASE_URL.",
+        "filename":              file.filename,
+        "rows_read":             len(parsed) + len(errors),
+        "valid_rows":            len(parsed),
+        "inserted":              inserted,
         "duplicates_or_skipped": max(0, len(parsed) - inserted) + skipped,
-        "invalid_rows": len(errors),
-        "errors_preview": errors[:20],
-        "total_events_in_db": total,
+        "invalid_rows":          len(errors),
+        "errors_preview":        errors[:20],
+        "total_events_in_db":    total,
     }
-
-
+ 
 # ─────────────────────────────────────────────────────────────
 # GET /api/events
 # ─────────────────────────────────────────────────────────────
@@ -532,69 +504,53 @@ async def list_events(
         "total": total, "page": page, "limit": limit,
         "events": [
             {
-                "id":               e.id,
-                "name":             e.name,
-                "start_date":       e.start_date,
-                "city":             getattr(e, "event_cities", "") or e.city,
-                "country":          e.country,
-                "est_attendees":    e.est_attendees,
-                "category":         e.category,
-                "source_platform":  e.source_platform,
+                "id":              e.id,
+                "name":            e.name,
+                "start_date":      e.start_date,
+                "city":            getattr(e, "event_cities", "") or e.city,
+                "country":         e.country,
+                "est_attendees":   e.est_attendees,
+                "category":        e.category,
+                "source_platform": e.source_platform,
                 "registration_url": (
-                    getattr(e, "website", "") or
-                    e.registration_url or
-                    e.source_url
+                    getattr(e, "website", "") or e.registration_url or e.source_url or ""
                 ),
             }
-            for e in all_evs[start : start + limit]
+            for e in all_evs[start: start + limit]
         ],
     }
  
-
-# ─────────────────────────────────────────────────────────────
+ 
+# ─────────────────────────────────────────────────────────────────────
 # GET /api/events/{id}
-# ─────────────────────────────────────────────────────────────
-
+# ─────────────────────────────────────────────────────────────────────
+ 
 @router.get("/events/{event_id}")
 async def get_event(event_id: str, db: AsyncSession = Depends(get_db)):
     event = await get_event_by_id(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     return {
-        "id":                 event.id,
-        "name":               event.name,
-        "description":        event.description,
-        "start_date":         event.start_date,
-        "end_date":           event.end_date,
-        "venue":              (
-            getattr(event, "event_venues", "") or event.venue_name or ""
-        ),
-        "city":               (
-            getattr(event, "event_cities", "") or event.city or ""
-        ),
-        "country":            event.country,
-        "est_attendees":      event.est_attendees,
-        "category":           event.category,
-        "industry":           (
-            getattr(event, "related_industries", "") or
-            event.industry_tags or ""
-        ),
-        "audience_personas":  event.audience_personas,
-        "price_description":  event.price_description,
-        "website":            (
-            getattr(event, "website", "") or
-            event.registration_url or
-            event.source_url or ""
-        ),
-        "organizer":          getattr(event, "organizer", "") or "",
-        "sponsors":           event.sponsors,
-        "source_platform":    event.source_platform,
-        "source_url":         event.source_url,
-        "ingested_at":        event.ingested_at.isoformat() if event.ingested_at else None,
-        "serpapi_enriched":   getattr(event, "serpapi_enriched", False),
+        "id":              event.id,
+        "name":            event.name,
+        "description":     event.description,
+        "start_date":      event.start_date,
+        "end_date":        event.end_date,
+        "venue":           getattr(event, "event_venues", "") or event.venue_name or "",
+        "city":            getattr(event, "event_cities", "") or event.city or "",
+        "country":         event.country,
+        "est_attendees":   event.est_attendees,
+        "category":        event.category,
+        "industry":        getattr(event, "related_industries", "") or event.industry_tags or "",
+        "audience_personas": event.audience_personas,
+        "price_description": event.price_description,
+        "website":         getattr(event, "website", "") or event.registration_url or event.source_url or "",
+        "sponsors":        event.sponsors,
+        "source_platform": event.source_platform,
+        "source_url":      event.source_url,
+        "ingested_at":     event.ingested_at.isoformat() if event.ingested_at else None,
     }
  
-
 
 # ─────────────────────────────────────────────────────────────
 # GET /api/stats
@@ -603,8 +559,6 @@ async def get_event(event_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     total = await count_events(db)
- 
-    # Count by source if available
     try:
         from db.crud import count_by_source
         by_source = await count_by_source(db)
@@ -642,20 +596,16 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 @router.post("/refresh")
 async def refresh_events(background_tasks: BackgroundTasks):
-    """Trigger a full event refresh in the background."""
     background_tasks.add_task(_do_refresh)
     return {"message": "Refresh started. Poll /api/stats for progress."}
- 
  
 async def _do_refresh():
     logger.info("Manual /api/refresh triggered.")
     try:
         stats = await run_ingestion()
         logger.info(
-            f"Manual refresh done — "
-            f"fetched={stats['total_fetched']} "
-            f"inserted={stats['total_inserted']} "
-            f"total_in_db={stats['total_in_db']}"
+            f"Manual refresh done — fetched={stats['total_fetched']} "
+            f"inserted={stats['total_inserted']} total_in_db={stats['total_in_db']}"
         )
     except Exception as e:
         logger.error(f"Manual refresh error: {e}")
@@ -667,25 +617,15 @@ async def _do_refresh():
 
 def _require_seed_token(x_seed_token: str | None) -> None:
     if not settings.seed_admin_token:
-        raise HTTPException(
-            status_code=503,
-            detail="SEED_ADMIN_TOKEN is not configured on the backend service.",
-        )
-
+        raise HTTPException(status_code=503, detail="SEED_ADMIN_TOKEN not configured.")
     if x_seed_token != settings.seed_admin_token:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing X-Seed-Token header."
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Seed-Token header.")
 
 
 
 
 @router.post("/seed-eventseye")
-async def seed_eventseye_events(
-    x_seed_token: str | None = Header(default=None),
-):
-    """Protected manual EventsEye seed run (writes to configured DATABASE_URL DB)."""
+async def seed_eventseye_events(x_seed_token: str | None = Header(default=None)):
     _require_seed_token(x_seed_token)
     result = await run_eventseye_seed()
     return {"message": "EventsEye seed finished.", "result": result}
@@ -698,51 +638,30 @@ async def seed_eventseye_events(
 @router.post("/seed-10times")
 async def seed_10times_events(
     background_tasks: BackgroundTasks,
-    limit_events: int = Query(1000, ge=1, le=2000),
+    limit_events: int          = Query(1000, ge=1, le=2000),
     max_pages_per_listing: int = Query(10, ge=1, le=50),
-    concurrency: int = Query(1, ge=1, le=3),
-    delay_seconds: float = Query(3.0, ge=0.0, le=30.0),
-    timeout_seconds: float = Query(25.0, ge=1.0, le=60.0),
-    dry_run: bool = Query(False),
-    x_seed_token: str | None = Header(default=None),
+    concurrency: int           = Query(1, ge=1, le=3),
+    delay_seconds: float       = Query(3.0, ge=0.0, le=30.0),
+    timeout_seconds: float     = Query(25.0, ge=1.0, le=60.0),
+    dry_run: bool              = Query(False),
+    x_seed_token: str | None   = Header(default=None),
 ):
     _require_seed_token(x_seed_token)
-
     if _seed_10times_status["running"]:
-        raise HTTPException(
-            status_code=409,
-            detail="A 10times seed job is already running."
-        )
-
+        raise HTTPException(status_code=409, detail="A 10times seed job is already running.")
+ 
     config = CrawlConfig(
-        max_pages_per_listing=max_pages_per_listing,
-        limit_events=limit_events,
-        concurrency=concurrency,
-        delay_seconds=delay_seconds,
-        timeout_seconds=timeout_seconds,
-        dry_run=dry_run,
+        max_pages_per_listing=max_pages_per_listing, limit_events=limit_events,
+        concurrency=concurrency, delay_seconds=delay_seconds,
+        timeout_seconds=timeout_seconds, dry_run=dry_run,
     )
-
     _seed_10times_status.update({
         "running": True,
         "started_at": datetime.utcnow().isoformat() + "Z",
         "last_error": None,
-        "requested_config": {
-            "limit_events": limit_events,
-            "max_pages_per_listing": max_pages_per_listing,
-            "concurrency": concurrency,
-            "delay_seconds": delay_seconds,
-            "timeout_seconds": timeout_seconds,
-            "dry_run": dry_run,
-        },
     })
-
     background_tasks.add_task(_do_seed_10times, config)
-
-    return {
-        "message": "10times seed started. Check /api/seed-10times/status.",
-        "requested_config": _seed_10times_status["requested_config"],
-    }
+    return {"message": "10times seed started. Check /api/seed-10times/status."}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -750,66 +669,57 @@ async def seed_10times_events(
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/seed-10times/status")
-async def get_seed_10times_status(
-    x_seed_token: str | None = Header(default=None)
-):
+async def get_seed_10times_status(x_seed_token: str | None = Header(default=None)):
     _require_seed_token(x_seed_token)
-
     return _seed_10times_status
-
+ 
+async def _do_seed_10times(config: CrawlConfig):
+    try:
+        result = await run_10times_seed(config)
+        _seed_10times_status.update({"running": False, "last_result": result, "last_error": None,
+                                      "finished_at": datetime.utcnow().isoformat() + "Z"})
+        logger.info(f"10times seed done: {result}")
+    except Exception as exc:
+        _seed_10times_status.update({"running": False, "last_error": str(exc),
+                                      "finished_at": datetime.utcnow().isoformat() + "Z"})
+        logger.exception(f"10times seed failed: {exc}")
 
 
 
 @router.post("/seed-conferencealerts")
 async def seed_conferencealerts_events(
     background_tasks: BackgroundTasks,
-    limit_events: int = Query(1000, ge=1, le=5000),
-    dry_run: bool = Query(False),
-    x_seed_token: str | None = Header(default=None),
+    limit_events: int       = Query(1000, ge=1, le=5000),
+    dry_run: bool           = Query(False),
+    x_seed_token: str | None= Header(default=None),
 ):
     _require_seed_token(x_seed_token)
-
     if _seed_conferencealerts_status["running"]:
         raise HTTPException(status_code=409, detail="A conferencealerts seed job is already running.")
-
+ 
     config = ConferenceAlertsSeedConfig(limit_events=limit_events, dry_run=dry_run)
     _seed_conferencealerts_status.update({
-        "running": True,
-        "started_at": datetime.utcnow().isoformat() + "Z",
-        "last_error": None,
-        "requested_config": {"limit_events": limit_events, "dry_run": dry_run},
+        "running": True, "started_at": datetime.utcnow().isoformat() + "Z", "last_error": None,
     })
-
     background_tasks.add_task(_do_seed_conferencealerts, config)
-    return {
-        "message": "ConferenceAlerts seed started. Check /api/seed-conferencealerts/status.",
-        "requested_config": _seed_conferencealerts_status["requested_config"],
-    }
-
+    return {"message": "ConferenceAlerts seed started. Check /api/seed-conferencealerts/status."}
+ 
 
 @router.get("/seed-conferencealerts/status")
 async def get_seed_conferencealerts_status(x_seed_token: str | None = Header(default=None)):
     _require_seed_token(x_seed_token)
     return _seed_conferencealerts_status
-
-
+ 
+ 
 async def _do_seed_conferencealerts(config: ConferenceAlertsSeedConfig):
-    logger.info("Background conferencealerts seed started...")
     try:
         result = await run_conferencealerts_seed(config)
-        _seed_conferencealerts_status.update({
-            "running": False,
-            "finished_at": datetime.utcnow().isoformat() + "Z",
-            "last_result": result,
-            "last_error": None,
-        })
+        _seed_conferencealerts_status.update({"running": False, "last_result": result, "last_error": None,
+                                               "finished_at": datetime.utcnow().isoformat() + "Z"})
     except Exception as exc:
-        _seed_conferencealerts_status.update({
-            "running": False,
-            "finished_at": datetime.utcnow().isoformat() + "Z",
-            "last_error": str(exc),
-        })
-        logger.exception(f"Background conferencealerts seed failed: {exc}")
+        _seed_conferencealerts_status.update({"running": False, "last_error": str(exc),
+                                               "finished_at": datetime.utcnow().isoformat() + "Z"})
+        logger.exception(f"conferencealerts seed failed: {exc}")
 
 
 async def _do_seed_10times(config: CrawlConfig):
@@ -894,36 +804,23 @@ async def seed_all_global_sources(
 async def get_seed_global_status(x_seed_token: str | None = Header(default=None)):
     _require_seed_token(x_seed_token)
     return _seed_global_status
-
-
-async def _do_seed_global(
-    times_config: CrawlConfig,
-    conferencealerts_config: ConferenceAlertsSeedConfig,
-    dry_run: bool,
-):
-    logger.info("Background global seed started...")
-    started_at = datetime.utcnow().isoformat() + "Z"
+ 
+ 
+async def _do_seed_global(times_config, ca_config, dry_run):
+    started = datetime.utcnow().isoformat() + "Z"
     try:
-        ten_times = await run_10times_seed(times_config)
-        conferencealerts = await run_conferencealerts_seed(conferencealerts_config)
-        eventseye = await run_eventseye_seed(dry_run=dry_run)
-
+        ten_times        = await run_10times_seed(times_config)
+        conferencealerts = await run_conferencealerts_seed(ca_config)
+        eventseye        = await run_eventseye_seed(dry_run=dry_run)
         _seed_global_status.update({
-            "running": False,
-            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "running": False, "finished_at": datetime.utcnow().isoformat() + "Z",
             "last_error": None,
-            "last_result": {
-                "started_at": started_at,
-                "10times": ten_times,
-                "conferencealerts": conferencealerts,
-                "eventseye": eventseye,
-            },
+            "last_result": {"started_at": started, "10times": ten_times,
+                            "conferencealerts": conferencealerts, "eventseye": eventseye},
         })
-        logger.info(f"Background global seed done: {_seed_global_status['last_result']}")
     except Exception as exc:
         _seed_global_status.update({
-            "running": False,
-            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "running": False, "finished_at": datetime.utcnow().isoformat() + "Z",
             "last_error": str(exc),
         })
-        logger.exception(f"Background global seed failed: {exc}")
+        logger.exception(f"Global seed failed: {exc}")
