@@ -8,6 +8,7 @@ We need to ADD new columns without dropping or re-creating the table.
 for each new column. This is idempotent and safe to run on every startup.
 """
 import os
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
@@ -25,6 +26,21 @@ def _resolve_db_url() -> str:
         # Ensure we use the asyncpg driver
         url = raw.replace("postgresql://", "postgresql+asyncpg://", 1)
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+        # asyncpg expects `ssl`, not `sslmode`.
+        # Some managed Postgres providers (e.g., Neon) provide URLs with
+        # `?sslmode=require`, which causes:
+        # TypeError: connect() got an unexpected keyword argument 'sslmode'
+        parts = urlsplit(url)
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        normalized_pairs = []
+        for key, value in query_pairs:
+            if key == "sslmode":
+                normalized_pairs.append(("ssl", value))
+            else:
+                normalized_pairs.append((key, value))
+        normalized_query = urlencode(normalized_pairs)
+        url = urlunsplit((parts.scheme, parts.netloc, parts.path, normalized_query, parts.fragment))
         logger.info(f"PostgreSQL (Neon): {url[:60]}...")
         return url
 
