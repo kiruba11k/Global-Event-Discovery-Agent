@@ -1,344 +1,269 @@
 """
-SerpAPI enricher — fills missing event fields at display time.
+enrichment/serpapi_enricher.py
 
-Rules:
-  • Only called when a field is genuinely missing / generic.
-  • NEVER fills data that doesn't match the event name (no false positives).
-  • Enriched values are added to the response payload; they are NOT written
-    back to the database (display-time only).
-  • Results are cached in memory per process to avoid duplicate API calls.
-  • Respects rate limits — at most one call per unique event name per run.
+Uses SerpAPI google_ai_mode to fill missing attendee counts and pricing.
 
-Requires: SERPAPI_KEY in environment / .env
-Free tier: 100 searches/month. We only enrich events missing key fields.
+Rules (strict — no false positives):
+  • Only fills est_attendees when a number appears next to "attendees",
+    "visitors", "exhibitors", or "delegates" in the AI response text.
+  • Only fills pricing when a currency symbol + number appears in context
+    of "registration", "ticket", "fee", or "pass".
+  • Never overwrites existing non-zero values.
+  • Returns {} if SerpAPI key not set or nothing found.
+
+Usage from SerpAPI docs:
+    import serpapi
+    client = serpapi.Client(api_key="secret_api_key")
+    results = client.search({"engine": "google_ai_mode", "q": "..."})
+    text_blocks = results["text_blocks"]
 """
-from __future__ import annotations
-
-import asyncio
 import re
+import asyncio
 from typing import Optional
 from loguru import logger
 
-try:
-    import httpx
-    _HTTPX_OK = True
-except ImportError:
-    _HTTPX_OK = False
 
-# In-process cache: event_name → enriched dict
-_cache: dict[str, dict] = {}
+# ── Regex patterns ─────────────────────────────────────────
 
-# Patterns to extract attendee counts
-_ATT_PATTERNS = [
-    r"(\d[\d,]+)\s*\+?\s*(?:attendees|visitors|delegates|participants|exhibitors|registrants)",
-    r"(?:attended|attracts|draws|expected|hosts|welcomes)\s*(?:over|more than|around|approx\.?)?\s*(\d[\d,]+)",
-    r"(\d[\d,]+)\s*(?:industry\s*)?(?:professionals|leaders|executives|companies)",
-    r"(\d[\d,]+)\s*(?:sqm|sq\s*m|square\s*metres?)",  # sometimes venue size implies scale
-]
+# Attendees: "12,000 attendees" / "50k visitors" / "1.2M exhibitors"
+_ATT_PATTERN = re.compile(
+    r"([\d,]+(?:\.\d+)?)\s*(?:k|K|M)?\s*"
+    r"(?:attendees?|visitors?|exhibitors?|delegates?|participants?|professionals?)",
+    re.IGNORECASE,
+)
 
-# Patterns to extract ticket / registration price in USD
-_PRICE_PATTERNS = [
-    r"(?:from\s*)?\$\s*(\d[\d,.]+)\s*(?:USD|per\s*(?:person|attendee|delegate))?",
-    r"(?:USD|US\$)\s*(\d[\d,.]+)",
-    r"(?:registration|ticket|pass|entry)\s*(?:fee|price|cost)\s*(?:is|of|from)?\s*\$\s*(\d[\d,.]+)",
-    r"(?:starts?\s*at|as\s*low\s*as)\s*\$\s*(\d[\d,.]+)",
-]
-_PERSONA_HINTS = {
-    "kitchen": "Kitchen & bath retailers, interior designers, architects, builders, contractors, product distributors",
-    "bath": "Kitchen & bath retailers, interior designers, architects, builders, contractors, product distributors",
-    "construction": "Developers, architects, builders, contractors, facility managers, procurement leaders",
-    "building": "Developers, architects, builders, contractors, facility managers, procurement leaders",
-    "health": "Healthcare executives, clinicians, hospital administrators, medtech buyers",
-    "medical": "Healthcare executives, clinicians, hospital administrators, medtech buyers",
-    "food": "Foodservice operators, retailers, distributors, hospitality buyers, procurement leaders",
-    "travel": "Travel buyers, tour operators, destination marketers, hospitality executives",
-    "manufacturing": "Plant managers, operations leaders, engineers, procurement leaders",
-    "technology": "CIOs, CTOs, engineering leaders, IT buyers, digital transformation leaders",
-    "ai": "AI leaders, data science leaders, CTOs, product leaders, innovation executives",
-    "retail": "Retail executives, merchandisers, ecommerce leaders, store operations leaders",
-}
+# Price: "$1,200" / "USD 500" / "€900" / "£500"
+_PRICE_PATTERN = re.compile(
+    r"(?:USD|US\$|SGD|AED|€|£|₹|\$)\s*([\d,]+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 
-def _is_generic_description(text: str) -> bool:
-    """True if the description is a boilerplate fallback, not real content."""
-    generic_phrases = [
-        "major global trade fair",
-        "source: eventseye",
-        "sourced from eventseye",
-        "trade show / expo sourced from",
-        "professional conference sourced from",
-        "global event sourced from",
-        "see 10times listing",
-        "see website",
-    ]
-    t = (text or "").lower().strip()
-    if len(t) < 60:
-        return True
-    return any(phrase in t for phrase in generic_phrases)
+# Price context words — must appear near the price for it to count
+_PRICE_CONTEXT = re.compile(
+    r"(register|registr|ticket|fee|pass|entry|admission|delegate\s+rate)",
+    re.IGNORECASE,
+)
 
 
-def _safe_int(text: str) -> Optional[int]:
-    try:
-        return int(text.replace(",", "").replace(" ", ""))
-    except (ValueError, AttributeError):
+def _parse_attendees(text: str) -> Optional[int]:
+    """
+    Extract attendee count. Returns None unless clearly stated.
+    Handles: "12,000 attendees", "50k visitors", "50,000+ visitors"
+    """
+    m = _ATT_PATTERN.search(text)
+    if not m:
         return None
-
-
-def _safe_float(text: str) -> Optional[float]:
+    raw = m.group(1).replace(",", "")
     try:
-        return float(text.replace(",", "").replace(" ", ""))
-    except (ValueError, AttributeError):
-        return None
-
-
-def _extract_attendees(full_text: str) -> Optional[int]:
-    for pat in _ATT_PATTERNS:
-        m = re.search(pat, full_text, re.I)
-        if m:
-            n = _safe_int(m.group(1))
-            if n and 200 <= n <= 5_000_000:
-                return n
+        val = float(raw)
+        # Check for k/M multiplier immediately after the number in the full match
+        suffix_region = text[m.start():m.end()].lower()
+        if re.search(r"\d\s*k\b", suffix_region) and val < 5000:
+            val *= 1_000
+        elif re.search(r"\d\s*m\b", suffix_region) and val < 500:
+            val *= 1_000_000
+        count = int(val)
+        # Sanity: realistic event size 100 → 2,000,000
+        if 100 <= count <= 2_000_000:
+            return count
+    except (ValueError, OverflowError):
+        pass
     return None
 
 
-def _extract_price(full_text: str) -> Optional[tuple[float, str]]:
-    """Returns (price_usd, description) or None."""
-    for pat in _PRICE_PATTERNS:
-        m = re.search(pat, full_text, re.I)
-        if m:
-            p = _safe_float(m.group(1))
-            if p and 1.0 <= p <= 50_000.0:
-                return p, f"From ${p:,.0f}"
-    return None
-
-
-def _build_query(event_name: str, year: str, city: str = "") -> str:
-    city_part = f" {city}" if city else ""
-    return f'"{event_name}" {year}{city_part} official website attendees registration fee'
-
-def _extract_best_link(data: dict) -> str:
-    """Return the first non-search organic result link, preferring official-looking pages."""
-    blocked = ("google.", "serpapi.com", "facebook.com", "linkedin.com", "instagram.com", "youtube.com")
-    organic = data.get("organic_results", []) or []
-    links = [str(item.get("link", "")).strip() for item in organic if item.get("link")]
-    links = [link for link in links if link.startswith(("http://", "https://")) and not any(b in link.lower() for b in blocked)]
-    if not links:
-        return ""
-
-    official_words = ("official", "register", "registration", "event", "expo", "show", "conference", "summit")
-    for item in organic:
-        link = str(item.get("link", "")).strip()
-        if link not in links:
+def _parse_price(text: str) -> Optional[float]:
+    """
+    Extract price only when it appears near a registration/ticket keyword.
+    Returns None unless clearly a ticket/registration price.
+    """
+    # Only search in sentences that contain price context words
+    sentences = re.split(r"[.!?\n]", text)
+    for sentence in sentences:
+        if not _PRICE_CONTEXT.search(sentence):
             continue
-        haystack = f"{item.get('title', '')} {item.get('snippet', '')} {link}".lower()
-        if any(word in haystack for word in official_words):
-            return link
-    return links[0]
+        m = _PRICE_PATTERN.search(sentence)
+        if m:
+            raw = m.group(1).replace(",", "")
+            try:
+                price = float(raw)
+                # Sanity: $5 → $100,000
+                if 5 <= price <= 100_000:
+                    return price
+            except ValueError:
+                pass
+    return None
 
 
-def _infer_personas(text: str) -> str:
-    """Infer conservative buyer/persona labels from event content only."""
-    lower = (text or "").lower()
-    matched: list[str] = []
-    for key, personas in _PERSONA_HINTS.items():
-        if re.search(rf"\b{re.escape(key)}\b", lower):
-            matched.extend([p.strip() for p in personas.split(",")])
-    seen, out = set(), []
-    for persona in matched:
-        if persona.lower() not in seen:
-            seen.add(persona.lower())
-            out.append(persona)
-    return ", ".join(out[:6])
-  
-async def enrich_event(
-    event_name: str,
-    year: str,
-    city: str,
+def _extract_all_text(text_blocks: list) -> str:
+    """
+    Flatten all text_blocks from google_ai_mode into one string.
+    Each block has a 'snippet' or 'text' field.
+    """
+    parts = []
+    for block in text_blocks:
+        snippet = (
+            block.get("snippet") or
+            block.get("text")    or
+            block.get("body")    or
+            ""
+        )
+        if snippet:
+            parts.append(str(snippet))
+    return " ".join(parts)
+
+
+# ── Single event enrichment ────────────────────────────────
+
+def enrich_event_sync(
+    name:        str,
+    city:        str,
+    country:     str,
+    start_date:  str,
     serpapi_key: str,
-    *,
-    need_attendees: bool = False,
-    need_price: bool = False,
-    need_description: bool = False,
+    needs_attendees: bool = False,
+    needs_price:     bool = False,
 ) -> dict:
     """
-    Call SerpAPI for missing event fields.
-    Returns a dict with only the fields we're confident about.
-    Empty dict → nothing reliable found.
+    Synchronous SerpAPI call using the serpapi Python package.
+    Uses google_ai_mode engine and parses text_blocks.
 
-    Args:
-        event_name:      Full event name (e.g. "Indonesia Tech Week 2026")
-        year:            Event year as string (e.g. "2026")
-        city:            Event city for disambiguation
-        serpapi_key:     SerpAPI API key
-        need_attendees:  True if est_attendees is 0 / missing
-        need_price:      True if price is "See website" / missing
-        need_description:True if description is generic / missing
+    Returns dict with ONLY confirmed findings, e.g.:
+        {"est_attendees": 12000}
+        {"ticket_price_usd": 1200, "price_description": "From $1,200"}
+        {}   ← if nothing found
     """
-    if not serpapi_key or not _HTTPX_OK:
-        return {}
-    if not any([need_attendees, need_price, need_description]):
+    if not serpapi_key or not (needs_attendees or needs_price):
         return {}
 
-    cache_key = f"{event_name}|{year}"
-    if cache_key in _cache:
-        return _cache[cache_key]
-
-    query = _build_query(event_name, year,city)
+    year  = start_date[:4] if start_date else "2026"
+    query = f"{name} {city} {country} {year}"
 
     try:
-        async with httpx.AsyncClient(timeout=12) as client:
-            r = await client.get(
-                "https://serpapi.com/search.json",
-                params={
-                    "engine":        "google",
-                    "q":             query,
-                    "api_key":       serpapi_key,
-                    "num":           5,
-                    "gl":            "us",
-                    "hl":            "en",
-                    "google_domain": "google.com",
-                },
-            )
-            r.raise_for_status()
-            data = r.json()
-    except Exception as exc:
-        logger.debug(f"SerpAPI enrichment failed for '{event_name}': {exc}")
-        _cache[cache_key] = {}
+        import serpapi as _serpapi
+        client  = _serpapi.Client(api_key=serpapi_key)
+        results = client.search({
+            "engine": "google_ai_mode",
+            "q":      query,
+        })
+        text_blocks = results.get("text_blocks", [])
+    except ImportError:
+        logger.error("serpapi package not installed. Run: pip install serpapi")
+        return {}
+    except Exception as e:
+        logger.debug(f"SerpAPI [{name[:35]}]: {e}")
         return {}
 
-    result: dict = {}
-
-    # ── Aggregate all text from the response ───────────────────
-    snippets: list[str] = []
-    for item in data.get("organic_results", [])[:5]:
-        snippets.append(item.get("snippet", ""))
-        snippets.append(item.get("title", ""))
-    kg = data.get("knowledge_graph", {})
-    snippets.append(str(kg.get("description", "")))
-    ab = data.get("answer_box", {})
-    snippets.append(str(ab.get("answer", "")))
-    snippets.append(str(ab.get("snippet", "")))
-    full_text = " ".join(snippets)
-
-    # ── Sanity-check: does the result actually match this event? ─
-    # Require that the event name words (ignoring year) appear in results
-    name_words = [w for w in event_name.lower().split() if len(w) > 3 and not w.isdigit()]
-    text_lower  = full_text.lower()
-    matched_words = sum(1 for w in name_words if w in text_lower)
-    if name_words and matched_words < max(1, len(name_words) // 2):
-        logger.debug(f"SerpAPI result doesn't match '{event_name}' — skipping enrichment")
-        _cache[cache_key] = {}
+    if not text_blocks:
+        logger.debug(f"SerpAPI [{name[:35]}]: no text_blocks returned.")
         return {}
-      
-    best_link = _extract_best_link(data)
-    if best_link:
-        result["event_link"] = best_link
-        result["website"] = best_link
 
-    # Keep compact, per-event search evidence for the ranking LLM so it can
-    # extract final display fields from actual SerpAPI results instead of
-    # guessing from the customer's ICP. Do not expose the full SerpAPI payload.
-    if full_text.strip():
-        result["serpapi_text"] = full_text[:2500]
-    if data.get("organic_results"):
-        result["serpapi_results"] = [
-            {
-                "title": str(item.get("title", ""))[:180],
-                "link": str(item.get("link", ""))[:500],
-                "snippet": str(item.get("snippet", ""))[:350],
-            }
-            for item in data.get("organic_results", [])[:5]
-        ]
+    full_text = _extract_all_text(text_blocks)
+    enriched  = {}
 
-    personas = _infer_personas(f"{event_name} {full_text}")
-    if personas:
-        result["audience_personas"] = personas
-
-    # ── Attendees ──────────────────────────────────────────────
-    if need_attendees:
-        att = _extract_attendees(full_text)
-        if att:
-            result["est_attendees"]        = att
-            result["enriched_attendees"]   = True
-            logger.debug(f"Enriched attendees for '{event_name}': {att:,}")
-
-    # ── Price ──────────────────────────────────────────────────
-    if need_price:
-        price_info = _extract_price(full_text)
-        if price_info:
-            price, desc = price_info
-            result["ticket_price_usd"]   = price
-            result["price_description"]  = desc
-            result["enriched_price"]     = True
-            logger.debug(f"Enriched price for '{event_name}': {desc}")
-
-    # ── Description ────────────────────────────────────────────
-    if need_description:
-        # Prefer knowledge graph description (most authoritative)
-        kg_desc = kg.get("description", "").strip()
-        if kg_desc and len(kg_desc) > 60:
-            result["description_enriched"] = kg_desc[:500]
-            result["description"] = kg_desc[:500]
-            result["enriched_description"] = True
-            logger.debug(f"Enriched description for '{event_name}' from KG")
+    # ── Attendee count ─────────────────────────────────────
+    if needs_attendees:
+        count = _parse_attendees(full_text)
+        if count:
+            enriched["est_attendees"] = count
+            logger.info(f"SerpAPI enriched [{name[:35]}]: attendees={count:,}")
         else:
-            # Try first organic result snippet
-            for item in data.get("organic_results", [])[:3]:
-                snip = item.get("snippet", "").strip()
-                if len(snip) > 80:
-                    result["description_enriched"] = snip[:500]
-                    result["description"] = snip[:500]
-                    result["enriched_description"] = True
-                    logger.debug(f"Enriched description for '{event_name}' from snippet")
-                    break
+            logger.debug(f"SerpAPI [{name[:35]}]: attendees not found in AI response")
 
-    _cache[cache_key] = result
-    return result
+    # ── Ticket price ───────────────────────────────────────
+    if needs_price:
+        price = _parse_price(full_text)
+        if price:
+            enriched["ticket_price_usd"]  = price
+            enriched["price_description"] = f"From ${price:,.0f}"
+            logger.info(f"SerpAPI enriched [{name[:35]}]: price=~${price:,.0f}")
+        else:
+            logger.debug(f"SerpAPI [{name[:35]}]: price not found in AI response")
+
+    return enriched
 
 
-async def enrich_events_batch(
-    events: list,           # list of EventORM
+# ── Async wrapper ──────────────────────────────────────────
+
+async def enrich_event(
+    name:        str,
+    city:        str,
+    country:     str,
+    start_date:  str,
     serpapi_key: str,
-    max_enrich: int = 7,    # limit API calls per search request
-) -> dict[str, dict]:
-    """
-    Enrich a batch of events concurrently.
-    Returns {event_id: enrichment_dict}.
+    needs_attendees: bool = False,
+    needs_price:     bool = False,
+) -> dict:
+    """Async wrapper — runs the sync SerpAPI call in a thread pool."""
+    return await asyncio.to_thread(
+        enrich_event_sync,
+        name, city, country, start_date, serpapi_key,
+        needs_attendees, needs_price,
+    )
 
-    Only enriches events that actually need it.
-    Processes at most `max_enrich` events to conserve API quota.
+
+# ── Batch enricher ─────────────────────────────────────────
+
+async def batch_enrich(
+    events:          list,       # list of EventORM objects
+    serpapi_key:     str,
+    max_enrichments: int = 5,    # max SerpAPI calls per search request
+) -> dict:
     """
-    if not serpapi_key or not _HTTPX_OK:
+    Enrich up to max_enrichments events that are missing attendees or price.
+
+    Returns: {event.id: {field: value, ...}, ...}
+
+    Priority: enrich GO events first (sorted by relevance_score descending).
+    Never enriches events that already have attendance/price data.
+    """
+    if not serpapi_key:
         return {}
 
-    to_enrich: list[tuple] = []  # (event, need_att, need_price, need_desc)
+    enrichments = {}
+    calls_made  = 0
 
     for event in events:
-        need_att  = (event.est_attendees or 0) == 0
-        need_prc  = not event.price_description or event.price_description.strip().lower() in (
-            "see website", "see 10times listing", "see eventseye listing", ""
+        if calls_made >= max_enrichments:
+            break
+
+        needs_att   = not event.est_attendees or event.est_attendees == 0
+        needs_price = (
+            (not event.ticket_price_usd or event.ticket_price_usd == 0)
+            and not (event.price_description or "").strip()
         )
-        need_desc = _is_generic_description(event.description or "")
-        if any([need_att, need_prc, need_desc]):
-            to_enrich.append((event, need_att, need_prc, need_desc))
 
-    # Prioritise GO events; limit total API calls
-    to_enrich = to_enrich[:max_enrich]
+        if not needs_att and not needs_price:
+            continue  # already has all critical numbers
 
-    if not to_enrich:
-        return {}
-
-    async def _one(event, need_att, need_prc, need_desc):
-        year = (event.start_date or "")[:4] or "2026"
-        enriched = await enrich_event(
-            event_name=event.name,
-            year=year,
-            city=event.city or "",
-            serpapi_key=serpapi_key,
-            need_attendees=need_att,
-            need_price=need_prc,
-            need_description=need_desc,
+        city    = (
+            getattr(event, "event_cities", "") or
+            event.city or ""
         )
-        return event.id, enriched
+        country = event.country or ""
 
-    results_list = await asyncio.gather(*[_one(*args) for args in to_enrich])
-    return {eid: enriched for eid, enriched in results_list if enriched}
+        result = await enrich_event(
+            name            = event.name,
+            city            = city,
+            country         = country,
+            start_date      = event.start_date or "",
+            serpapi_key     = serpapi_key,
+            needs_attendees = needs_att,
+            needs_price     = needs_price,
+        )
+
+        if result:
+            enrichments[event.id] = result
+            calls_made += 1
+
+        # Small delay to stay within SerpAPI rate limits
+        if calls_made < max_enrichments:
+            await asyncio.sleep(0.5)
+
+    if enrichments:
+        total_fields = sum(len(v) for v in enrichments.values())
+        logger.info(
+            f"SerpAPI batch: enriched {len(enrichments)} events, "
+            f"{total_fields} fields filled, {calls_made} API calls."
+        )
+
+    return enrichments
