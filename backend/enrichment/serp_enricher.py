@@ -43,7 +43,20 @@ _PRICE_PATTERNS = [
     r"(?:registration|ticket|pass|entry)\s*(?:fee|price|cost)\s*(?:is|of|from)?\s*\$\s*(\d[\d,.]+)",
     r"(?:starts?\s*at|as\s*low\s*as)\s*\$\s*(\d[\d,.]+)",
 ]
-
+_PERSONA_HINTS = {
+    "kitchen": "Kitchen & bath retailers, interior designers, architects, builders, contractors, product distributors",
+    "bath": "Kitchen & bath retailers, interior designers, architects, builders, contractors, product distributors",
+    "construction": "Developers, architects, builders, contractors, facility managers, procurement leaders",
+    "building": "Developers, architects, builders, contractors, facility managers, procurement leaders",
+    "health": "Healthcare executives, clinicians, hospital administrators, medtech buyers",
+    "medical": "Healthcare executives, clinicians, hospital administrators, medtech buyers",
+    "food": "Foodservice operators, retailers, distributors, hospitality buyers, procurement leaders",
+    "travel": "Travel buyers, tour operators, destination marketers, hospitality executives",
+    "manufacturing": "Plant managers, operations leaders, engineers, procurement leaders",
+    "technology": "CIOs, CTOs, engineering leaders, IT buyers, digital transformation leaders",
+    "ai": "AI leaders, data science leaders, CTOs, product leaders, innovation executives",
+    "retail": "Retail executives, merchandisers, ecommerce leaders, store operations leaders",
+}
 
 def _is_generic_description(text: str) -> bool:
     """True if the description is a boilerplate fallback, not real content."""
@@ -98,11 +111,44 @@ def _extract_price(full_text: str) -> Optional[tuple[float, str]]:
     return None
 
 
-def _build_query(event_name: str, year: str) -> str:
-    """Build a focused Google search query for the event."""
-    return f'"{event_name}" {year} attendees registration fee'
+def _build_query(event_name: str, year: str, city: str = "") -> str:
+    city_part = f" {city}" if city else ""
+    return f'"{event_name}" {year}{city_part} official website attendees registration fee'
+
+def _extract_best_link(data: dict) -> str:
+    """Return the first non-search organic result link, preferring official-looking pages."""
+    blocked = ("google.", "serpapi.com", "facebook.com", "linkedin.com", "instagram.com", "youtube.com")
+    organic = data.get("organic_results", []) or []
+    links = [str(item.get("link", "")).strip() for item in organic if item.get("link")]
+    links = [link for link in links if link.startswith(("http://", "https://")) and not any(b in link.lower() for b in blocked)]
+    if not links:
+        return ""
+
+    official_words = ("official", "register", "registration", "event", "expo", "show", "conference", "summit")
+    for item in organic:
+        link = str(item.get("link", "")).strip()
+        if link not in links:
+            continue
+        haystack = f"{item.get('title', '')} {item.get('snippet', '')} {link}".lower()
+        if any(word in haystack for word in official_words):
+            return link
+    return links[0]
 
 
+def _infer_personas(text: str) -> str:
+    """Infer conservative buyer/persona labels from event content only."""
+    lower = (text or "").lower()
+    matched: list[str] = []
+    for key, personas in _PERSONA_HINTS.items():
+        if re.search(rf"\b{re.escape(key)}\b", lower):
+            matched.extend([p.strip() for p in personas.split(",")])
+    seen, out = set(), []
+    for persona in matched:
+        if persona.lower() not in seen:
+            seen.add(persona.lower())
+            out.append(persona)
+    return ", ".join(out[:6])
+  
 async def enrich_event(
     event_name: str,
     year: str,
@@ -136,7 +182,7 @@ async def enrich_event(
     if cache_key in _cache:
         return _cache[cache_key]
 
-    query = _build_query(event_name, year)
+    query = _build_query(event_name, year,city)
 
     try:
         async with httpx.AsyncClient(timeout=12) as client:
@@ -182,6 +228,15 @@ async def enrich_event(
         logger.debug(f"SerpAPI result doesn't match '{event_name}' — skipping enrichment")
         _cache[cache_key] = {}
         return {}
+      
+    best_link = _extract_best_link(data)
+    if best_link:
+        result["event_link"] = best_link
+        result["website"] = best_link
+
+    personas = _infer_personas(f"{event_name} {full_text}")
+    if personas:
+        result["audience_personas"] = personas
 
     # ── Attendees ──────────────────────────────────────────────
     if need_attendees:
@@ -207,6 +262,7 @@ async def enrich_event(
         kg_desc = kg.get("description", "").strip()
         if kg_desc and len(kg_desc) > 60:
             result["description_enriched"] = kg_desc[:500]
+            result["description"] = kg_desc[:500]
             result["enriched_description"] = True
             logger.debug(f"Enriched description for '{event_name}' from KG")
         else:
@@ -215,6 +271,7 @@ async def enrich_event(
                 snip = item.get("snippet", "").strip()
                 if len(snip) > 80:
                     result["description_enriched"] = snip[:500]
+                    result["description"] = snip[:500]
                     result["enriched_description"] = True
                     logger.debug(f"Enriched description for '{event_name}' from snippet")
                     break
