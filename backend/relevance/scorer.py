@@ -1,21 +1,51 @@
 """
-relevance/scorer.py — fixed industry matching.
+relevance/scorer.py  —  DB-aware scoring for EventsEye-style trade show data.
 
-Key fixes:
-  1. _reverse_match now splits event tags only by comma/semicolon/pipe (not
-     whitespace), preventing "Domestic Appliance Technology" from matching
-     the "Technology" IT industry.
-  2. _reverse_match returns the original profile value strings (not lowercase
-     event tag tokens), eliminating "Technology" + "technology" duplicates.
-  3. Single-word profile industries (e.g. "Technology") only match if the
-     event segment has ≤ 3 tokens — avoids compound-noun false positives.
+Key facts about the Neon DB (from actual rows):
+  ✅ industry_tags       populated  ("Metal Working Industries, Mechanical Components")
+  ✅ venue_name          populated  ("Singapore Expo")
+  ✅ city / country      populated  ("Singapore", "Singapore")
+  ✅ description         populated  (event description text)
+  ✅ name                populated
+  ✅ source_url          populated  (eventseye.com event page)
+  ❌ related_industries  NULL / ""   — never use as primary
+  ❌ event_cities        NULL / ""   — never use as primary
+  ❌ event_venues        NULL / ""   — never use as primary
+  ❌ website             NULL / ""   — never use as primary
+  ❌ est_attendees       = 0        — do NOT filter on this; SerpAPI fills later
+  ❌ audience_personas   ""         — SerpAPI fills later
+
+Pipeline order for every field:
+  industry  : related_industries  → industry_tags  → category → ""
+  location  : event_cities        → city + country
+  venue     : event_venues        → venue_name
+  link      : website             → source_url (eventseye page) → registration_url
+
+TAXONOMY BRIDGE
+--------------
+EventsEye uses its own taxonomy ("Metal Working Industries", "Catering and Hospitality
+Industries") that doesn't match user-facing profile industries ("Manufacturing",
+"Food & Beverage").  We maintain a forward map so that a profile targeting
+"Manufacturing" scores events tagged "Metal Working Industries", "Industrial Machinery",
+etc., correctly without false positives.
+
+SCORING WEIGHTS (rule-only mode, no FAISS):
+  Industry match  0.35
+  Persona match   0.25
+  Geography match 0.22
+  Event type      0.10
+  Attendee tier   0.08  (0 if unknown — not penalised)
 """
+from __future__ import annotations
+
 import re
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
+
+from loguru import logger
+
+from config import get_settings
 from models.event import EventORM
 from models.icp_profile import ICPProfile
-from config import get_settings
-from loguru import logger
 
 settings = get_settings()
 
@@ -23,311 +53,421 @@ TIER_GO       = "GO"
 TIER_CONSIDER = "CONSIDER"
 TIER_SKIP     = "SKIP"
 
-RULE_ONLY_GO_THRESHOLD       = 0.45
-RULE_ONLY_CONSIDER_THRESHOLD = 0.22
+# Rule-only thresholds (no FAISS / cosine)
+RULE_GO_THRESHOLD       = 0.38
+RULE_CONSIDER_THRESHOLD = 0.18
 
 
-# ── Token helpers ──────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# TAXONOMY BRIDGE
+# Maps normalised profile industry tokens → EventsEye industry segments
+# that semantically overlap.  Keys are lowercase, comma-separated tokens
+# that the user might choose.  Values are sets of lowercase substrings
+# to look for inside an event's industry_tags string.
+# ══════════════════════════════════════════════════════════════════════
+_PROFILE_TO_EVENTSEYE: dict[str, list[str]] = {
+    # Manufacturing / Industrial
+    "manufacturing":        ["manufactur", "metal work", "mechanical", "industrial", "machiner",
+                             "machine tool", "welding", "casting", "forging", "cnc", "automation",
+                             "robotics", "production", "factory", "stamping", "sheet metal",
+                             "engineering", "material", "alloy", "steel", "aluminium"],
+    "industrial":           ["industrial", "manufactur", "metal", "mechanical", "machiner",
+                             "engineering", "factory"],
+    "engineering":          ["engineering", "manufactur", "metal", "mechanical", "machiner",
+                             "structural", "civil", "aerospace"],
+    # Technology / IT
+    "technology":           ["technolog", "it ", "information technology", "software",
+                             "digital", "compute", "network", "telecom", "electronic",
+                             "semiconductor", "iot", "smart", "multimedia", "cad", "cam"],
+    "information technology": ["information technology", "it ", "software", "digital",
+                                "compute", "network"],
+    "it":                   ["it ", "information technology", "software", "compute", "network",
+                             "digital"],
+    "software":             ["software", "digital", "compute", "it ", "saas", "cloud",
+                             "application"],
+    "ai":                   ["artificial intelligence", "ai", "machine learning", "deep learning",
+                             "data science", "analytics", "automation", "robotics"],
+    "ai / machine learning": ["artificial intelligence", "ai", "machine learning", "analytics",
+                               "data science", "deep learning"],
+    "cloud computing":      ["cloud", "saas", "paas", "iaas", "data center", "hosting",
+                             "virtualisation", "digital transformation"],
+    "cybersecurity":        ["cyber", "security", "infosec", "information security",
+                             "network security", "data protection"],
+    "digital":              ["digital", "technolog", "software", "compute", "internet",
+                             "iot", "smart"],
+    # Finance / Fintech
+    "fintech":              ["fintech", "financial technology", "digital banking", "payment",
+                             "insurtech", "regtech", "blockchain", "cryptocurrency"],
+    "finance":              ["finance", "banking", "financial", "investment", "capital market",
+                             "insurance", "treasury", "fintech", "accounting"],
+    "banking":              ["banking", "finance", "financial", "payment", "fintech"],
+    # Healthcare / Life Sciences
+    "healthcare":           ["healthcare", "health", "medical", "medtech", "pharma",
+                             "biotech", "hospital", "clinical", "dental", "optical",
+                             "nursing", "life science", "diagnostic", "telemedicine"],
+    "medtech":              ["medtech", "medical device", "medical equipment", "diagnostic",
+                             "imaging", "surgical"],
+    "pharma":               ["pharma", "pharmaceutical", "drug", "biotech", "life science",
+                             "clinical", "laboratory"],
+    # Logistics / Supply Chain
+    "logistics":            ["logistic", "supply chain", "transport", "freight", "shipping",
+                             "warehousing", "cargo", "courier", "last mile", "fleet",
+                             "handling", "intralogistic", "distribution", "port"],
+    "supply chain":         ["supply chain", "logistic", "procurement", "sourcing",
+                             "warehousing", "inventory", "distribution"],
+    "transportation":       ["transport", "logistic", "freight", "shipping", "automotive",
+                             "truck", "rail", "aviation", "maritime", "fleet"],
+    # Retail / E-commerce / Consumer
+    "retail":               ["retail", "ecommerce", "consumer", "fmcg", "fashion",
+                             "merchandise", "shopping", "omnichannel", "pos"],
+    "ecommerce":            ["ecommerce", "e-commerce", "online retail", "digital commerce",
+                             "marketplace", "d2c"],
+    "consumer goods":       ["consumer", "fmcg", "household", "appliance", "personal care",
+                             "food", "beverage", "retail"],
+    # Food & Beverage / Hospitality
+    "food & beverage":      ["food processing", "food", "beverage", "catering", "hospitality",
+                             "restaurant", "hotel", "bakery", "dairy", "meat", "seafood",
+                             "organic", "wine", "spirits"],
+    "food":                 ["food processing", "food", "beverage", "catering", "bakery",
+                             "dairy", "seafood", "agri"],
+    "hospitality":          ["hospitality", "catering", "hotel", "restaurant", "food service",
+                             "tourism", "travel"],
+    # Energy / Environment
+    "energy":               ["energy", "oil", "gas", "petroleum", "renewable", "solar",
+                             "wind", "nuclear", "power", "electricity", "utility"],
+    "cleantech":            ["cleantech", "renewable", "solar", "wind", "green energy",
+                             "sustainable", "environmental", "waste", "water treatment"],
+    "sustainability":       ["sustainab", "environmental", "cleantech", "green", "renewable",
+                             "circular economy", "esg", "carbon"],
+    # Real Estate / Construction
+    "construction":         ["construction", "build", "architect", "real estate", "civil",
+                             "infrastructure", "contractor", "property"],
+    "real estate":          ["real estate", "property", "construction", "land", "housing"],
+    # Mining / Resources
+    "mining":               ["mining", "mineral", "quarry", "ore", "coal", "metals",
+                             "extraction", "petroleum"],
+    # Media / Print / Marketing
+    "marketing":            ["marketing", "advertising", "media", "digital marketing",
+                             "martech", "brand", "pr", "communication", "promotion"],
+    "media":                ["media", "publishing", "broadcast", "print", "graphic",
+                             "content", "advertising"],
+    # HR / Education
+    "hr tech":              ["human resource", "hr", "talent", "recruitment", "workforce",
+                             "payroll", "people management", "future of work"],
+    "education":            ["education", "training", "learning", "university", "academic",
+                             "e-learning", "professional development"],
+    # Agriculture
+    "agriculture":          ["agriculture", "agri", "farming", "crop", "livestock",
+                             "aquaculture", "fishery", "agritech"],
+    # Travel / Tourism
+    "travel":               ["travel", "tourism", "hospitality", "airline", "hotel",
+                             "destination", "mice"],
+    # Automotive
+    "automotive":           ["automotive", "vehicle", "car", "truck", "electric vehicle",
+                             "ev", "mobility", "fleet"],
+    # Fashion / Textile
+    "fashion":              ["fashion", "textile", "clothing", "apparel", "fabric",
+                             "garment", "leather", "footwear"],
+    # Printing / Packaging
+    "printing":             ["printing", "packaging", "graphic", "inkjet", "label",
+                             "flexo", "offset"],
+}
 
-def _tokenise(text: str) -> List[str]:
-    if not text:
-        return []
-    parts = re.split(r"[/,|]", text)
-    tokens = []
-    for part in parts:
-        cleaned = part.strip().lower()
-        if cleaned and len(cleaned) > 1:
-            tokens.append(cleaned)
-            words = [w for w in cleaned.split() if len(w) > 2]
-            tokens.extend(words)
-    seen, out = set(), []
-    for t in tokens:
-        if t not in seen:
-            seen.add(t)
-            out.append(t)
-    return out
+
+def _get_industry(event: EventORM) -> str:
+    """
+    Return the best available industry string from DB columns.
+    Priority: related_industries → industry_tags → category
+    For this DB: related_industries is always NULL/empty, so industry_tags is used.
+    """
+    ri = getattr(event, "related_industries", None)
+    if ri and ri.strip():
+        return ri.strip()
+    it = event.industry_tags or ""
+    if it.strip():
+        return it.strip()
+    return (event.category or "").strip()
 
 
-def _build_event_text(event: EventORM) -> str:
-    industry_text = (
-        getattr(event, "related_industries", "") or
-        event.industry_tags or
-        event.category or ""
-    )
-    location_text = " ".join(filter(None, [
-        getattr(event, "event_cities",  "") or event.city or "",
-        getattr(event, "event_venues",  "") or event.venue_name or "",
-        event.country or "",
-    ]))
+def _get_event_text(event: EventORM) -> str:
+    """
+    Build a comprehensive searchable text blob using only populated columns.
+    Uses industry_tags / venue_name / city / country — not the NULL new columns.
+    """
+    industry = _get_industry(event)
+    # Location: prefer event_cities if populated, fall back to city/country
+    ec = (getattr(event, "event_cities", "") or "").strip()
+    location = ec if ec else f"{event.city or ''} {event.country or ''}".strip()
+    # Venue: prefer event_venues if populated, fall back to venue_name
+    ev = (getattr(event, "event_venues", "") or "").strip()
+    venue = ev if ev else (event.venue_name or "").strip()
+
     parts = [
-        event.name          or "",
-        industry_text,
-        event.audience_personas or "",
-        event.category      or "",
-        event.description   or "",
+        event.name or "",
+        industry,
+        event.description or "",
         event.short_summary or "",
-        location_text,
+        event.audience_personas or "",
+        event.category or "",
+        venue,
+        location,
         getattr(event, "organizer", "") or "",
     ]
     return " ".join(p for p in parts if p).lower()
 
 
-def _token_match(profile_values: List[str], search_text: str) -> Tuple[int, List[str]]:
-    matched = []
-    for val in profile_values:
-        tokens = _tokenise(val)
-        if any(tok in search_text for tok in tokens):
-            matched.append(val)
-    return len(matched), matched
+def _get_geo_text(event: EventORM) -> str:
+    """Return a clean city+country string for geo matching."""
+    ec = (getattr(event, "event_cities", "") or "").strip()
+    if ec:
+        return ec.lower()
+    city    = (event.city or "").strip()
+    country = (event.country or "").strip()
+    # Strip known suffixes like "UK - United Kingdom" → keep just "United Kingdom"
+    if " - " in country:
+        country = country.split(" - ")[-1].strip()
+    return f"{city} {country}".lower().strip()
 
 
-def _reverse_match(event_tag_str: str, profile_values: List[str]) -> List[str]:
+# ── Tokenisation with word-boundary awareness ──────────────────────
+
+def _tokenise(text: str) -> List[str]:
     """
-    Return profile values whose keywords appear as the PRIMARY content of a
-    discrete event-tag segment.
-
-    Splits only by comma / semicolon / pipe (not whitespace) so that compound
-    phrases like "Domestic Appliance Technology" are treated as ONE segment and
-    do NOT falsely trigger a match for the single-word profile industry
-    "Technology".
-
-    Single-token profile industries only match a segment that has ≤ 3 tokens
-    (to block "Appliance Technology" -> "Technology" but allow "Technology"
-    or "IT Technology").
-
-    Always returns the original profile value string (not a lowercased tag
-    token), eliminating "Technology" + "technology" duplicates.
+    Split by standard delimiters and return unique tokens of length > 2.
+    Does NOT further split tokens by whitespace to avoid sub-word matches
+    (e.g. "machine" inside "mechanical").
     """
-    if not event_tag_str:
-        return []
+    raw_parts = re.split(r"[/,|;]", text)
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for part in raw_parts:
+        t = part.strip().lower()
+        if t and len(t) > 2 and t not in seen:
+            tokens.append(t)
+            seen.add(t)
+            # Also add significant individual words from multi-word tokens
+            for w in t.split():
+                if len(w) > 3 and w not in seen:
+                    tokens.append(w)
+                    seen.add(w)
+    return tokens
 
-    # Split into comma/semicolon/pipe-separated segments only
-    event_segments = [
-        s.strip().lower()
-        for s in re.split(r"[,;|]", event_tag_str)
-        if s.strip()
-    ]
 
-    matched: List[str] = []
-    for pv in profile_values:
-        pv_lower = pv.lower().strip()
-        pv_tokens = [t for t in re.split(r"[^a-z0-9]+", pv_lower) if len(t) > 2]
-        if not pv_tokens:
+def _word_in_text(word: str, text: str) -> bool:
+    """True only if `word` appears as a complete word in `text`."""
+    return bool(re.search(r"\b" + re.escape(word) + r"\b", text, re.I))
+
+
+# ── Industry matching (profile → event) ───────────────────────────
+
+def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:
+    """
+    Score industry match using a two-pass approach:
+    Pass 1: Direct token match between profile industry names and event text
+    Pass 2: Taxonomy bridge — map profile industry to EventsEye synonyms
+    Returns (score 0..0.35, list of matched profile industry values).
+    """
+    if not profile.target_industries:
+        return 0.0, []
+
+    industry_str = _get_industry(event).lower()
+    event_text   = _get_event_text(event)
+    matched: list[str] = []
+
+    for prof_ind in profile.target_industries:
+        pi_lower = prof_ind.lower().strip()
+        already  = False
+
+        # Pass 1: direct word match in event text
+        pi_words = [w for w in re.split(r"[\s/,\-&]+", pi_lower) if len(w) > 2]
+        if any(_word_in_text(w, event_text) for w in pi_words):
+            matched.append(prof_ind)
+            already = True
+
+        if already:
             continue
-        for segment in event_segments:
-            seg_tokens = [t for t in re.split(r"[^a-z0-9]+", segment) if len(t) > 2]
-            if not seg_tokens:
-                continue
-            # Every profile token must appear in this segment
-            if not all(pt in seg_tokens for pt in pv_tokens):
-                continue
-            # Single-token profile industry (e.g. "Technology"): the matching
-            # segment must itself be short (≤ 3 words) so we don't fire on
-            # "Domestic Appliance Technology" (4 words including "and").
-            if len(pv_tokens) == 1 and len(seg_tokens) > 3:
-                continue
-            matched.append(pv)   # ← original profile value, not lowercase tag
-            break
 
-    return list(dict.fromkeys(matched))   # preserve order, deduplicate
+        # Pass 2: taxonomy bridge
+        for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
+            # Does this profile industry activate this taxonomy key?
+            key_words = key.split()
+            if not all(_word_in_text(kw, pi_lower) or kw in pi_lower for kw in key_words):
+                continue
+            # Does the event's industry_tags contain any synonym?
+            for syn in synonyms:
+                if syn in industry_str:
+                    matched.append(prof_ind)
+                    already = True
+                    break
+            if already:
+                break
+
+    matched = list(dict.fromkeys(matched))  # preserve order, deduplicate
+
+    n = len(matched)
+    if   n >= 3: score = 0.35
+    elif n == 2: score = 0.28
+    elif n == 1: score = 0.20
+    else:
+        score = 0.0
+
+    return round(score, 4), matched
 
 
-# ── Core rule scorer ───────────────────────────────────────
+# ── Persona matching ───────────────────────────────────────────────
+
+def _score_persona(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:
+    """
+    Match target personas against event audience_personas field.
+    When audience_personas is empty (all DB events), score is 0.
+    SerpAPI will fill this field before display — but scoring runs before enrichment.
+    We give a partial score if the event description or industry implies a persona.
+    """
+    if not profile.target_personas:
+        return 0.0, []
+
+    persona_text = (event.audience_personas or "").lower()
+    event_text   = _get_event_text(event)
+    matched: list[str] = []
+
+    for persona in profile.target_personas:
+        p_lower = persona.lower()
+        # Direct match in persona field
+        if persona_text and _word_in_text(p_lower.split()[0], persona_text):
+            matched.append(persona)
+            continue
+        # Partial match in full event text (catches "CTO" in description, etc.)
+        key_word = p_lower.split()[0]  # first word: "CIO" from "CIO / CTO"
+        if len(key_word) >= 3 and _word_in_text(key_word, event_text):
+            matched.append(persona)
+
+    matched = list(dict.fromkeys(matched))
+    n = len(matched)
+    if   n >= 2: score = 0.25
+    elif n == 1: score = 0.15
+    else:        score = 0.0
+    return round(score, 4), matched
+
+
+# ── Geography matching ─────────────────────────────────────────────
+
+def _score_geo(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
+    if not profile.target_geographies:
+        return 0.22, "Global"
+
+    is_global = any(
+        g.lower().strip() in ("global", "worldwide", "international", "any")
+        for g in profile.target_geographies
+    )
+    if is_global:
+        return 0.22, "Global"
+
+    geo_text = _get_geo_text(event)
+    for geo in profile.target_geographies:
+        geo_words = [
+            w for w in re.split(r"[\s,/\-]+", geo.lower())
+            if len(w) > 2
+        ]
+        if any(_word_in_text(w, geo_text) for w in geo_words):
+            return 0.22, geo
+
+    if event.is_virtual or event.is_hybrid:
+        return 0.12, "Virtual/Hybrid"
+
+    return 0.0, ""
+
+
+# ── Event type matching ────────────────────────────────────────────
+
+def _score_type(event: EventORM, profile: ICPProfile) -> float:
+    type_text = f"{event.category or ''} {event.name or ''}".lower()
+    for t in (profile.preferred_event_types or []):
+        t_words = [w for w in re.split(r"[\s/,\-]+", t.lower()) if len(w) > 2]
+        if any(_word_in_text(w, type_text) for w in t_words):
+            return 0.10
+    # Generic fallback: most EventsEye events are trade shows / conferences
+    generic_event_words = ["trade", "expo", "fair", "conference", "exhibition",
+                           "summit", "congress", "symposium", "forum", "show"]
+    if any(w in type_text for w in generic_event_words):
+        # If profile wants any of these formats, give partial credit
+        if any(f in ["trade show", "expo", "conference", "summit", "exhibition"]
+               for f in (profile.preferred_event_types or [])):
+            return 0.07
+    return 0.0
+
+
+# ── Attendee tier ──────────────────────────────────────────────────
+
+def _score_attendees(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
+    """
+    Score based on estimated attendees.
+    IMPORTANT: all DB events have est_attendees=0 (unknown, not zero).
+    We return 0 score but empty tier — this is neutral, not a penalty.
+    SerpAPI will enrich this field later and it's used for display only.
+    """
+    att = event.est_attendees or 0
+    min_att = max(profile.min_attendees or 0, 0)  # never filter by attendees when unknown
+
+    if att == 0:
+        # Unknown — neutral, no penalty, no bonus
+        return 0.0, ""
+    if att >= 10_000: score = 0.08; tier = f"{att:,}+ (flagship)"
+    elif att >= 5_000: score = 0.07; tier = f"{att:,}+ (large)"
+    elif att >= 1_000: score = 0.05; tier = f"{att:,} (mid-size)"
+    elif att >= max(min_att, 200): score = 0.03; tier = f"{att:,}"
+    elif att > 0: score = 0.01; tier = f"{att} (boutique)"
+    else:
+        score = 0.0; tier = ""
+
+    return round(score, 4), tier
+
+
+# ── Main rule scorer ───────────────────────────────────────────────
 
 def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
-    score = 0.0
-    detail: dict = {
-        "industry_matched": [],
-        "industry_missed":  False,
-        "persona_matched":  [],
-        "persona_missed":   False,
-        "geo_matched":      "",
-        "geo_missed":       False,
-        "type_matched":     False,
-        "attendee_tier":    "",
-    }
+    ind_score, ind_matched  = _score_industry(event, profile)
+    per_score, per_matched  = _score_persona(event, profile)
+    geo_score, geo_matched  = _score_geo(event, profile)
+    type_score              = _score_type(event, profile)
+    att_score, att_tier     = _score_attendees(event, profile)
 
-    event_text = _build_event_text(event)
-
-    industry_tags = (
-        getattr(event, "related_industries", "") or
-        event.industry_tags or ""
-    ).lower()
-
-    persona_tags = (event.audience_personas or "").lower()
-
-    # ── Industry — 0.32 ───────────────────────────────────
-    _, ind_fwd = _token_match(profile.target_industries, event_text)
-    ind_rev    = _reverse_match(industry_tags, profile.target_industries)
-    # Merge without duplicates (both lists now contain profile value strings)
-    all_ind    = list(dict.fromkeys(ind_fwd + [v for v in ind_rev if v not in ind_fwd]))
-
-    if   len(all_ind) >= 3: score += 0.32
-    elif len(all_ind) == 2: score += 0.26
-    elif len(all_ind) == 1: score += 0.18
-    else:                   detail["industry_missed"] = True
-
-    detail["industry_matched"] = all_ind[:4]
-
-    # ── Persona — 0.28 ────────────────────────────────────
-    _, per_fwd = _token_match(profile.target_personas, persona_tags)
-    per_rev    = _reverse_match(persona_tags, profile.target_personas)
-    all_per    = list(dict.fromkeys(per_fwd + [v for v in per_rev if v not in per_fwd]))
-
-    if   len(all_per) >= 2: score += 0.28
-    elif len(all_per) == 1: score += 0.18
-    else:                   detail["persona_missed"] = True
-
-    detail["persona_matched"] = all_per[:4]
-
-    # ── Geography — 0.22 ──────────────────────────────────
-    city_text    = getattr(event, "event_cities", "") or event.city or ""
-    geo_text     = f"{city_text} {event.country or ''}".lower()
-    is_global    = any(
-        g.lower() in ("global", "worldwide", "international", "any")
-        for g in (profile.target_geographies or [])
+    total = round(
+        ind_score + per_score + geo_score + type_score + att_score,
+        4
     )
 
-    if is_global:
-        score += 0.22
-        detail["geo_matched"] = "Global"
-    else:
-        _, geo_matched = _token_match(profile.target_geographies, geo_text)
-        if geo_matched:
-            score += 0.22
-            detail["geo_matched"] = geo_matched[0]
-        elif event.is_virtual or event.is_hybrid:
-            score += 0.12
-            detail["geo_matched"] = "Virtual/Hybrid"
-        else:
-            detail["geo_missed"] = True
-
-    # ── Event type — 0.10 ────────────────────────────────
-    type_text = f"{event.category or ''} {event.name or ''}".lower()
-    type_hits = [
-        t for t in (profile.preferred_event_types or [])
-        if any(tok in type_text for tok in _tokenise(t))
-    ]
-    if type_hits:
-        score += 0.10
-        detail["type_matched"] = True
-
-    # ── Attendees — 0.08 ─────────────────────────────────
-    att = event.est_attendees or 0
-    if   att >= 10000: score += 0.08; detail["attendee_tier"] = f"{att:,}+ (flagship)"
-    elif att >= 5000:  score += 0.07; detail["attendee_tier"] = f"{att:,}+ (large)"
-    elif att >= 1000:  score += 0.05; detail["attendee_tier"] = f"{att:,} (mid-size)"
-    elif att >= max(profile.min_attendees or 0, 200):
-                       score += 0.03; detail["attendee_tier"] = f"{att:,}"
-    elif att > 0:      score += 0.01; detail["attendee_tier"] = f"{att} (boutique)"
-
-    return round(min(score, 1.0), 4), detail
+    detail = {
+        "industry_matched":  ind_matched[:4],
+        "industry_score":    ind_score,
+        "industry_missed":   ind_score == 0.0,
+        "persona_matched":   per_matched[:4],
+        "persona_score":     per_score,
+        "persona_missed":    per_score == 0.0,
+        "geo_matched":       geo_matched,
+        "geo_score":         geo_score,
+        "geo_missed":        geo_score == 0.0,
+        "type_matched":      type_score > 0,
+        "type_score":        type_score,
+        "attendee_tier":     att_tier,
+    }
+    return total, detail
 
 
 def _tier(score: float, semantic_active: bool) -> str:
     if semantic_active:
-        go_t, con_t = settings.go_threshold, settings.consider_threshold
+        go_t  = settings.go_threshold
+        con_t = settings.consider_threshold
     else:
-        go_t, con_t = RULE_ONLY_GO_THRESHOLD, RULE_ONLY_CONSIDER_THRESHOLD
+        go_t  = RULE_GO_THRESHOLD
+        con_t = RULE_CONSIDER_THRESHOLD
     if score >= go_t:  return TIER_GO
     if score >= con_t: return TIER_CONSIDER
     return TIER_SKIP
 
 
-def build_fallback_rationale(
-    event: EventORM, profile: ICPProfile,
-    detail: dict, score: float, tier: str,
-) -> str:
-    event_name   = event.name or "This event"
-    city_raw     = getattr(event, "event_cities", "") or event.city or ""
-    event_loc    = f"{city_raw}, {event.country}".strip(", ") or "an unspecified location"
-    ind_matched  = detail.get("industry_matched", [])
-    per_matched  = detail.get("persona_matched", [])
-    geo_matched  = detail.get("geo_matched", "")
-    att_tier     = detail.get("attendee_tier", "")
-    score_pct    = int(score * 100)
+# ── Fallback rationale builder ─────────────────────────────────────
 
-    # Use the event's actual industries (what it IS about), not the profile industries
-    event_industries = _clean_tags(
-        getattr(event, "related_industries", "") or event.industry_tags or event.category or ""
-    )
-
-    # --- Industry sentence ---
-    if ind_matched:
-        ind_sentence = (
-            f"{event_name} covers {_join_natural(ind_matched[:3])}, aligning with your target market."
-        )
-    elif event_industries:
-        ind_sentence = (
-            f"{event_name} is focused on {event_industries}, "
-            f"which doesn't directly align with your target industries "
-            f"({_join_natural((profile.target_industries or [])[:3])})."
-        )
-    else:
-        ind_sentence = (
-            f"{event_name} does not provide enough industry evidence to confirm alignment with "
-            f"{_join_natural((profile.target_industries or [])[:3])}."
-        )
-
-    # --- Persona sentence ---
-    event_personas   = _clean_tags(event.audience_personas or "")
-    target_personas  = _join_natural((profile.target_personas or [])[:3])
-    if per_matched:
-        per_sentence = (
-            f"The event draws {_join_natural(per_matched[:3])} — your target decision-makers."
-        )
-    elif event_personas:
-        per_sentence = (
-            f"The typical attendees are {event_personas[:80]}, "
-            f"which doesn't strongly match your target {target_personas}."
-        )
-    else:
-        per_sentence = (
-            f"Attendee profile is unclear for your target buyers ({target_personas})."
-        )
-
-    # --- Geo sentence ---
-    if geo_matched and geo_matched != "Global":
-        geo_sentence = f"Held in {event_loc} — within your target regions."
-    elif geo_matched == "Global":
-        geo_sentence = f"Held in {event_loc}. Your global scope means geography isn't a barrier."
-    elif event.is_virtual or event.is_hybrid:
-        geo_sentence = "This is a virtual/hybrid event — your team can join remotely."
-    else:
-        target_geos  = _join_natural((profile.target_geographies or [])[:3])
-        geo_sentence = (
-            f"Based in {event_loc}, which is outside your primary regions ({target_geos})."
-        )
-
-    format_note = ""
-    if detail.get("type_matched") and att_tier:
-        format_note = f"Format ({event.category}) matches your preference; {att_tier}."
-    elif att_tier:
-        format_note = f"Scale: {att_tier}."
-
-    if tier == TIER_GO:
-        parts = [ind_sentence, per_sentence]
-        if format_note: parts.append(format_note)
-        parts.append(f"Strong pipeline fit — worth attending ({score_pct}% match).")
-    elif tier == TIER_CONSIDER:
-        parts = [ind_sentence, per_sentence]
-        if not geo_matched: parts.append(geo_sentence)
-        parts.append(f"Partial fit ({score_pct}%) — evaluate before committing budget.")
-    else:
-        parts = []
-        if not ind_matched: parts.append(ind_sentence)
-        if not per_matched: parts.append(per_sentence)
-        if not geo_matched: parts.append(geo_sentence)
-        if not parts:       parts.append(ind_sentence)
-        parts.append(
-            f"Weak fit ({score_pct}%) — audience and industry don't align well "
-            f"enough for this sales motion."
-        )
-
-    return " ".join(parts)
-
-
-def _join_natural(items: list) -> str:
+def _join(items: list) -> str:
     items = [str(i) for i in items if i]
     if not items:       return "your target areas"
     if len(items) == 1: return items[0]
@@ -335,18 +475,99 @@ def _join_natural(items: list) -> str:
     return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
-def _clean_tags(tag_str: str) -> str:
-    tags = [t.strip() for t in tag_str.split(",") if t.strip()]
-    return ", ".join(tags[:4])
+def _clean_tags(s: str) -> str:
+    return ", ".join(t.strip() for t in s.split(",") if t.strip())[:120]
 
+
+def build_fallback_rationale(
+    event: EventORM, profile: ICPProfile,
+    detail: dict, score: float, tier: str,
+) -> str:
+    ind_matched = detail.get("industry_matched", [])
+    per_matched = detail.get("persona_matched", [])
+    geo_matched = detail.get("geo_matched", "")
+    att_tier    = detail.get("attendee_tier", "")
+    score_pct   = int(score * 100)
+
+    # Location string — use what's available
+    ec      = (getattr(event, "event_cities", "") or "").strip()
+    city    = ec if ec else f"{event.city or ''}, {event.country or ''}".strip(", ")
+    # Strip "UK - United Kingdom" → "United Kingdom"
+    if " - " in city:
+        city = city.split(" - ")[-1].strip()
+
+    # Industry info from DB
+    event_ind = _clean_tags(_get_industry(event))
+
+    # --- Industry sentence ---
+    if ind_matched:
+        ind_s = (
+            f"This event covers {_join(ind_matched[:3])}, "
+            f"which aligns with your target market."
+        )
+    elif event_ind:
+        ind_s = (
+            f"This event is focused on {event_ind}, "
+            f"which doesn't directly match your target industries "
+            f"({_join((profile.target_industries or [])[:3])})."
+        )
+    else:
+        ind_s = (
+            f"Attendee profile is unclear for your target buyers "
+            f"({_join((profile.target_personas or [])[:3])})."
+        )
+
+    # --- Persona sentence ---
+    target_p = _join((profile.target_personas or [])[:3])
+    if per_matched:
+        per_s = f"The event attracts {_join(per_matched[:3])} — your target decision-makers."
+    else:
+        per_s = f"Attendee profile is unclear for your target buyers ({target_p})."
+
+    # --- Geo sentence ---
+    if geo_matched == "Global":
+        geo_s = f"Held in {city}. Your global scope means geography is not a barrier."
+    elif geo_matched:
+        geo_s = f"Located in {city} — within your target geography."
+    elif event.is_virtual or event.is_hybrid:
+        geo_s = "Virtual/hybrid format — your team can attend remotely."
+    else:
+        target_g = _join((profile.target_geographies or [])[:2])
+        geo_s = f"Held in {city}, which is outside your primary target regions ({target_g})."
+
+    scale_note = f" Scale: {att_tier}." if att_tier else ""
+
+    if tier == TIER_GO:
+        parts = [ind_s, per_s, f"Strong pipeline fit — worth attending ({score_pct}% match).{scale_note}"]
+    elif tier == TIER_CONSIDER:
+        parts = [ind_s, per_s]
+        if not geo_matched or geo_matched == "":
+            parts.append(geo_s)
+        parts.append(f"Partial fit ({score_pct}%) — evaluate before committing budget.{scale_note}")
+    else:
+        parts = []
+        if not ind_matched:  parts.append(ind_s)
+        if not per_matched:  parts.append(per_s)
+        if not geo_matched:  parts.append(geo_s)
+        if not parts:        parts.append(ind_s)
+        parts.append(f"Weak fit ({score_pct}%) — audience and industry don't align well.")
+
+    return " ".join(parts)
+
+
+# ── Public API ─────────────────────────────────────────────────────
 
 def score_candidates(
-    events: List[EventORM],
-    profile: ICPProfile,
+    events:        List[EventORM],
+    profile:       ICPProfile,
     cosine_scores: Dict[str, float],
 ) -> List[Tuple[EventORM, float, str, dict]]:
+    """
+    Score and tier all events.  Returns list sorted by score descending.
+    cosine_scores is empty when FAISS is disabled (default on free tier).
+    """
     semantic_active = bool(cosine_scores)
-    results = []
+    results: list = []
 
     for event in events:
         cosine = cosine_scores.get(event.id, 0.0)
@@ -360,14 +581,16 @@ def score_candidates(
         tier   = _tier(hybrid, semantic_active)
         results.append((event, hybrid, tier, detail))
 
-    results.sort(key=lambda x: x[1], reverse=True)
+    results.sort(key=lambda x: -x[1])
 
-    counts = {TIER_GO: 0, TIER_CONSIDER: 0, TIER_SKIP: 0}
+    counts: dict[str, int] = {TIER_GO: 0, TIER_CONSIDER: 0, TIER_SKIP: 0}
     for _, _, t, _ in results:
-        counts[t] = counts.get(t, 0) + 1
+        counts[t] += 1
 
     logger.info(
         f"Scored {len(results)} events — "
-        f"GO={counts[TIER_GO]} CONSIDER={counts[TIER_CONSIDER]} SKIP={counts[TIER_SKIP]}"
+        f"GO={counts[TIER_GO]} "
+        f"CONSIDER={counts[TIER_CONSIDER]} "
+        f"SKIP={counts[TIER_SKIP]}"
     )
     return results
