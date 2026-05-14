@@ -1,10 +1,14 @@
 """
-relevance/scorer.py — updated to use new DB columns.
+relevance/scorer.py — fixed industry matching.
 
-Changes vs original:
-  • _build_event_text now includes related_industries, event_cities, event_venues
-  • These take precedence over the old industry_tags / venue_name fields
-  • All other scoring logic unchanged
+Key fixes:
+  1. _reverse_match now splits event tags only by comma/semicolon/pipe (not
+     whitespace), preventing "Domestic Appliance Technology" from matching
+     the "Technology" IT industry.
+  2. _reverse_match returns the original profile value strings (not lowercase
+     event tag tokens), eliminating "Technology" + "technology" duplicates.
+  3. Single-word profile industries (e.g. "Technology") only match if the
+     event segment has ≤ 3 tokens — avoids compound-noun false positives.
 """
 import re
 from typing import List, Dict, Tuple
@@ -45,24 +49,16 @@ def _tokenise(text: str) -> List[str]:
 
 
 def _build_event_text(event: EventORM) -> str:
-    """
-    Build a searchable text blob from all event fields.
-    New columns (related_industries, event_cities, event_venues) take precedence.
-    """
-    # Industry: prefer related_industries (richer), fall back to industry_tags
     industry_text = (
         getattr(event, "related_industries", "") or
         event.industry_tags or
         event.category or ""
     )
-
-    # Location: prefer event_cities/event_venues (more detailed)
     location_text = " ".join(filter(None, [
         getattr(event, "event_cities",  "") or event.city or "",
         getattr(event, "event_venues",  "") or event.venue_name or "",
         event.country or "",
     ]))
-
     parts = [
         event.name          or "",
         industry_text,
@@ -86,17 +82,54 @@ def _token_match(profile_values: List[str], search_text: str) -> Tuple[int, List
 
 
 def _reverse_match(event_tag_str: str, profile_values: List[str]) -> List[str]:
+    """
+    Return profile values whose keywords appear as the PRIMARY content of a
+    discrete event-tag segment.
+
+    Splits only by comma / semicolon / pipe (not whitespace) so that compound
+    phrases like "Domestic Appliance Technology" are treated as ONE segment and
+    do NOT falsely trigger a match for the single-word profile industry
+    "Technology".
+
+    Single-token profile industries only match a segment that has ≤ 3 tokens
+    (to block "Appliance Technology" -> "Technology" but allow "Technology"
+    or "IT Technology").
+
+    Always returns the original profile value string (not a lowercased tag
+    token), eliminating "Technology" + "technology" duplicates.
+    """
     if not event_tag_str:
         return []
-    profile_tokens = set()
-    for v in profile_values:
-        profile_tokens.update(_tokenise(v))
-    matched = []
-    for tag in re.split(r"[,;\s]+", event_tag_str.lower()):
-        tag = tag.strip()
-        if tag and len(tag) > 2 and tag in profile_tokens:
-            matched.append(tag)
-    return list(set(matched))
+
+    # Split into comma/semicolon/pipe-separated segments only
+    event_segments = [
+        s.strip().lower()
+        for s in re.split(r"[,;|]", event_tag_str)
+        if s.strip()
+    ]
+
+    matched: List[str] = []
+    for pv in profile_values:
+        pv_lower = pv.lower().strip()
+        pv_tokens = [t for t in re.split(r"[^a-z0-9]+", pv_lower) if len(t) > 2]
+        if not pv_tokens:
+            continue
+        for segment in event_segments:
+            seg_tokens = [t for t in re.split(r"[^a-z0-9]+", segment) if len(t) > 2]
+            if not seg_tokens:
+                continue
+            # Every profile token must appear in this segment
+            if not all(pt in seg_tokens for pt in pv_tokens):
+                continue
+            # Single-token profile industry (e.g. "Technology"): the matching
+            # segment must itself be short (≤ 3 words) so we don't fire on
+            # "Domestic Appliance Technology" (4 words including "and").
+            if len(pv_tokens) == 1 and len(seg_tokens) > 3:
+                continue
+            matched.append(pv)   # ← original profile value, not lowercase tag
+            break
+
+    return list(dict.fromkeys(matched))   # preserve order, deduplicate
 
 
 # ── Core rule scorer ───────────────────────────────────────
@@ -116,7 +149,6 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
 
     event_text = _build_event_text(event)
 
-    # Use richer industry field when available
     industry_tags = (
         getattr(event, "related_industries", "") or
         event.industry_tags or ""
@@ -127,7 +159,8 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     # ── Industry — 0.32 ───────────────────────────────────
     _, ind_fwd = _token_match(profile.target_industries, event_text)
     ind_rev    = _reverse_match(industry_tags, profile.target_industries)
-    all_ind    = list(dict.fromkeys(ind_fwd + ind_rev))
+    # Merge without duplicates (both lists now contain profile value strings)
+    all_ind    = list(dict.fromkeys(ind_fwd + [v for v in ind_rev if v not in ind_fwd]))
 
     if   len(all_ind) >= 3: score += 0.32
     elif len(all_ind) == 2: score += 0.26
@@ -139,7 +172,7 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     # ── Persona — 0.28 ────────────────────────────────────
     _, per_fwd = _token_match(profile.target_personas, persona_tags)
     per_rev    = _reverse_match(persona_tags, profile.target_personas)
-    all_per    = list(dict.fromkeys(per_fwd + per_rev))
+    all_per    = list(dict.fromkeys(per_fwd + [v for v in per_rev if v not in per_fwd]))
 
     if   len(all_per) >= 2: score += 0.28
     elif len(all_per) == 1: score += 0.18
@@ -148,7 +181,6 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     detail["persona_matched"] = all_per[:4]
 
     # ── Geography — 0.22 ──────────────────────────────────
-    # Use event_cities (richer) when available
     city_text    = getattr(event, "event_cities", "") or event.city or ""
     geo_text     = f"{city_text} {event.country or ''}".lower()
     is_global    = any(
@@ -214,33 +246,47 @@ def build_fallback_rationale(
     geo_matched  = detail.get("geo_matched", "")
     att_tier     = detail.get("attendee_tier", "")
     score_pct    = int(score * 100)
+
+    # Use the event's actual industries (what it IS about), not the profile industries
     event_industries = _clean_tags(
         getattr(event, "related_industries", "") or event.industry_tags or event.category or ""
     )
 
-    ind_sentence = (
-        f"{event_name} covers {_join_natural(ind_matched[:3])}, aligning with your target market."
-        if ind_matched else
-        (
-            f"{event_name} is focused on {event_industries}, which is outside your core target industries "
+    # --- Industry sentence ---
+    if ind_matched:
+        ind_sentence = (
+            f"{event_name} covers {_join_natural(ind_matched[:3])}, aligning with your target market."
+        )
+    elif event_industries:
+        ind_sentence = (
+            f"{event_name} is focused on {event_industries}, "
+            f"which doesn't directly align with your target industries "
             f"({_join_natural((profile.target_industries or [])[:3])})."
-            if event_industries else
+        )
+    else:
+        ind_sentence = (
             f"{event_name} does not provide enough industry evidence to confirm alignment with "
             f"{_join_natural((profile.target_industries or [])[:3])}."
         )
-    )
 
+    # --- Persona sentence ---
     event_personas   = _clean_tags(event.audience_personas or "")
     target_personas  = _join_natural((profile.target_personas or [])[:3])
-    per_sentence = (
-        f"The event draws {_join_natural(per_matched[:3])} — your target decision-makers."
-        if per_matched else
-        f"The typical attendees are {event_personas[:80]}, "
-        f"which doesn't strongly match your target {target_personas}."
-        if event_personas else
-        f"Attendee profile is unclear for your target buyers ({target_personas})."
-    )
+    if per_matched:
+        per_sentence = (
+            f"The event draws {_join_natural(per_matched[:3])} — your target decision-makers."
+        )
+    elif event_personas:
+        per_sentence = (
+            f"The typical attendees are {event_personas[:80]}, "
+            f"which doesn't strongly match your target {target_personas}."
+        )
+    else:
+        per_sentence = (
+            f"Attendee profile is unclear for your target buyers ({target_personas})."
+        )
 
+    # --- Geo sentence ---
     if geo_matched and geo_matched != "Global":
         geo_sentence = f"Held in {event_loc} — within your target regions."
     elif geo_matched == "Global":
@@ -262,9 +308,7 @@ def build_fallback_rationale(
     if tier == TIER_GO:
         parts = [ind_sentence, per_sentence]
         if format_note: parts.append(format_note)
-        parts.append(
-            f"Strong pipeline fit — worth attending ({score_pct}% match)."
-        )
+        parts.append(f"Strong pipeline fit — worth attending ({score_pct}% match).")
     elif tier == TIER_CONSIDER:
         parts = [ind_sentence, per_sentence]
         if not geo_matched: parts.append(geo_sentence)
