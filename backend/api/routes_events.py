@@ -193,12 +193,21 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         raise ValueError(f"row {row_number}: invalid start_date '{start_date}'")
  
     event_id   = _csv_value(normalized_row, "id", "event_id") or str(uuid.uuid4())
-    source_url = _csv_value(normalized_row, "source_url", "url")
- 
-    # ── Prefer "website" column for the official event URL ──────────
-    # This becomes registration_url AND website so _get_link() can find it.
-    website_url = _csv_value(normalized_row, "website", "registration_url", "event_url", "link")
- 
+    source_url = _csv_value(
+        normalized_row,
+        "source_url", "source url", "url", "event_source_url", "event source url",
+    )
+
+    # ── Prefer per-row official event URL columns for the official URL ─
+    # CSV exports often use human-readable headers ("Event Link",
+    # "Register URL", "Website URL"). Capture those so every event keeps
+    # its own link instead of falling back to a shared CSV/source URL.
+    website_url = _csv_value(
+        normalized_row,
+        "website", "website_url", "website url", "official_website", "official website",
+        "registration_url", "registration url", "register_url", "register url",
+        "event_url", "event url", "event_link", "event link", "link",
+    ) 
     city        = _csv_value(normalized_row, "city")
     country     = _csv_value(normalized_row, "country")
     event_cities= _csv_value(normalized_row, "event_cities", "event_city", "location")
@@ -223,7 +232,12 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         edition_number=_csv_value(normalized_row, "edition_number", "edition"),
         industry_tags=related_industries,
         related_industries=related_industries,
-        audience_personas=_csv_value(normalized_row, "audience_personas", "buyer_persona", "personas"),
+        audience_personas=_csv_value(
+            normalized_row,
+            "audience_personas", "audience personas", "buyer_persona", "buyer persona",
+            "buyer_personas", "buyer personas", "personas", "attendee_profile", "attendee profile",
+            "visitor_profile", "visitor profile",
+        ),
         start_date=start_date,
         end_date=end_date or start_date,
         duration_days=_csv_int(normalized_row, "duration_days", default=1),
@@ -235,10 +249,19 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
         country=country,
         is_virtual=_csv_bool(normalized_row, "is_virtual"),
         is_hybrid=_csv_bool(normalized_row, "is_hybrid"),
-        est_attendees=_csv_int(normalized_row, "est_attendees", "attendees", "expected_attendance"),
+        est_attendees=_csv_int(
+            normalized_row,
+            "est_attendees", "estimated_attendees", "estimated attendees", "attendees",
+            "expected_attendance", "expected attendance", "visitors", "expected_visitors",
+            "expected visitors",
+        ),
         category=_csv_value(normalized_row, "category"),
         ticket_price_usd=_csv_float(normalized_row, "ticket_price_usd", "price_usd"),
-        price_description=_csv_value(normalized_row, "price_description", "pricing"),
+        price_description=_csv_value(
+            normalized_row,
+            "price_description", "price description", "pricing", "ticket_price",
+            "ticket price", "entry_fee", "entry fee",
+        ),
         registration_url=website_url,   # official event URL
         website=website_url,            # stored in BOTH fields so _get_link() finds it
         sponsors=_csv_value(normalized_row, "sponsors"),
