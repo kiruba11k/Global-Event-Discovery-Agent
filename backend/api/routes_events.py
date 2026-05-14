@@ -91,39 +91,21 @@ def _parse_date(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _within_requested_dates(event, date_from: Optional[str], date_to: Optional[str]) -> bool:
-    """
-    Require the event start date to stay inside the user-requested range.
-    """
+def _within_requested_dates(event, date_from, date_to) -> bool:
     event_start = _parse_date(getattr(event, "start_date", None))
-
     if not event_start:
         return False
-
-    range_start = _parse_date(date_from)
-    range_end = _parse_date(date_to)
-
-    if range_start and event_start < range_start:
+    if date_from and event_start < _parse_date(date_from):
         return False
-
-    if range_end and event_start > range_end:
+    if date_to   and event_start > _parse_date(date_to):
         return False
-
     return True
 
 
 def _apply_result_mix(ranked: Iterable) -> list:
-    """
-    Return at most seven events with exactly:
-    - 4 GO
-    - 3 CONSIDER
-    when available.
-    """
     selected = list(ranked)[:RESULT_LIMIT]
-
     for idx, event in enumerate(selected):
         event.fit_verdict = "GO" if idx < GO_RESULT_COUNT else "CONSIDER"
-
     return selected
 
 
@@ -256,20 +238,15 @@ def _parse_csv_event_row(row: dict, row_number: int) -> EventCreate:
 
 def _extract_pdf_text(file_bytes: bytes) -> str:
     try:
-        import pypdf
-        import io as _io
-
+        import pypdf, io as _io
         reader = pypdf.PdfReader(_io.BytesIO(file_bytes))
-        texts = []
-
+        texts  = []
         for page in reader.pages[:20]:
             try:
                 texts.append(page.extract_text() or "")
             except Exception:
                 pass
-
         return "\n".join(texts)[:8000]
-
     except Exception as e:
         logger.warning(f"PDF extraction failed: {e}")
         return ""
@@ -287,39 +264,22 @@ async def save_company_profile(
 ):
     try:
         profile_data = CompanyProfileCreate(**json.loads(company_data))
-
     except Exception as e:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid company_data JSON: {e}"
-        )
-
-    deck_text = ""
-    deck_filename = ""
-
+        raise HTTPException(status_code=422, detail=f"Invalid company_data JSON: {e}")
+ 
+    deck_text, deck_filename = "", ""
     if deck and deck.filename:
         deck_filename = deck.filename
-        file_bytes = await deck.read()
-
+        file_bytes    = await deck.read()
         if deck.filename.lower().endswith(".pdf"):
             deck_text = _extract_pdf_text(file_bytes)
-
-            logger.info(
-                f"Deck extracted: {len(deck_text)} chars from {deck_filename}"
-            )
-
-    company = await create_company_profile(
-        db,
-        profile_data,
-        deck_text,
-        deck_filename,
-    )
-
+ 
+    company = await create_company_profile(db, profile_data, deck_text, deck_filename)
     return {
-        "id": company.id,
-        "message": "Company profile saved.",
+        "id":             company.id,
+        "message":        "Company profile saved.",
         "deck_extracted": len(deck_text) > 0,
-        "deck_chars": len(deck_text),
+        "deck_chars":     len(deck_text),
     }
 
 
@@ -329,26 +289,20 @@ async def save_company_profile(
 
 @router.get("/company-profile/{profile_id}")
 async def fetch_company_profile(
-    profile_id: str,
-    db: AsyncSession = Depends(get_db),
+    profile_id: str, db: AsyncSession = Depends(get_db)
 ):
     cp = await get_company_profile(db, profile_id)
-
     if not cp:
-        raise HTTPException(
-            status_code=404,
-            detail="Company profile not found."
-        )
-
+        raise HTTPException(status_code=404, detail="Company profile not found.")
     return {
-        "id": cp.id,
+        "id":           cp.id,
         "company_name": cp.company_name,
         "founded_year": cp.founded_year,
-        "location": cp.location,
-        "what_we_do": cp.what_we_do,
+        "location":     cp.location,
+        "what_we_do":   cp.what_we_do,
         "what_we_need": cp.what_we_need,
-        "deck_filename": cp.deck_filename,
-        "has_deck": bool(cp.deck_text),
+        "deck_filename":cp.deck_filename,
+        "has_deck":     bool(cp.deck_text),
     }
 
 
@@ -361,22 +315,18 @@ async def search_events(
     request: SearchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    profile = request.profile
+    profile    = request.profile
     profile_id = str(uuid.uuid4())
-
     logger.info(
         f"Search: {profile.company_name} | "
         f"industries={profile.target_industries} | "
         f"geo={profile.target_geographies}"
     )
-
+ 
     # ── Resolve company context ──────────────────────────
-
     company_ctx: CompanyContext | None = request.company_context
-
     if request.company_profile_id and not company_ctx:
         cp = await get_company_profile(db, request.company_profile_id)
-
         if cp:
             company_ctx = CompanyContext(
                 company_name=cp.company_name,
@@ -386,15 +336,8 @@ async def search_events(
                 what_we_need=cp.what_we_need,
                 deck_text=cp.deck_text,
             )
-
-            logger.info(
-                f"Company context loaded: "
-                f"{cp.company_name} "
-                f"(deck: {len(cp.deck_text)} chars)"
-            )
-
+ 
     # ── Step 1: DB filter ────────────────────────────────
-
     candidates = await get_candidate_events(
         db=db,
         geographies=profile.target_geographies,
@@ -404,14 +347,10 @@ async def search_events(
         min_attendees=profile.min_attendees or 0,
         limit=300,
     )
-
+ 
     if len(candidates) < 5:
-        logger.warning(
-            f"Only {len(candidates)} candidates — running seed ingestion..."
-        )
-
+        logger.warning(f"Only {len(candidates)} candidates — running seed ingestion.")
         await run_seed_only()
-
         candidates = await get_candidate_events(
             db=db,
             geographies=profile.target_geographies,
@@ -421,37 +360,16 @@ async def search_events(
             min_attendees=0,
             limit=300,
         )
-
-    if len(candidates) < 5 and profile.target_industries:
-        logger.warning(
-            "Still too few candidates after seed run; broadening search "
-            "by temporarily removing industry pre-filter."
-        )
-        candidates = await get_candidate_events(
-            db=db,
-            geographies=profile.target_geographies,
-            industries=[],
-            date_from=profile.date_from,
-            date_to=profile.date_to,
-            min_attendees=0,
-            limit=300,
-        )
-
+ 
     # Hard date filter
     candidates = [
-        event for event in candidates
-        if _within_requested_dates(
-            event,
-            profile.date_from,
-            profile.date_to,
-        )
+        e for e in candidates
+        if _within_requested_dates(e, profile.date_from, profile.date_to)
     ]
-
+ 
     if not candidates:
-        logger.info("No candidates found inside the requested date range.")
-
+        logger.info("No candidates in requested date range.")
         _last_results[profile_id] = []
-
         return SearchResponse(
             profile_id=profile_id,
             company_name=profile.company_name,
@@ -459,100 +377,79 @@ async def search_events(
             events=[],
             generated_at=datetime.utcnow().isoformat() + "Z",
         )
-
-    logger.info(f"Candidates: {len(candidates)}")
-
+ 
+    logger.info(f"Candidates after date filter: {len(candidates)}")
+ 
     # ── Step 2: Semantic search (optional) ───────────────
-
     cosine_scores: dict = {}
-
     if settings.enable_semantic_search:
         try:
             from relevance.embedder import (
-                build_profile_text,
-                search_similar,
-                add_events_to_index,
-                get_index,
+                build_profile_text, search_similar,
+                add_events_to_index, get_index,
             )
-
             profile_text = build_profile_text(profile)
-
-            idx = get_index()
-
+            idx          = get_index()
             if idx.ntotal == 0:
                 add_events_to_index(candidates)
-
-            similar = search_similar(profile_text, top_k=100)
-
-            cosine_scores = {
-                r["id"]: r["cosine_score"]
-                for r in similar
-            }
-
+            similar       = search_similar(profile_text, top_k=100)
+            cosine_scores = {r["id"]: r["cosine_score"] for r in similar}
         except Exception as e:
-            logger.warning(
-                f"Semantic search error: {e} — falling back to rules only"
-            )
-
+            logger.warning(f"Semantic search error: {e}")
+ 
     # ── Step 3: Hybrid scoring ───────────────────────────
-
-    scored = score_candidates(
-        candidates,
-        profile,
-        cosine_scores,
-    )
-
-    top = scored[:settings.top_k_for_llm]
-
-    top_events = [e for e, _, _, _ in top]
-
-    pre_scores = {
-        e.id: s
-        for e, s, _, _ in top
-    }
-
-    pre_tiers = {
-        e.id: t
-        for e, _, t, _ in top
-    }
-
-    pre_details = {
-        e.id: d
-        for e, _, _, d in top
-    }
-
-    # ── Step 4: Groq ranking ─────────────────────────────
-    enrichments = await enrich_events_batch(
-        events=top_events,
-        serpapi_key=settings.serpapi_key,
-        max_enrich=min(7, len(top_events)),
-    )
-
+    scored = score_candidates(candidates, profile, cosine_scores)
+    top    = scored[:settings.top_k_for_llm]
+ 
+    top_events  = [e for e, _, _, _  in top]
+    pre_scores  = {e.id: s          for e, s, _, _ in top}
+    pre_tiers   = {e.id: t          for e, _, t, _ in top}
+    pre_details = {e.id: d          for e, _, _, d in top}
+ 
+    # ── Step 4: SerpAPI enrichment ───────────────────────
+    # Fill missing attendees / price / description for top events.
+    # Only fires when fields are genuinely missing. Max 5 API calls.
+    enrichments: dict = {}
+    if settings.serpapi_key:
+        try:
+            from enrichment.serpapi_enricher import batch_enrich
+            enrichments = await batch_enrich(
+                events         = top_events,
+                serpapi_key    = settings.serpapi_key,
+                max_enrichments= 5,
+            )
+            if enrichments:
+                logger.info(
+                    f"SerpAPI enriched {len(enrichments)} events "
+                    f"({sum(len(v) for v in enrichments.values())} fields total)."
+                )
+        except Exception as e:
+            logger.warning(f"SerpAPI enrichment error (non-fatal): {e}")
+ 
+    # ── Step 5: Groq ranking ─────────────────────────────
     ranked = await rank_with_groq(
-        events=top_events,
-        profile=profile,
-        pre_scores=pre_scores,
-        pre_tiers=pre_tiers,
-        pre_details=pre_details,
-        company_ctx=company_ctx,
-        enrichments=enrichments,
+        events      = top_events,
+        profile     = profile,
+        pre_scores  = pre_scores,
+        pre_tiers   = pre_tiers,
+        pre_details = pre_details,
+        company_ctx = company_ctx,
+        enrichments = enrichments,    # ← pass enrichments to ranker
     )
-
+ 
     ranked.sort(key=lambda r: -r.relevance_score)
-
     ranked = _apply_result_mix(ranked)
-
     _last_results[profile_id] = ranked
-
-    go_n = sum(1 for r in ranked if r.fit_verdict == "GO")
+ 
+    go_n  = sum(1 for r in ranked if r.fit_verdict == "GO")
     con_n = sum(1 for r in ranked if r.fit_verdict == "CONSIDER")
-    skip_n = sum(1 for r in ranked if r.fit_verdict == "SKIP")
-
+    enr_n = sum(1 for r in ranked if r.serpapi_enriched)
     logger.info(
         f"Search done: {len(ranked)} results | "
-        f"GO={go_n} CONSIDER={con_n} SKIP={skip_n}"
+        f"GO={go_n} CONSIDER={con_n} | "
+        f"SerpAPI-enriched={enr_n}"
     )
-
+ 
     return SearchResponse(
         profile_id=profile_id,
         company_name=profile.company_name,
@@ -560,6 +457,7 @@ async def search_events(
         events=[r.model_dump() for r in ranked],
         generated_at=datetime.utcnow().isoformat() + "Z",
     )
+
 
 
 
@@ -623,85 +521,79 @@ async def upload_events_csv(
 
 @router.get("/events")
 async def list_events(
-    page: int = Query(1, ge=1),
+    page:  int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     all_evs = await get_all_events(db, limit=limit * page)
-
-    start = (page - 1) * limit
-
-    total = await count_events(db)
-
+    start   = (page - 1) * limit
+    total   = await count_events(db)
     return {
-        "total": total,
-        "page": page,
-        "limit": limit,
+        "total": total, "page": page, "limit": limit,
         "events": [
             {
-                "id": e.id,
-                "name": e.name,
-                "start_date": e.start_date,
-                "city": e.city,
-                "country": e.country,
-                "est_attendees": e.est_attendees,
-                "category": e.category,
-                "source_platform": e.source_platform,
-                "registration_url": e.registration_url,
+                "id":               e.id,
+                "name":             e.name,
+                "start_date":       e.start_date,
+                "city":             getattr(e, "event_cities", "") or e.city,
+                "country":          e.country,
+                "est_attendees":    e.est_attendees,
+                "category":         e.category,
+                "source_platform":  e.source_platform,
+                "registration_url": (
+                    getattr(e, "website", "") or
+                    e.registration_url or
+                    e.source_url
+                ),
             }
-            for e in all_evs[start:start + limit]
+            for e in all_evs[start : start + limit]
         ],
     }
-
+ 
 
 # ─────────────────────────────────────────────────────────────
 # GET /api/events/{id}
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/events/{event_id}")
-async def get_event(
-    event_id: str,
-    db: AsyncSession = Depends(get_db),
-):
+async def get_event(event_id: str, db: AsyncSession = Depends(get_db)):
     event = await get_event_by_id(db, event_id)
-
     if not event:
-        raise HTTPException(
-            status_code=404,
-            detail="Event not found"
-        )
-
+        raise HTTPException(status_code=404, detail="Event not found")
     return {
-        "id": event.id,
-        "name": event.name,
-        "description": event.description,
-        "start_date": event.start_date,
-        "end_date": event.end_date,
-        "venue_name": event.venue_name,
-        "address": event.address,
-        "city": event.city,
-        "country": event.country,
-        "est_attendees": event.est_attendees,
-        "vip_count": getattr(event, "vip_count", 0),
-        "category": event.category,
-        "industry_tags": event.industry_tags,
-        "related_industries": getattr(event, "related_industries", ""),
-        "event_cities": getattr(event, "event_cities", ""),
-        "event_venues": getattr(event, "event_venues", ""),
-        "website": getattr(event, "website", ""),
-        "audience_personas": event.audience_personas,
-        "price_description": event.price_description,
-        "registration_url": event.registration_url,
-        "sponsors": event.sponsors,
-        "speakers_url": event.speakers_url,
-        "agenda_url": event.agenda_url,
-        "source_platform": event.source_platform,
-        "source_url": event.source_url,
-        "ingested_at": (
-            event.ingested_at.isoformat()
-            if event.ingested_at else None
+        "id":                 event.id,
+        "name":               event.name,
+        "description":        event.description,
+        "start_date":         event.start_date,
+        "end_date":           event.end_date,
+        "venue":              (
+            getattr(event, "event_venues", "") or event.venue_name or ""
         ),
+        "city":               (
+            getattr(event, "event_cities", "") or event.city or ""
+        ),
+        "country":            event.country,
+        "est_attendees":      event.est_attendees,
+        "category":           event.category,
+        "industry":           (
+            getattr(event, "related_industries", "") or
+            event.industry_tags or ""
+        ),
+        "audience_personas":  event.audience_personas,
+        "price_description":  event.price_description,
+        "website":            (
+            getattr(event, "website", "") or
+            event.registration_url or
+            event.source_url or ""
+        ),
+        "organizer":          getattr(event, "organizer", "") or "",
+        "sponsors":           event.sponsors,
+        "source_platform":    event.source_platform,
+        "source_url":         event.source_url,
+        "ingested_at":        event.ingested_at.isoformat() if event.ingested_at else None,
+        "serpapi_enriched":   getattr(event, "serpapi_enriched", False),
     }
+ 
 
 
 # ─────────────────────────────────────────────────────────────
@@ -711,33 +603,37 @@ async def get_event(
 @router.get("/stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     total = await count_events(db)
-
+ 
+    # Count by source if available
+    try:
+        from db.crud import count_by_source
+        by_source = await count_by_source(db)
+    except Exception:
+        by_source = {}
+ 
     index_size = 0
-
     if settings.enable_semantic_search:
         try:
             from relevance.embedder import get_index
-
             index_size = get_index().ntotal
-
         except Exception:
             pass
-
+ 
     return {
         "total_events_in_db": total,
-        "faiss_vectors": index_size,
-        "groq_enabled": bool(settings.groq_api_key),
-
-        # Added from code 2
-        "resend_enabled": bool(settings.resend_api_key),
-
+        "events_by_source":   by_source,
+        "faiss_vectors":      index_size,
+        "groq_enabled":       bool(settings.groq_api_key),
+        "serpapi_enabled":    bool(settings.serpapi_key),
+        "resend_enabled":     bool(settings.resend_api_key),
         "apis_configured": {
             "ticketmaster": bool(settings.ticketmaster_key),
-            "eventbrite": bool(settings.eventbrite_token),
-            "meetup": True,
-            "luma": bool(settings.luma_api_key),
+            "eventbrite":   bool(settings.eventbrite_token),
+            "meetup":       True,
+            "luma":         bool(settings.luma_api_key),
         },
     }
+ 
 
 
 # ─────────────────────────────────────────────────────────────
@@ -746,37 +642,24 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 @router.post("/refresh")
 async def refresh_events(background_tasks: BackgroundTasks):
-    """
-    Trigger a full event refresh in the background.
-
-    Returns immediately; check /api/stats for updated count.
-
-    Also used by GitHub Actions / cron-job.org
-    to keep service alive.
-    """
+    """Trigger a full event refresh in the background."""
     background_tasks.add_task(_do_refresh)
-
-    return {
-        "message": "Refresh started. Poll /api/stats for progress."
-    }
-
-
+    return {"message": "Refresh started. Poll /api/stats for progress."}
+ 
+ 
 async def _do_refresh():
-    logger.info("Manual refresh triggered.")
-
+    logger.info("Manual /api/refresh triggered.")
     try:
         stats = await run_ingestion()
-
         logger.info(
             f"Manual refresh done — "
             f"fetched={stats['total_fetched']} "
             f"inserted={stats['total_inserted']} "
             f"total_in_db={stats['total_in_db']}"
         )
-
     except Exception as e:
         logger.error(f"Manual refresh error: {e}")
-
+ 
 
 # ─────────────────────────────────────────────────────────────
 # Seed 10Times Protection
