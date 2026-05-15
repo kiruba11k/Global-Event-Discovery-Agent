@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import CompanyForm    from './components/CompanyForm'
-import ICPForm        from './components/ICPForm'
-import EventTable     from './components/EventTable'
+import CompanyForm      from './components/CompanyForm'
+import ICPForm          from './components/ICPForm'
+import EventTable       from './components/EventTable'
 import EmailReportModal from './components/EmailReportModal'
-import { api }        from './api/client'
+import { api }          from './api/client'
 import {
   Zap, Globe, Brain, TrendingUp, ChevronRight,
-  Sparkles, Mail, X, ArrowRight,
+  Sparkles, Mail, X, ArrowRight, AlertCircle,
 } from 'lucide-react'
 import './App.css'
 
-/* ─────────────────────────────────────────────────────────
-   Animated stat counter
-   ───────────────────────────────────────────────────────── */
+/* ── Animated stat counter ───────────────────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
   const [display, setDisplay] = useState(0)
   useEffect(() => {
@@ -94,138 +92,52 @@ function SectionLabel({ step, label, sublabel }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────
-   EMAIL GATE
-   Shows before results if no email was captured via CompanyForm.
-   Minimal, focused — one field, one action.
-   ───────────────────────────────────────────────────────── */
+/* ── Email gate ──────────────────────────────────────────────────── */
 function EmailGate({ onCapture, onDismiss }) {
-  const [email,  setEmail]  = useState('')
-  const [error,  setError]  = useState('')
+  const [email,   setEmail]   = useState('')
+  const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = () => {
-    if (!email.trim())          { setError('Please enter your work email.'); return }
-    if (!email.includes('@'))   { setError('Please enter a valid email address.'); return }
+    if (!email.trim())        { setError('Please enter your work email.'); return }
+    if (!email.includes('@')) { setError('Please enter a valid email address.'); return }
     setLoading(true)
-    // Small delay for UX — feels like something is happening
     setTimeout(() => { onCapture(email.trim()); setLoading(false) }, 400)
   }
 
   return (
     <>
-      {/* Backdrop */}
-      <div style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(15,23,42,0.7)',
-        backdropFilter: 'blur(6px)',
-        zIndex: 900,
-        animation: 'modalBgIn 0.2s ease both',
-      }} />
-
-      {/* Gate card */}
-      <div style={{
-        position: 'fixed', top: '50%', left: '50%',
-        transform: 'translate(-50%,-50%)',
-        zIndex: 901, width: '100%', maxWidth: 420, padding: '0 16px',
-        animation: 'modalIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
-      }}>
-        <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          boxShadow: '0 32px 80px rgba(15,23,42,0.3)',
-          overflow: 'hidden',
-        }}>
-          {/* Header gradient */}
-          <div style={{
-            background: 'linear-gradient(135deg,#0369a1,#06b6d4 50%,#3b82f6)',
-            padding: '24px 24px 20px',
-            color: '#fff',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(6px)', zIndex: 900 }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 901, width: '100%', maxWidth: 420, padding: '0 16px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 32px 80px rgba(15,23,42,0.3)', overflow: 'hidden' }}>
+          <div style={{ background: 'linear-gradient(135deg,#0369a1,#06b6d4 50%,#3b82f6)', padding: '22px 24px', color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Mail size={18} />
               </div>
               <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800 }}>
-                  Your report is ready
-                </div>
-                <div style={{ fontSize: 11, opacity: 0.8 }}>
-                  Enter your work email to view &amp; receive results
-                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800 }}>Your report is ready</div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>Enter your work email to view &amp; receive results</div>
               </div>
             </div>
           </div>
-
-          {/* Body */}
           <div style={{ padding: '20px 24px 24px' }}>
             <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.65, marginBottom: 16 }}>
-              We'll display your personalised event matches on screen and email you
-              a full PDF report with AI analysis and meeting package pricing.
+              We'll display your personalised event matches on screen and email you a full PDF report with AI analysis and meeting package pricing.
             </p>
-
-            {/* Email input */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              background: 'var(--bg-input)',
-              border: `1.5px solid ${error ? 'var(--skip)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-sm)',
-              padding: '11px 14px', marginBottom: 8,
-              transition: 'border-color 0.2s',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-input)', border: `1.5px solid ${error ? 'var(--skip)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', padding: '11px 14px', marginBottom: 8 }}>
               <Mail size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
-              <input
-                type="email"
-                autoFocus
-                value={email}
+              <input type="email" autoFocus value={email}
                 onChange={e => { setEmail(e.target.value); setError('') }}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 placeholder="your@company.com"
-                style={{
-                  flex: 1, background: 'none', border: 'none', outline: 'none',
-                  fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text)',
-                }}
-              />
+                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text)' }} />
             </div>
-
-            {error && (
-              <div style={{ fontSize: 11, color: 'var(--skip)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <X size={10} /> {error}
-              </div>
-            )}
-
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 16, lineHeight: 1.55 }}>
-              🔒 No spam. Your email is used only to send the event report.
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', gap: 8,
-                background: loading
-                  ? 'var(--border)'
-                  : 'linear-gradient(135deg,var(--accent),var(--accent-2))',
-                color: loading ? 'var(--text-dim)' : '#fff',
-                border: 'none', borderRadius: 'var(--radius-sm)',
-                padding: '13px 24px',
-                fontFamily: 'var(--font-display)',
-                fontSize: 14, fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-                boxShadow: loading ? 'none' : '0 4px 16px rgba(6,182,212,0.3)',
-              }}
-            >
-              {loading
-                ? 'Loading your results…'
-                : <><ArrowRight size={15} /> View My Results</>
-              }
+            {error && <div style={{ fontSize: 11, color: 'var(--skip)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}><X size={10} /> {error}</div>}
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 16, lineHeight: 1.55 }}>🔒 No spam. Your email is used only to send the event report.</div>
+            <button onClick={handleSubmit} disabled={loading}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: loading ? 'var(--border)' : 'linear-gradient(135deg,var(--accent),var(--accent-2))', color: loading ? 'var(--text-dim)' : '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '13px 24px', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 4px 16px rgba(6,182,212,0.3)' }}>
+              {loading ? 'Loading your results…' : <><ArrowRight size={15} /> View My Results</>}
             </button>
           </div>
         </div>
@@ -234,13 +146,11 @@ function EmailGate({ onCapture, onDismiss }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────
-   APP ROOT
-   ───────────────────────────────────────────────────────── */
+/* ── App root ────────────────────────────────────────────────────── */
 export default function App() {
   const [loading,          setLoading]          = useState(false)
   const [results,          setResults]          = useState([])
-  const [pendingResults,   setPendingResults]   = useState(null)   // held until email captured
+  const [pendingResults,   setPendingResults]   = useState(null)
   const [hasSearched,      setHasSearched]      = useState(false)
   const [profileId,        setProfileId]        = useState('')
   const [companyData,      setCompanyData]      = useState(null)
@@ -249,12 +159,12 @@ export default function App() {
   const [dealSizeCategory, setDealSizeCategory] = useState('medium')
   const [lastProfile,      setLastProfile]      = useState(null)
   const [emailModalOpen,   setEmailModalOpen]   = useState(false)
-  const [userEmail,        setUserEmail]        = useState('')     // captured email
-  const [showEmailGate,    setShowEmailGate]    = useState(false)  // gate before results
+  const [userEmail,        setUserEmail]        = useState('')
+  const [showEmailGate,    setShowEmailGate]    = useState(false)
+  const [reportSent,       setReportSent]       = useState(false)
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
-  /* ── Capture email from CompanyForm ── */
   const onCompanySave = async (data, deckFile) => {
     try {
       const formData = new FormData()
@@ -270,17 +180,16 @@ export default function App() {
     }
   }
 
-  /* ── Search handler ── */
   const onSearch = async (profile) => {
     if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
     setLastProfile(profile)
     setLoading(true)
+    setReportSent(false)
     try {
       const payload = { profile }
       if (companyProfileId) payload.company_profile_id = companyProfileId
       const res    = await api.search(payload)
       const events = res.events || []
-
       setHasSearched(true)
       setProfileId(res.profile_id || '')
 
@@ -292,18 +201,12 @@ export default function App() {
       }
 
       if (!userEmail) {
-        // Gate: hold results until email is captured
         setPendingResults(events)
         setShowEmailGate(true)
       } else {
-        // Email already known — show results immediately
         setResults(events)
         const goCount = displayEvents.filter(e => e.fit_verdict === 'GO').length
-        toast.success(
-          `Found ${displayEvents.length} events — ${goCount} strong matches`,
-          { duration: 4000 },
-        )
-        // Auto-send report in background
+        toast.success(`Found ${displayEvents.length} events — ${goCount} strong matches`, { duration: 4000 })
         _autoSendReport(events, profile, userEmail, res.profile_id)
         setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
       }
@@ -314,25 +217,35 @@ export default function App() {
     }
   }
 
-  /* ── Email gate resolved ── */
   const onEmailCaptured = (email) => {
     setUserEmail(email)
     setShowEmailGate(false)
     const events = pendingResults || []
     setResults(events)
     setPendingResults(null)
-
     const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
     const goCount       = displayEvents.filter(e => e.fit_verdict === 'GO').length
     toast.success(`Found ${displayEvents.length} events — ${goCount} strong matches`, { duration: 4000 })
-
     _autoSendReport(events, lastProfile, email, profileId)
     setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
   }
 
-  /* ── Background email send ── */
+  /**
+   * FIXED: Now shows clear error messages instead of silently failing.
+   * Checks stats.resend_enabled before attempting send.
+   */
   const _autoSendReport = async (events, profile, email, _profileId) => {
     if (!email || !events?.length) return
+
+    // Check if email service is configured (from /api/stats)
+    if (stats && stats.resend_enabled === false) {
+      toast.error(
+        'Email service not configured on server. Use "Resend PDF Report" button to try manually.',
+        { duration: 6000, icon: '⚠️' }
+      )
+      return
+    }
+
     try {
       const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
       await api.emailReport({
@@ -363,9 +276,21 @@ export default function App() {
         },
         deal_size_category: dealSizeCategory || 'medium',
       })
-      toast.success(`Report emailed to ${email}`, { icon: '📧', duration: 5000 })
-    } catch {
-      // Silent — user can still manually send via the email modal button
+      setReportSent(true)
+      toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
+    } catch (err) {
+      // FIXED: show clear error instead of silent failure
+      const msg = err.message || 'Unknown error'
+      if (msg.includes('RESEND_API_KEY') || msg.includes('Email service not configured') || msg.includes('503')) {
+        toast.error(
+          'Email not sent: RESEND_API_KEY is not set on the server. Add it in Render → Environment Variables.',
+          { duration: 8000, icon: '🔑' }
+        )
+      } else if (msg.includes('Invalid email')) {
+        toast.error(`Invalid email address: ${email}`)
+      } else {
+        toast.error(`Failed to send email report: ${msg}`, { duration: 6000 })
+      }
     }
   }
 
@@ -387,7 +312,7 @@ export default function App() {
       <Toaster
         position="top-right"
         toastOptions={{
-          style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
+          style:   { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
           success: { iconTheme: { primary: '#06b6d4', secondary: '#1e293b' } },
           error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
@@ -407,30 +332,25 @@ export default function App() {
             <span className="status-apis">
               {Object.entries(stats.apis_configured || {}).filter(([, v]) => v).map(([k]) => k).join(' · ')}
             </span>
+            {/* FIXED: Show email service warning if not configured */}
+            {stats.resend_enabled === false && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#f59e0b', background: '#fffbeb', border: '1px solid rgba(245,158,11,0.4)', padding: '2px 8px', borderRadius: 100 }}>
+                <AlertCircle size={9} /> Email not configured
+              </span>
+            )}
           </div>
         )}
 
-        {/* Step 1 — Company + Email */}
         <section className="form-section">
-          <SectionLabel
-            step="01"
-            label="Your Company"
-            sublabel="Add your company context + work email to receive your PDF report"
-          />
+          <SectionLabel step="01" label="Your Company" sublabel="Add your company context + work email to receive your PDF report" />
           <CompanyForm onSave={onCompanySave} saved={!!companyProfileId} />
         </section>
 
-        {/* Step 2 — ICP */}
         <section className="form-section">
-          <SectionLabel
-            step="02"
-            label="Your ICP"
-            sublabel="Define who you sell to · include deal size for USD meeting package pricing"
-          />
+          <SectionLabel step="02" label="Your ICP" sublabel="Define who you sell to · include deal size for USD meeting package pricing" />
           <ICPForm onSubmit={onSearch} loading={loading} companyData={companyData} />
         </section>
 
-        {/* No results */}
         {hasSearched && displayResults.length === 0 && !showEmailGate && (
           <section id="results" className="results-section">
             <div className="results-header">
@@ -442,7 +362,6 @@ export default function App() {
           </section>
         )}
 
-        {/* Results */}
         {displayResults.length > 0 && (
           <section id="results" className="results-section">
             <div className="results-header">
@@ -452,7 +371,7 @@ export default function App() {
                 </h2>
                 <p className="results-sub">
                   Sorted by AI relevance · Expand any row for package details &amp; meeting pricing
-                  {userEmail && (
+                  {reportSent && userEmail && (
                     <span style={{ marginLeft: 8, color: 'var(--go)', fontWeight: 600 }}>
                       · Report sent to {userEmail}
                     </span>
@@ -468,32 +387,14 @@ export default function App() {
                     </div>
                   )
                 })}
-                {/* Resend report button */}
-                <button
-                  onClick={() => setEmailModalOpen(true)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7,
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)',
-                    padding: '8px 16px', fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: 'var(--font-display)',
-                    boxShadow: '0 3px 12px rgba(99,102,241,0.35)',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = 'none'}
-                >
+                <button onClick={() => setEmailModalOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-display)', boxShadow: '0 3px 12px rgba(99,102,241,0.35)' }}>
                   <Mail size={13} />
-                  {userEmail ? 'Resend PDF Report' : 'Email PDF Report'}
+                  {reportSent ? 'Resend PDF Report' : 'Email PDF Report'}
                 </button>
               </div>
             </div>
 
-            <EventTable
-              events={displayResults}
-              profileId={profileId}
-              dealSizeCategory={dealSizeCategory}
-            />
+            <EventTable events={displayResults} profileId={profileId} dealSizeCategory={dealSizeCategory} />
           </section>
         )}
       </main>
@@ -507,7 +408,6 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Email gate — shown before results when no email captured */}
       {showEmailGate && (
         <EmailGate
           onCapture={onEmailCaptured}
@@ -519,7 +419,6 @@ export default function App() {
         />
       )}
 
-      {/* Email PDF Modal — for manual resend */}
       <EmailReportModal
         isOpen={emailModalOpen}
         onClose={() => setEmailModalOpen(false)}
