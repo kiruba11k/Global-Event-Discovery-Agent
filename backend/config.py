@@ -25,16 +25,34 @@ class Settings(BaseSettings):
     enable_semantic_search: bool = False
     preload_index_on_startup: bool = False
 
-    # ── Event APIs ───────────────────────────────
-    ticketmaster_key: str = ""
-    eventbrite_token: str = ""
-    meetup_key: str = ""
-    allevents_key: str = ""
-    luma_api_key: str = ""
-    serpapi_key: str = ""
-    seed_admin_token: str = ""
+    # ── Real-time Event APIs ──────────────────────
+    # All free tiers — see signup URLs in .env.example
 
-    # ── Scraping ─────────────────────────────────
+    # SerpAPI — PRIMARY real-time source
+    # engine=google_events gives live Google Events data
+    # Free: 100 searches/month  |  https://serpapi.com
+    serpapi_key: str = ""
+
+    # Ticketmaster Discovery API
+    # Free: 5,000 calls/day     |  https://developer.ticketmaster.com
+    ticketmaster_key: str = ""
+
+    # Eventbrite API
+    # Free with account         |  https://www.eventbrite.com/platform/api
+    eventbrite_token: str = ""
+
+    # PredictHQ Event Intelligence
+    # Free: 1,000 events/month  |  https://www.predicthq.com/signup
+    predicthq_key: str = ""
+
+    # Luma (lu.ma) API
+    # Free with account         |  https://lu.ma/developers
+    luma_api_key: str = ""
+
+    # AllEvents.in API (optional)
+    allevents_key: str = ""
+
+    # ── Scraper tuning ────────────────────────────
     scrape_delay_seconds: float = 2.0
     scrape_timeout_seconds: int = 15
 
@@ -49,13 +67,11 @@ class Settings(BaseSettings):
     refresh_interval_hours: int = 24
 
     # ── Email / Resend ────────────────────────────
-    # Get your free API key at: https://resend.com
-    # Free tier: 3,000 emails/month, 100/day — more than enough
     resend_api_key: str = ""
-    # Must be a verified domain in your Resend account.
-    # On free tier you can send from: onboarding@resend.dev (for testing)
-    # For production: reports@yourdomain.com
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"
+
+    # ── Seed protection ───────────────────────────
+    seed_admin_token: str = ""
 
     class Config:
         env_file = ".env"
