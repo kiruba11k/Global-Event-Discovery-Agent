@@ -17,6 +17,7 @@ import re
 import uuid
 from datetime import date, datetime
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from loguru import logger
 
@@ -37,6 +38,96 @@ _MONTHS = {
     "oct": "10", "october": "10", "nov": "11", "november": "11",
     "dec": "12", "december": "12",
 }
+
+_COUNTRY_TO_GL = {
+    "australia": "au",
+    "brazil": "br",
+    "canada": "ca",
+    "france": "fr",
+    "germany": "de",
+    "india": "in",
+    "indonesia": "id",
+    "japan": "jp",
+    "malaysia": "my",
+    "netherlands": "nl",
+    "nigeria": "ng",
+    "philippines": "ph",
+    "saudi arabia": "sa",
+    "singapore": "sg",
+    "south africa": "za",
+    "south korea": "kr",
+    "thailand": "th",
+    "uae": "ae",
+    "uk": "uk",
+    "united kingdom": "uk",
+    "usa": "us",
+    "united states": "us",
+    "vietnam": "vn",
+}
+
+
+def _location_token(location: str) -> str:
+    """Return a human search-location token for the google_events query."""
+    return " ".join((location or "").replace(",", " ").split())
+
+
+def _query_includes_location(query: str, location: str) -> bool:
+    loc = _location_token(location).lower()
+    if not loc:
+        return True
+    normalized_q = " ".join((query or "").replace(",", " ").split()).lower()
+    return loc in normalized_q
+
+
+def _country_gl(location: str) -> str:
+    loc = _location_token(location).lower()
+    for country, gl in sorted(_COUNTRY_TO_GL.items(), key=lambda item: len(item[0]), reverse=True):
+        if country in loc.split() or country in loc:
+            return gl
+    return "us"
+
+
+def _build_google_events_params(qobj: SerpAPIQuery) -> dict[str, str]:
+    """Build SerpAPI google_events params using the API's event-location format.
+
+    SerpAPI's Google Events API expects the event city/region to be part of `q`
+    (for example, "Events in Austin, TX").  Its `location` parameter is only
+    the Google-search origin and must match SerpAPI's canonical locations; our
+    short labels such as "New York USA" can produce HTTP 400.  Therefore we
+    put the event location in `q` and intentionally omit `location`.
+    """
+    query = (qobj.q or "").strip()
+    location = _location_token(qobj.location)
+    if location and not _query_includes_location(query, location):
+        query = f"{query} in {location}" if query else f"Events in {location}"
+
+    params = {
+        "engine": "google_events",
+        "q": query,
+        "hl": "en",
+        "gl": _country_gl(location),
+    }
+    return params
+
+
+def _redact_api_key_from_error(exc: Exception) -> str:
+    """Prevent SerpAPI keys from being printed in exception URLs."""
+    msg = str(exc)
+    match = re.search(r"https?://\S+", msg)
+    if not match:
+        return msg
+
+    url = match.group(0)
+    try:
+        split = urlsplit(url)
+        query = urlencode(
+            (key, "***" if key.lower() == "api_key" else value)
+            for key, value in parse_qsl(split.query, keep_blank_values=True)
+        )
+        redacted = urlunsplit((split.scheme, split.netloc, split.path, query, split.fragment))
+        return msg.replace(url, redacted)
+    except Exception:
+        return re.sub(r"([?&]api_key=)[^&\s]+", r"\1***", msg)
 
 
 def _parse_when(when: str) -> tuple[str, str]:
@@ -204,20 +295,17 @@ async def run_serpapi_queries(
     ok = 0; fail = 0
 
     for qobj in queries:
-        params = {
-            "engine":   "google_events",
-            "q":        qobj.q,
-            "location": qobj.location,
-            "hl":       "en",
-            "gl":       "us",
-        }
+        params = _build_google_events_params(qobj)
         try:
             client   = _serpapi.Client(api_key=serpapi_key)
             raw      = await asyncio.to_thread(client.search, params)
             ev_list  = raw.get("events_results", []) or []
             ok      += 1
         except Exception as exc:
-            logger.debug(f"SerpAPI google_events '{qobj.q}' @ '{qobj.location}': {exc}")
+            logger.debug(
+                f"SerpAPI google_events '{qobj.q}' @ '{qobj.location}' "
+                f"with params={params}: {_redact_api_key_from_error(exc)}"
+            )
             fail += 1
             await asyncio.sleep(0.3)
             continue
