@@ -229,7 +229,7 @@ async def search_events(
     realtime_events = []
     try:
         from ingestion.realtime_pipeline import fetch_realtime_candidates
-        realtime_events = await fetch_realtime_candidates(profile, settings, db)
+        realtime_events = await fetch_realtime_candidates(db, profile)
         logger.info(f"Real-time pipeline: {len(realtime_events)} candidates")
     except Exception as e:
         logger.warning(f"Real-time pipeline error (non-fatal): {e}")
@@ -335,11 +335,11 @@ async def search_events(
     enrichments: dict = {}
     if settings.serpapi_key:
         try:
-            from enrichment.serpapi_enricher import batch_enrich
-            enrichments = await batch_enrich(
+            from enrichment.serp_enricher import enrich_events_batch
+            enrichments = await enrich_events_batch(
                 events=top_events,
                 serpapi_key=settings.serpapi_key,
-                max_enrichments=5,
+                max_enrich=5,
             )
             if enrichments:
                 logger.info(
