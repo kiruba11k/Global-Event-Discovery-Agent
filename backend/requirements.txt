@@ -50,3 +50,4 @@ pandas
 rapidfuzz
 tenacity
 loguru
+serpapi
