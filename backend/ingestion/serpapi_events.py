@@ -1,338 +1,485 @@
 """
-ingestion/serpapi_events.py
+ingestion/serpapi_events.py  —  Real-time event discovery via SerpAPI google_events
 
-Real-time event discovery using SerpAPI google_events engine.
+This is the PRIMARY real-time source.  It calls the SerpAPI `google_events`
+engine which mirrors what you see when you Google "technology conference Jakarta".
+Returns fully-structured event data including dates, venue, description, and link.
 
-google_events searches Google's live event index — the same results you'd
-see when googling "Tech conference Singapore 2026". Updated in real-time.
-Returns events from Eventbrite, Meetup, LinkedIn Events, official sites, etc.
+Engine: google_events (included in all SerpAPI plans, uses 1 credit per call)
+Key: SERPAPI_KEY (already in env)
+Docs: https://serpapi.com/google-events-api
 
-Strategy:
-  Build targeted queries from ICP (industry × geography × event type).
-  Fire up to 12 queries per search request.
-  Each query returns up to 10 events.
-  Total: up to 120 fresh real-time events per search.
+Typical result per event:
+  {
+    "title": "Indonesia Tech Week 2026",
+    "date": {"start_date": "Oct 14", "when": "Oct 14 – 16, 2026"},
+    "address": ["Jakarta Convention Centre", "Jakarta, Indonesia"],
+    "link": "https://...",
+    "description": "...",
+    "ticket_info": [{"source": "Official Site", "link": "..."}],
+  }
 """
+from __future__ import annotations
+
 import asyncio
 import hashlib
-import uuid
 import re
+import uuid
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 
-from models.event import EventCreate
 from loguru import logger
 
+try:
+    import serpapi as _serpapi
+    _SERPAPI_OK = True
+except ImportError:
+    _SERPAPI_OK = False
+    logger.warning("serpapi not installed — run: pip install serpapi")
 
-# ── Geography → Google country code mapping ────────────────
-GEO_TO_GL: dict = {
-    "singapore":      "sg",
-    "india":          "in",
-    "usa":            "us",
-    "united states":  "us",
-    "uk":             "gb",
-    "united kingdom": "gb",
-    "australia":      "au",
-    "germany":        "de",
-    "uae":            "ae",
-    "dubai":          "ae",
-    "malaysia":       "my",
-    "japan":          "jp",
-    "canada":         "ca",
-    "france":         "fr",
-    "netherlands":    "nl",
-    "spain":          "es",
-    "brazil":         "br",
-    "south korea":    "kr",
-    "korea":          "kr",
-    "china":          "cn",
-    "indonesia":      "id",
-    "thailand":       "th",
-    "vietnam":        "vn",
-    "hong kong":      "hk",
-    "south africa":   "za",
-}
+from models.event import EventCreate
 
-MONTHS_SHORT: dict = {
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-    "may": "05", "jun": "06", "jul": "07", "aug": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+# ── Month parsing ──────────────────────────────────────────────────
+_MONTHS = {
+    "jan": "01", "january": "01", "feb": "02", "february": "02",
+    "mar": "03", "march": "03", "apr": "04", "april": "04",
+    "may": "05", "jun": "06", "june": "06", "jul": "07", "july": "07",
+    "aug": "08", "august": "08", "sep": "09", "sept": "09", "september": "09",
+    "oct": "10", "october": "10", "nov": "11", "november": "11",
+    "dec": "12", "december": "12",
 }
 
 
-def _parse_google_date(text: str) -> Optional[str]:
+def _parse_google_events_date(date_info: dict) -> tuple[str, str]:
     """
-    Parse Google Events date strings into YYYY-MM-DD.
-    Handles: "Oct 14", "Oct 14, 2026", "Wed, Oct 14", "2026-10-14"
+    Parse Google Events date dict → (start_date, end_date) as ISO strings.
+    Handles: "Oct 14 – 16, 2026", "Oct 14, 2026", "Oct 14 – Nov 2, 2026"
     """
-    if not text:
-        return None
-    t = text.strip()
+    when = date_info.get("when", "") or date_info.get("start_date", "") or ""
+    when = str(when).strip()
+    if not when:
+        return "", ""
 
-    # ISO already
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", t)
-    if m:
-        return m.group(1)
+    # Try to extract year
+    year_match = re.search(r"\b(202\d|203\d)\b", when)
+    year = year_match.group(1) if year_match else str(date.today().year + 1)
 
-    # "Month DD, YYYY"
-    m = re.search(
-        r"(\w{3,9})\s+(\d{1,2}),?\s+(\d{4})", t, re.IGNORECASE
+    # "Oct 14 – 16, 2026" → start Oct 14, end Oct 16
+    m1 = re.match(
+        r"(\w+)\s+(\d{1,2})\s*[–\-]\s*(\d{1,2}),?\s*(202\d|203\d)?", when, re.I
     )
-    if m:
-        mon = MONTHS_SHORT.get(m.group(1)[:3].lower(), "01")
-        return f"{m.group(3)}-{mon}-{m.group(2).zfill(2)}"
+    if m1:
+        mon  = _MONTHS.get(m1.group(1).lower()[:3], "01")
+        sd   = m1.group(2).zfill(2)
+        ed   = m1.group(3).zfill(2)
+        yr   = m1.group(4) or year
+        return f"{yr}-{mon}-{sd}", f"{yr}-{mon}-{ed}"
 
-    # "Month DD" (no year — assume current or next year)
-    m = re.search(r"(\w{3,9})\s+(\d{1,2})", t, re.IGNORECASE)
-    if m:
-        mon = MONTHS_SHORT.get(m.group(1)[:3].lower())
-        if mon:
-            day  = m.group(2).zfill(2)
-            year = date.today().year
-            candidate = f"{year}-{mon}-{day}"
-            if candidate < date.today().isoformat():
-                candidate = f"{year + 1}-{mon}-{day}"
-            return candidate
+    # "Oct 14 – Nov 2, 2026" → different months
+    m2 = re.match(
+        r"(\w+)\s+(\d{1,2})\s*[–\-]\s*(\w+)\s+(\d{1,2}),?\s*(202\d|203\d)?", when, re.I
+    )
+    if m2:
+        smon = _MONTHS.get(m2.group(1).lower()[:3], "01")
+        sd   = m2.group(2).zfill(2)
+        emon = _MONTHS.get(m2.group(3).lower()[:3], smon)
+        ed   = m2.group(4).zfill(2)
+        yr   = m2.group(5) or year
+        return f"{yr}-{smon}-{sd}", f"{yr}-{emon}-{ed}"
 
-    return None
+    # "Oct 14, 2026" single day
+    m3 = re.match(r"(\w+)\s+(\d{1,2}),?\s*(202\d|203\d)?", when, re.I)
+    if m3:
+        mon = _MONTHS.get(m3.group(1).lower()[:3], "01")
+        sd  = m3.group(2).zfill(2)
+        yr  = m3.group(3) or year
+        return f"{yr}-{mon}-{sd}", f"{yr}-{mon}-{sd}"
+
+    return "", ""
 
 
-def _clean_industry(industry: str) -> str:
-    """'AI / Machine Learning' → 'AI Machine Learning'"""
-    return re.sub(r"[/|]", " ", industry).strip()
+def _dedup_hash(name: str, start_date: str, city: str) -> str:
+    raw = f"{name.lower().strip()}|{start_date}|{city.lower().strip()}"
+    return hashlib.sha1(raw.encode()).hexdigest()
 
 
-def _build_queries(profile) -> list:
+def _extract_city_country(address: list[str]) -> tuple[str, str]:
     """
-    Build targeted google_events search queries from ICP profile.
-    Returns list of {q, gl, location} dicts.
-    Max 12 queries to stay within SerpAPI free tier.
+    Google Events address is usually:
+      ["Venue Name", "City, Country"] or ["City, Country"] or ["Venue, City, Country"]
     """
-    queries    = []
-    industries = profile.target_industries[:3]
-    geos       = profile.target_geographies[:4]
-    evt_types  = profile.preferred_event_types[:2] or ["conference", "summit"]
-    year       = date.today().year
-
-    for geo in geos:
-        geo_lower = geo.lower()
-        is_global = geo_lower in ("global", "worldwide", "international", "any")
-        gl        = GEO_TO_GL.get(geo_lower, "us")
-
-        for industry in industries:
-            ind_clean = _clean_industry(industry)
-            evt_type  = evt_types[0] if evt_types else "conference"
-
-            if is_global:
-                q = f"{ind_clean} {evt_type} {year}"
-                queries.append({"q": q, "gl": "us", "location": ""})
-            else:
-                q = f"{ind_clean} {evt_type} {geo} {year}"
-                queries.append({"q": q, "gl": gl, "location": geo})
-
-    # Additional persona-based queries (catches niche C-suite events)
-    for persona in profile.target_personas[:2]:
-        persona_clean = persona.split("(")[0].strip()
-        if persona_clean:
-            q = f"{persona_clean} conference summit {year}"
-            queries.append({"q": q, "gl": "us", "location": ""})
-
-    # Deduplicate and cap
-    seen = set()
-    unique = []
-    for qd in queries:
-        if qd["q"] not in seen:
-            seen.add(qd["q"])
-            unique.append(qd)
-    return unique[:12]
+    if not address:
+        return "", ""
+    # Last element usually has city/country
+    last = address[-1] if address else ""
+    parts = [p.strip() for p in last.split(",") if p.strip()]
+    if len(parts) >= 2:
+        return parts[-2], parts[-1]
+    if len(parts) == 1:
+        return parts[0], ""
+    return "", ""
 
 
-def _parse_one_event(result: dict) -> Optional[EventCreate]:
-    """Parse a single google_events result into EventCreate."""
-    title = (result.get("title") or "").strip()
+def _best_link(event_data: dict) -> str:
+    """Extract the best official event link from google_events result."""
+    # ticket_info often has the official site link
+    for ti in (event_data.get("ticket_info") or []):
+        link = ti.get("link", "")
+        if link and "google.com" not in link.lower():
+            return link
+    # Fallback: main link
+    return event_data.get("link", "") or ""
+
+
+def _google_event_to_event_create(
+    event_data: dict,
+    query_industry: str = "",
+    query_geo: str = "",
+) -> Optional[EventCreate]:
+    """Convert a google_events result dict to EventCreate."""
+    title = (event_data.get("title") or "").strip()
     if not title or len(title) < 4:
         return None
 
-    # Date
-    date_info  = result.get("date", {})
-    start_raw  = date_info.get("start_date", "") or date_info.get("when", "")
-    start_date = _parse_google_date(start_raw)
-    if not start_date:
+    date_info = event_data.get("date") or {}
+    start_date, end_date = _parse_google_events_date(date_info)
+
+    # Skip past events
+    today = date.today().isoformat()
+    if start_date and start_date < today:
         return None
-    if start_date < date.today().isoformat():
-        return None   # skip past events
 
-    # End date (optional)
-    end_raw  = date_info.get("end_date", "")
-    end_date = _parse_google_date(end_raw) or start_date
+    # If no parseable date, skip — we need at least a year
+    if not start_date:
+        # Try extracting year from title or description
+        desc = event_data.get("description", "") or ""
+        yr_m = re.search(r"\b(202\d|203\d)\b", title + " " + desc)
+        if yr_m:
+            start_date = f"{yr_m.group(1)}-01-01"
+            end_date   = start_date
+        else:
+            return None
 
-    # Location
-    address    = result.get("address", [])
-    venue_info = result.get("venue", {})
-    venue_name = (venue_info.get("name") or "").strip()
-    city       = address[0].strip() if address else ""
-    country    = address[-1].strip() if len(address) > 1 else ""
+    address  = event_data.get("address") or []
+    venue_name = address[0].strip() if address else ""
+    city, country = _extract_city_country(address)
 
-    # Link
-    link = result.get("link", "") or ""
+    # If city not found from address, try query geo
+    if not city and query_geo:
+        city = query_geo
 
-    # Ticket info
-    ticket_info   = result.get("ticket_info", [])
-    price_desc    = "See website"
-    registration  = link
-    if ticket_info:
-        first = ticket_info[0]
-        src   = (first.get("source") or "").lower()
-        tlink = first.get("link") or link
-        if tlink:
-            registration = tlink
-        if "free" in src or "free" in title.lower():
-            price_desc = "Free"
+    description = (event_data.get("description") or "").strip()[:800]
+    link = _best_link(event_data)
+    thumbnail = event_data.get("thumbnail", "") or ""
 
-    description = (result.get("description") or "").strip()[:1000]
+    # Infer industry tags from title + description
+    industry_tags = _infer_industry_tags(title + " " + description, query_industry)
 
-    # Industry from event type / description (rough tagger)
-    industry = _infer_industry(title + " " + description)
-
-    # Dedup hash
-    dh = hashlib.md5(
-        f"{title.lower().strip()}|{start_date}|{city.lower().strip()}".encode()
-    ).hexdigest()
+    event_id = str(uuid.uuid4())
+    dh = _dedup_hash(title, start_date, city)
 
     return EventCreate(
-        id=str(uuid.uuid4()),
-        source_platform="Google Events",
-        source_url=link,
-        dedup_hash=dh,
-        name=title,
-        description=description,
-        short_summary="",
-        edition_number="",
-        start_date=start_date,
-        end_date=end_date,
-        duration_days=1,
-        venue_name=venue_name,
-        address=", ".join(address),
-        city=city,
-        country=country,
-        is_virtual=False,
-        is_hybrid=False,
-        est_attendees=0,
-        category="conference",
-        industry_tags=industry,
-        related_industries=industry,
-        audience_personas="executives,professionals,business leaders",
-        ticket_price_usd=0.0,
-        price_description=price_desc,
-        registration_url=registration,
-        website=link,
-        sponsors="",
-        speakers_url="",
-        agenda_url="",
+        id              = event_id,
+        dedup_hash      = dh,
+        source_platform = "SerpAPI_GoogleEvents",
+        source_url      = link or f"https://www.google.com/search?q={title.replace(' ', '+')}",
+        name            = title,
+        description     = description or f"Event sourced from Google Events for query: {query_industry} {query_geo}",
+        short_summary   = description[:200] if description else "",
+        edition_number  = "",
+        start_date      = start_date,
+        end_date        = end_date or start_date,
+        duration_days   = max(1, (
+            (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days + 1
+            if end_date and end_date != start_date else 1
+        )),
+        venue_name      = venue_name,
+        event_venues    = venue_name,
+        address         = ", ".join(address),
+        city            = city,
+        country         = country,
+        event_cities    = f"{city}, {country}".strip(", "),
+        is_virtual      = any(v in title.lower() + description.lower() for v in ["virtual", "online", "webinar"]),
+        is_hybrid       = "hybrid" in title.lower() + description.lower(),
+        est_attendees   = 0,   # filled by SerpAPI enricher
+        category        = _infer_category(title + " " + description),
+        industry_tags   = industry_tags,
+        related_industries = industry_tags,
+        audience_personas = "",  # filled by enricher
+        ticket_price_usd = 0.0,
+        price_description = "",  # filled by enricher
+        registration_url = link,
+        website         = link,
+        sponsors        = "",
+        speakers_url    = "",
+        agenda_url      = "",
     )
 
 
-_INDUSTRY_KEYWORDS: dict = {
-    "tech,software,AI":          ["tech", "technology", "software", "digital", "ai", "artificial intelligence", "cloud", "saas", "devops", "data"],
-    "fintech,banking,finance":   ["fintech", "banking", "finance", "financial", "payments", "lending", "insurance", "blockchain", "crypto"],
-    "healthcare,medtech":        ["health", "medical", "healthcare", "medtech", "pharma", "biotech", "clinical", "hospital"],
-    "logistics,supply chain":    ["logistics", "supply chain", "freight", "shipping", "warehousing", "transport"],
-    "manufacturing,industrial":  ["manufacturing", "industrial", "factory", "automation", "robotics", "industry 4.0"],
-    "retail,ecommerce":          ["retail", "ecommerce", "e-commerce", "consumer", "omnichannel", "d2c"],
-    "energy,cleantech":          ["energy", "solar", "renewable", "cleantech", "sustainability", "climate", "esg"],
-    "marketing,advertising":     ["marketing", "advertising", "martech", "brand", "content", "seo", "media"],
-    "HR tech,talent":            ["hr", "human resources", "talent", "workforce", "people ops", "recruitment"],
-    "cybersecurity,infosec":     ["security", "cybersecurity", "infosec", "ciso", "threat"],
-    "real estate,construction":  ["real estate", "property", "construction", "architecture"],
-    "education,edtech":          ["education", "edtech", "learning", "academic", "university"],
-}
-
-
-def _infer_industry(text: str) -> str:
+def _infer_industry_tags(text: str, query_industry: str) -> str:
+    """Infer industry tags from event text + original search query."""
+    tags: list[str] = []
     t = text.lower()
-    for industry, keywords in _INDUSTRY_KEYWORDS.items():
-        if any(k in t for k in keywords):
-            return industry
-    return "conference,business"
+    if query_industry:
+        tags.append(query_industry)
+    kw_map = [
+        (["ai", "artificial intelligence", "machine learning", "deep learning"], "AI / Machine Learning"),
+        (["cloud", "saas", "paas", "devops", "kubernetes"], "Cloud Computing"),
+        (["cybersecurity", "security", "infosec", "cyber"], "Cybersecurity"),
+        (["fintech", "banking", "finance", "payment", "blockchain"], "Finance / Fintech"),
+        (["health", "medical", "pharma", "biotech", "medtech"], "Healthcare / Medtech"),
+        (["manufactur", "industrial", "factory", "automation", "robotics"], "Manufacturing"),
+        (["logistics", "supply chain", "freight", "warehouse"], "Logistics"),
+        (["retail", "ecommerce", "consumer"], "Retail / Ecommerce"),
+        (["marketing", "advertising", "martech"], "Marketing"),
+        (["hr", "talent", "workforce", "recruitment"], "HR Tech"),
+        (["startup", "venture", "entrepreneur", "founder"], "Startup / VC"),
+        (["tech", "technology", "digital", "software", "developer"], "Technology"),
+        (["energy", "renewable", "solar", "green", "climate"], "Energy / Cleantech"),
+        (["data", "analytics", "big data", "business intelligence"], "Data & Analytics"),
+    ]
+    for keywords, tag in kw_map:
+        if any(kw in t for kw in keywords):
+            if tag not in tags:
+                tags.append(tag)
+    return ", ".join(tags[:5]) if tags else "Business Events"
 
 
-# ── Main async search ──────────────────────────────────────
+def _infer_category(text: str) -> str:
+    t = text.lower()
+    if any(w in t for w in ["trade show", "expo", "exhibition", "tradeshow"]):
+        return "trade show"
+    if any(w in t for w in ["summit", "symposium"]):
+        return "summit"
+    if any(w in t for w in ["workshop", "bootcamp", "training"]):
+        return "workshop"
+    if any(w in t for w in ["hackathon"]):
+        return "hackathon"
+    if any(w in t for w in ["meetup", "networking", "mixer"]):
+        return "meetup"
+    return "conference"
+
+
+# ── Core search function ───────────────────────────────────────────
 
 async def search_google_events(
-    profile,
+    query:       str,
+    location:    str,
     serpapi_key: str,
-) -> List[EventCreate]:
+    *,
+    date_from:   str = "",
+    date_to:     str = "",
+    max_results: int = 20,
+) -> list[EventCreate]:
     """
-    Query SerpAPI google_events for real-time events matching the ICP.
-    Returns a list of EventCreate objects ready to store in DB.
+    Search Google Events via SerpAPI for a specific query + location.
+
+    Args:
+        query:       Search query, e.g. "technology conference"
+        location:    Location, e.g. "Jakarta, Indonesia"
+        serpapi_key: SerpAPI API key
+        date_from:   ISO date string, optional filter
+        date_to:     ISO date string, optional filter
+        max_results: Max events to return per query
     """
-    if not serpapi_key:
-        logger.warning("SerpAPI key not set — skipping google_events search.")
+    if not serpapi_key or not _SERPAPI_OK:
         return []
 
-    queries = _build_queries(profile)
-    logger.info(
-        f"Google Events: firing {len(queries)} queries for "
-        f"{profile.company_name}"
-    )
-
-    events: List[EventCreate] = []
-    seen:   set               = set()
-
-    for qd in queries:
-        try:
-            result = await asyncio.to_thread(_call_google_events, qd, serpapi_key, profile)
-            for ev in result:
-                if ev.dedup_hash not in seen:
-                    seen.add(ev.dedup_hash)
-                    events.append(ev)
-            # Small delay to be polite to SerpAPI
-            await asyncio.sleep(0.4)
-        except Exception as e:
-            logger.debug(f"Google Events [{qd['q'][:40]}]: {e}")
-
-    logger.info(
-        f"Google Events: {len(events)} unique real-time events from "
-        f"{len(queries)} queries."
-    )
-    return events
-
-
-def _call_google_events(qd: dict, serpapi_key: str, profile) -> List[EventCreate]:
-    """Synchronous SerpAPI call — runs in a thread pool."""
-    import serpapi as _serpapi
-
+    # Build params
     params: dict = {
         "engine": "google_events",
-        "q":      qd["q"],
+        "q":      f"{query} {location}".strip(),
         "hl":     "en",
-        "gl":     qd.get("gl", "us"),
+        "gl":     "us",
     }
-    if qd.get("location"):
-        params["location"] = qd["location"]
 
-    # Date filter: start from ICP date_from or today
-    start_from = getattr(profile, "date_from", None) or date.today().isoformat()
-    # SerpAPI google_events supports htichips for date filtering
-    # but results must be post-filtered since htichips is coarse
-    params["htichips"] = "event_type:Event"
+    # Google Events supports "date:today", "date:week", "date:month", "date:next_week"
+    # For broader ranges we use the 'htichips' parameter
+    if date_from:
+        # Parse year from date_from to add to query for better filtering
+        yr = date_from[:4]
+        if yr not in params["q"]:
+            params["q"] += f" {yr}"
 
-    client      = _serpapi.Client(api_key=serpapi_key)
-    raw_results = client.search(params)
-    events_data = raw_results.get("events_results", [])
+    try:
+        client = _serpapi.Client(api_key=serpapi_key)
+        raw = await asyncio.to_thread(client.search, params)
+    except Exception as exc:
+        logger.debug(f"SerpAPI google_events error for '{query} {location}': {exc}")
+        return []
 
-    parsed = []
-    for item in events_data:
-        ev = _parse_one_event(item)
-        if ev:
-            # Post-filter by date range
-            if profile.date_from and ev.start_date < profile.date_from:
+    events_raw = raw.get("events_results", []) or []
+    if not events_raw:
+        logger.debug(f"SerpAPI google_events: 0 results for '{query} {location}'")
+        return []
+
+    today = date.today().isoformat()
+    results: list[EventCreate] = []
+    seen: set[str] = set()
+
+    for ev in events_raw[:max_results]:
+        try:
+            event_create = _google_event_to_event_create(
+                ev,
+                query_industry = query,
+                query_geo      = location,
+            )
+            if event_create is None:
                 continue
-            if profile.date_to and ev.start_date > profile.date_to:
+            # Date range filter
+            if date_from and event_create.start_date < date_from:
                 continue
-            parsed.append(ev)
+            if date_to and event_create.start_date > date_to:
+                continue
+            # Future events only
+            if event_create.start_date < today:
+                continue
+            # Dedup
+            if event_create.dedup_hash in seen:
+                continue
+            seen.add(event_create.dedup_hash)
+            results.append(event_create)
+        except Exception as exc:
+            logger.debug(f"SerpAPI google_events parse error: {exc}")
 
-    logger.debug(
-        f"Google Events [{qd['q'][:40]}]: {len(parsed)}/{len(events_data)} events."
+    logger.info(f"SerpAPI google_events: {len(results)} events for '{query} {location}'")
+    return results
+
+
+# ── Batch search from ICP profile ─────────────────────────────────
+
+async def search_events_for_profile(
+    serpapi_key:     str,
+    industries:      list[str],
+    geographies:     list[str],
+    event_types:     list[str],
+    date_from:       str = "",
+    date_to:         str = "",
+    company_desc:    str = "",
+    max_queries:     int = 8,
+    max_per_query:   int = 10,
+) -> list[EventCreate]:
+    """
+    Generate targeted queries from ICP inputs and call google_events for each.
+    Returns combined, deduplicated list of EventCreate objects.
+    """
+    if not serpapi_key or not _SERPAPI_OK:
+        return []
+
+    # Build industry search terms
+    _IND_TERMS: dict[str, list[str]] = {
+        "Technology":           ["technology conference", "tech summit", "digital innovation"],
+        "AI / Machine Learning": ["AI conference", "machine learning summit", "artificial intelligence"],
+        "Cloud Computing":      ["cloud computing conference", "cloud summit", "SaaS conference"],
+        "Cybersecurity":        ["cybersecurity conference", "infosec summit", "security expo"],
+        "Manufacturing":        ["manufacturing expo", "industrial trade show", "factory automation"],
+        "Logistics / Supply Chain": ["logistics conference", "supply chain summit", "transport expo"],
+        "Healthcare / Medtech": ["healthcare conference", "medtech summit", "health innovation"],
+        "Fintech":              ["fintech conference", "financial technology summit", "payments expo"],
+        "Retail / Ecommerce":   ["retail conference", "ecommerce summit", "retail technology"],
+        "Energy / Cleantech":   ["energy conference", "cleantech summit", "renewable energy expo"],
+        "Data & Analytics":     ["data analytics conference", "big data summit", "BI conference"],
+        "HR Tech":              ["HR technology conference", "talent summit", "workforce expo"],
+        "Marketing":            ["marketing conference", "martech summit", "digital marketing"],
+        "Startup / VC":         ["startup conference", "venture capital summit", "founder expo"],
+    }
+
+    # Geo normalisation
+    _GEO_TERMS: dict[str, list[str]] = {
+        "Global":     ["Asia", "Europe", "USA", "Singapore", "UAE"],
+        "Indonesia":  ["Jakarta Indonesia", "Surabaya Indonesia", "Indonesia"],
+        "Singapore":  ["Singapore"],
+        "India":      ["Bangalore India", "Mumbai India", "New Delhi India"],
+        "USA":        ["New York USA", "San Francisco USA", "Chicago USA"],
+        "UK":         ["London UK", "London United Kingdom"],
+        "UAE":        ["Dubai UAE", "Abu Dhabi UAE"],
+        "Germany":    ["Frankfurt Germany", "Berlin Germany", "Munich Germany"],
+        "Australia":  ["Sydney Australia", "Melbourne Australia"],
+        "Japan":      ["Tokyo Japan"],
+        "Malaysia":   ["Kuala Lumpur Malaysia"],
+        "South Korea":["Seoul South Korea"],
+        "Brazil":     ["Sao Paulo Brazil"],
+        "Canada":     ["Toronto Canada", "Vancouver Canada"],
+        "France":     ["Paris France"],
+    }
+
+    # Extract year for queries
+    year = date_from[:4] if date_from else str(date.today().year)
+
+    # Build query combinations
+    query_list: list[tuple[str, str]] = []  # (search_term, location)
+
+    ind_terms: list[str] = []
+    for ind in industries[:4]:
+        terms = _IND_TERMS.get(ind, [f"{ind.lower()} conference"])
+        ind_terms.extend(terms[:2])
+
+    # If company description has useful keywords, extract them
+    if company_desc:
+        desc_lower = company_desc.lower()
+        extra_terms = []
+        kws = [
+            ("supply chain", "supply chain conference"),
+            ("erp", "ERP technology conference"),
+            ("data pipeline", "data engineering summit"),
+            ("fintech", "fintech conference"),
+            ("saas", "SaaS conference"),
+            ("cybersecurity", "cybersecurity summit"),
+        ]
+        for kw, term in kws:
+            if kw in desc_lower:
+                extra_terms.append(term)
+        ind_terms = (extra_terms + ind_terms)[:6]
+
+    if not ind_terms:
+        ind_terms = ["technology conference", "business summit", "trade show"]
+
+    geo_terms_all: list[str] = []
+    for geo in geographies[:4]:
+        terms = _GEO_TERMS.get(geo, [geo])
+        geo_terms_all.extend(terms[:2])
+
+    if not geo_terms_all:
+        geo_terms_all = ["Global", "Asia", "USA"]
+
+    # Build combos with year
+    for term in ind_terms[:4]:
+        for geo in geo_terms_all[:4]:
+            q = f"{term} {year}"
+            query_list.append((q, geo))
+            if len(query_list) >= max_queries:
+                break
+        if len(query_list) >= max_queries:
+            break
+
+    # Execute queries sequentially (rate limit: 100/month free tier)
+    all_events: list[EventCreate] = []
+    seen_hashes: set[str] = set()
+
+    logger.info(f"SerpAPI google_events: running {len(query_list)} targeted queries")
+
+    for i, (query, location) in enumerate(query_list[:max_queries]):
+        try:
+            events = await search_google_events(
+                query       = query,
+                location    = location,
+                serpapi_key = serpapi_key,
+                date_from   = date_from,
+                date_to     = date_to,
+                max_results = max_per_query,
+            )
+            for ev in events:
+                if ev.dedup_hash not in seen_hashes:
+                    seen_hashes.add(ev.dedup_hash)
+                    all_events.append(ev)
+            # Small delay between calls
+            if i < len(query_list) - 1:
+                await asyncio.sleep(0.5)
+        except Exception as exc:
+            logger.warning(f"SerpAPI google_events batch error [{query}]: {exc}")
+
+    logger.info(
+        f"SerpAPI google_events total: {len(all_events)} unique events "
+        f"from {min(len(query_list), max_queries)} queries"
     )
-    return parsed
+    return all_events
