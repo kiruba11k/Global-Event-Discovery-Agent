@@ -112,7 +112,7 @@ export default function App() {
   const [userEmail,        setUserEmail]        = useState('')
   const [showEmailGate,    setShowEmailGate]    = useState(false)
   const [reportSent,       setReportSent]       = useState(false)
-  const [showLanding, setShowLanding] = useState(true)
+  const [showLanding, setShowLanding] = useState(false)
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
   const onCompanySave = async (data, deckFile) => {
