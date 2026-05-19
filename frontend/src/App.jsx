@@ -50,7 +50,7 @@ function Hero() {
       <div className="hero-content">
         <div className="hero-badge"><Sparkles size={12} /><span>11,000+ B2B trade shows · ranked for your ICP</span></div>
         <h1 className="hero-title">Where will your buyers be next year?</h1>
-        <p className="hero-subtitle">Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up — and tell you exactly how to walk away with meetings, not business cards.</p>
+        <p className="hero-subtitle">Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up  -  and tell you exactly how to walk away with meetings, not business cards.</p>
         <div className="hero-stats">
           <StatCounter value={12}   suffix="+" label="Event Sources"       />
           <div className="stat-divider" />
@@ -63,7 +63,7 @@ function Hero() {
         <div className="hero-features">
           {[
             { icon: Brain,      text: 'Groq LLM + Cross-Validation'    },
-            { icon: Globe,      text: 'Global Coverage — 20+ Countries' },
+            { icon: Globe,      text: 'Global Coverage  -  20+ Countries' },
             { icon: TrendingUp, text: 'ROI + Meeting Package Pricing'   },
             { icon: Mail,       text: 'PDF Report Emailed Instantly'    },
           ].map(({ icon: Icon, text }) => (
@@ -89,8 +89,8 @@ function LandingShowcase() {
       </div>
       <div className="hero-eyebrow">11,000+ B2B trade shows · ranked for your ICP</div>
       <div className="path-cards">
-        <div className="path-card"><h4>Attending — hunting meetings</h4><p>Sales, BD, founders. Find your ICPs before you fly out.</p></div>
-        <div className="path-card"><h4>Exhibiting — need booth traffic</h4><p>Get 5x the qualified meetings around your booth.</p></div>
+        <div className="path-card"><h4>Attending  -  hunting meetings</h4><p>Sales, BD, founders. Find your ICPs before you fly out.</p></div>
+        <div className="path-card"><h4>Exhibiting  -  need booth traffic</h4><p>Get 5x the qualified meetings around your booth.</p></div>
       </div>
       <a className="escape-link" href="#results">Already know your show? Get show-specific intel →</a>
       <div className="proof-row">
@@ -231,7 +231,7 @@ export default function App() {
       } else {
         setResults(events)
         const goCount = displayEvents.filter(e => e.fit_verdict === 'GO').length
-        toast.success(`Found ${displayEvents.length} events — ${goCount} strong matches`, { duration: 4000 })
+        toast.success(`Found ${displayEvents.length} events  -  ${goCount} strong matches`, { duration: 4000 })
         _autoSendReport(events, profile, userEmail, res.profile_id)
         setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
       }
@@ -250,7 +250,7 @@ export default function App() {
     setPendingResults(null)
     const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
     const goCount       = displayEvents.filter(e => e.fit_verdict === 'GO').length
-    toast.success(`Found ${displayEvents.length} events — ${goCount} strong matches`, { duration: 4000 })
+    toast.success(`Found ${displayEvents.length} events  -  ${goCount} strong matches`, { duration: 4000 })
     _autoSendReport(events, lastProfile, email, profileId)
     setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
   }
