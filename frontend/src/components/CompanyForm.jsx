@@ -7,11 +7,11 @@ import {
 } from 'lucide-react'
 
 const STEPS = [
-  { id: 'name',      icon: Building2, question: "Let's start — who are you?",         hint: 'Company name and work email so we can send your report' },
+  { id: 'name',      icon: Building2, question: "Let's start  -  who are you?",         hint: 'Company name and work email so we can send your report' },
   { id: 'location',  icon: MapPin,    question: 'Where are you headquartered?',        hint: 'City, country or region' },
   { id: 'mission',   icon: Zap,       question: 'What does your company sell or do?',  hint: 'The more specific, the sharper the AI matching' },
   { id: 'objective', icon: Target,    question: 'What do you need from events?',       hint: 'Choose one or type your own goal' },
-  { id: 'deck',      icon: FileText,  question: 'Upload your company deck',            hint: 'Optional — we extract key context for deeper AI matching' },
+  { id: 'deck',      icon: FileText,  question: 'Upload your company deck',            hint: 'Optional  -  we extract key context for deeper AI matching' },
 ]
 
 const OBJECTIVES = [
@@ -101,7 +101,7 @@ export default function CompanyForm({ onSave, saved }) {
     <button className="company-trigger" onClick={() => setOpen(true)}>
       {saved
         ? <><CheckCircle size={15} className="ct-icon saved" /><span>Company context saved</span><span className="ct-edit">Edit</span></>
-        : <><Sparkles size={15} className="ct-icon" /><span>Add company context</span><span className="ct-hint">Optional — improves matching &amp; enables email report</span><ChevronRight size={13} className="ct-chevron" /></>
+        : <><Sparkles size={15} className="ct-icon" /><span>Add company context</span><span className="ct-hint">Optional  -  improves matching &amp; enables email report</span><ChevronRight size={13} className="ct-chevron" /></>
       }
     </button>
   )
@@ -134,7 +134,7 @@ export default function CompanyForm({ onSave, saved }) {
           <h2 className="cf-question">{current.question}</h2>
           <p className="cf-hint">{current.hint}</p>
 
-          {/* ── Step 0 — Company name + Email (mandatory) ── */}
+          {/* ── Step 0  -  Company name + Email (mandatory) ── */}
           {step === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div className="cf-input-wrap">
@@ -149,7 +149,7 @@ export default function CompanyForm({ onSave, saved }) {
                 />
               </div>
 
-              {/* Email — mandatory */}
+              {/* Email  -  mandatory */}
               <div className={`cf-input-wrap ${emailError ? 'cf-input-error' : ''}`}>
                 <Mail size={15} className="cf-input-icon" />
                 <input
@@ -176,7 +176,7 @@ export default function CompanyForm({ onSave, saved }) {
             </div>
           )}
 
-          {/* ── Step 1 — Location ── */}
+          {/* ── Step 1  -  Location ── */}
           {step === 1 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="cf-input-wrap">
@@ -194,14 +194,14 @@ export default function CompanyForm({ onSave, saved }) {
             </div>
           )}
 
-          {/* ── Step 2 — Mission ── */}
+          {/* ── Step 2  -  Mission ── */}
           {step === 2 && (
             <textarea ref={inputRef} className="cf-textarea" rows={5} value={form.what_we_do}
               onChange={e => set('what_we_do', e.target.value)}
               placeholder="We build AI-powered supply chain software for mid-market manufacturers. Our buyers are COOs and supply chain heads who need real-time visibility..." />
           )}
 
-          {/* ── Step 3 — Objective ── */}
+          {/* ── Step 3  -  Objective ── */}
           {step === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div className="cf-obj-grid">
@@ -223,7 +223,7 @@ export default function CompanyForm({ onSave, saved }) {
             </div>
           )}
 
-          {/* ── Step 4 — Deck upload ── */}
+          {/* ── Step 4  -  Deck upload ── */}
           {step === 4 && (
             <div
               className={`cf-dropzone ${dragging ? 'drag' : ''} ${deckFile ? 'has-file' : ''}`}
