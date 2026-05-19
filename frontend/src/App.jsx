@@ -44,79 +44,79 @@ function OrbBackground() {
   )
 }
 
-function Hero() {
-  return (
-    <header className="hero">
-      <OrbBackground />
-      <div className="hero-content">
-        <div className="hero-badge"><Sparkles size={12} /><span>11,000+ B2B trade shows · ranked for your ICP</span></div>
-        <h1 className="hero-title">Where will your buyers be next year?</h1>
-        <p className="hero-subtitle">Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up  -  and tell you exactly how to walk away with meetings, not business cards.</p>
-        <div className="hero-stats">
-          <StatCounter value={12}   suffix="+" label="Event Sources"       />
-          <div className="stat-divider" />
-          <StatCounter value={5000} suffix="+" label="Events Indexed"      />
-          <div className="stat-divider" />
-          <StatCounter value={3}              label="AI Ranking Layers"    />
-          <div className="stat-divider" />
-          <StatCounter value={98}   suffix="%" label="Anti-Hallucination"  />
-        </div>
-        <div className="hero-features">
-          {[
-            { icon: Brain,      text: 'Groq LLM + Cross-Validation'    },
-            { icon: Globe,      text: 'Global Coverage  -  20+ Countries' },
-            { icon: TrendingUp, text: 'ROI + Meeting Package Pricing'   },
-            { icon: Mail,       text: 'PDF Report Emailed Instantly'    },
-          ].map(({ icon: Icon, text }) => (
-            <div key={text} className="hero-feature"><Icon size={14} /><span>{text}</span></div>
-          ))}
-        </div>
-      </div>
-    </header>
-  )
-}
+// function Hero() {
+//   return (
+//     <header className="hero">
+//       <OrbBackground />
+//       <div className="hero-content">
+//         <div className="hero-badge"><Sparkles size={12} /><span>11,000+ B2B trade shows · ranked for your ICP</span></div>
+//         <h1 className="hero-title">Where will your buyers be next year?</h1>
+//         <p className="hero-subtitle">Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up  -  and tell you exactly how to walk away with meetings, not business cards.</p>
+//         <div className="hero-stats">
+//           <StatCounter value={12}   suffix="+" label="Event Sources"       />
+//           <div className="stat-divider" />
+//           <StatCounter value={5000} suffix="+" label="Events Indexed"      />
+//           <div className="stat-divider" />
+//           <StatCounter value={3}              label="AI Ranking Layers"    />
+//           <div className="stat-divider" />
+//           <StatCounter value={98}   suffix="%" label="Anti-Hallucination"  />
+//         </div>
+//         <div className="hero-features">
+//           {[
+//             { icon: Brain,      text: 'Groq LLM + Cross-Validation'    },
+//             { icon: Globe,      text: 'Global Coverage  -  20+ Countries' },
+//             { icon: TrendingUp, text: 'ROI + Meeting Package Pricing'   },
+//             { icon: Mail,       text: 'PDF Report Emailed Instantly'    },
+//           ].map(({ icon: Icon, text }) => (
+//             <div key={text} className="hero-feature"><Icon size={14} /><span>{text}</span></div>
+//           ))}
+//         </div>
+//       </div>
+//     </header>
+//   )
+// }
 
 
-function LandingShowcase() {
-  return (
-    <section className="landing-showcase">
-      <div className="showcase-nav">
-        <div className="nav-brand">LeadStrategus</div>
-        <div className="nav-links">
-          <a href="#icp">Find your shows</a><a href="#how-it-works">How it works</a><a href="#services">Services</a><a href="#resources">Resources</a>
-        </div>
-        <button className="nav-cta">Get free intel</button>
-        <button className="nav-menu"><Menu size={16} /></button>
-      </div>
-      <div className="hero-eyebrow">11,000+ B2B trade shows · ranked for your ICP</div>
-      <div className="path-cards">
-        <div className="path-card"><h4>Attending  -  hunting meetings</h4><p>Sales, BD, founders. Find your ICPs before you fly out.</p></div>
-        <div className="path-card"><h4>Exhibiting  -  need booth traffic</h4><p>Get 5x the qualified meetings around your booth.</p></div>
-      </div>
-      <a className="escape-link" href="#results">Already know your show? Get show-specific intel →</a>
-      <div className="proof-row">
-        {['50+ meetings, single event','$1M pipeline per show','12 Fortune 50 meetings, BSMA','5.0 Clutch rating'].map((t)=><div key={t} className="proof-pill"><CheckCircle2 size={14}/>{t}</div>)}
-      </div>
-      <div className="logo-strip">Dreamforce · Medica · Gartner Symposium · BSMA · CES</div>
-      <div className="pain-block" id="how-it-works">
-        <h3>Sound familiar?</h3>
-        {["I won't know who's actually attending until I'm there.","My follow-up competes with 200 other emails.","70% of conversations are vendors selling to me, not buyers.","I'll meet maybe 5 decision-makers in 3 days."].map(q=><blockquote key={q}>“{q}”</blockquote>)}
-      </div>
-    </section>
-  )
-}
+// function LandingShowcase() {
+//   return (
+//     <section className="landing-showcase">
+//       <div className="showcase-nav">
+//         <div className="nav-brand">LeadStrategus</div>
+//         <div className="nav-links">
+//           <a href="#icp">Find your shows</a><a href="#how-it-works">How it works</a><a href="#services">Services</a><a href="#resources">Resources</a>
+//         </div>
+//         <button className="nav-cta">Get free intel</button>
+//         <button className="nav-menu"><Menu size={16} /></button>
+//       </div>
+//       <div className="hero-eyebrow">11,000+ B2B trade shows · ranked for your ICP</div>
+//       <div className="path-cards">
+//         <div className="path-card"><h4>Attending  -  hunting meetings</h4><p>Sales, BD, founders. Find your ICPs before you fly out.</p></div>
+//         <div className="path-card"><h4>Exhibiting  -  need booth traffic</h4><p>Get 5x the qualified meetings around your booth.</p></div>
+//       </div>
+//       <a className="escape-link" href="#results">Already know your show? Get show-specific intel →</a>
+//       <div className="proof-row">
+//         {['50+ meetings, single event','$1M pipeline per show','12 Fortune 50 meetings, BSMA','5.0 Clutch rating'].map((t)=><div key={t} className="proof-pill"><CheckCircle2 size={14}/>{t}</div>)}
+//       </div>
+//       <div className="logo-strip">Dreamforce · Medica · Gartner Symposium · BSMA · CES</div>
+//       <div className="pain-block" id="how-it-works">
+//         <h3>Sound familiar?</h3>
+//         {["I won't know who's actually attending until I'm there.","My follow-up competes with 200 other emails.","70% of conversations are vendors selling to me, not buyers.","I'll meet maybe 5 decision-makers in 3 days."].map(q=><blockquote key={q}>“{q}”</blockquote>)}
+//       </div>
+//     </section>
+//   )
+// }
 
-function SectionLabel({ step, label, sublabel }) {
-  return (
-    <div className="section-label">
-      <div className="step-badge">{step}</div>
-      <div>
-        <div className="step-title">{label}</div>
-        {sublabel && <div className="step-sub">{sublabel}</div>}
-      </div>
-    </div>
-  )
-}
+// function SectionLabel({ step, label, sublabel }) {
+//   return (
+//     <div className="section-label">
+//       <div className="step-badge">{step}</div>
+//       <div>
+//         <div className="step-title">{label}</div>
+//         {sublabel && <div className="step-sub">{sublabel}</div>}
+//       </div>
+//     </div>
+//   )
+// }
 
 /* ── Email gate ──────────────────────────────────────────────────── */
 function EmailGate({ onCapture, onDismiss }) {
