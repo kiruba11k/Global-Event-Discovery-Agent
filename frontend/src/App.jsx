@@ -10,6 +10,7 @@ import {
   Sparkles, Mail, X, ArrowRight, AlertCircle, Menu, CheckCircle2,
 } from 'lucide-react'
 import './App.css'
+import LandingPage from './components/LandingPage'
 
 /* ── Animated stat counter ───────────────────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
@@ -187,7 +188,7 @@ export default function App() {
   const [userEmail,        setUserEmail]        = useState('')
   const [showEmailGate,    setShowEmailGate]    = useState(false)
   const [reportSent,       setReportSent]       = useState(false)
-
+  const [showLanding, setShowLanding] = useState(true)
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
   const onCompanySave = async (data, deckFile) => {
@@ -342,7 +343,25 @@ export default function App() {
           error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
       />
+ {showLanding ? (
+      <LandingPage
+        onGetStarted={(path) => {
+          setShowLanding(false)
 
+          // optional
+          console.log(path)
+        }}
+        onHowItWorks={() => {
+          setShowLanding(false)
+          setTimeout(() => {
+            document.getElementById('how-it-works')?.scrollIntoView({
+              behavior: 'smooth',
+            })
+          }, 100)
+        }}
+      />
+    ) : (
+      <>
       <Hero />
 
       <main className="main-content">
@@ -404,8 +423,22 @@ export default function App() {
                   )}
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                {['GO', 'CONSIDER'].map(v => {
+<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+
+  <button
+    onClick={() => setShowLanding(true)}
+    style={{
+      background: 'transparent',
+      border: '1px solid var(--border)',
+      padding: '8px 14px',
+      borderRadius: 'var(--radius-sm)',
+      cursor: 'pointer',
+      color: 'var(--text)',
+    }}
+  >
+    ← Start Over
+  </button>
+  {['GO', 'CONSIDER'].map(v => {
                   const count = displayResults.filter(e => e.fit_verdict === v).length
                   return (
                     <div key={v} className={`results-pill pill-${v.toLowerCase()}`}>
