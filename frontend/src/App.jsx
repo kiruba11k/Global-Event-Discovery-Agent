@@ -485,6 +485,8 @@ export default function App() {
         dealSizeCategory={dealSizeCategory}
         prefillEmail={userEmail}
       />
+           </>
+    )}
     </div>
   )
 }
