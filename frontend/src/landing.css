@@ -21,17 +21,17 @@
 
 /* ── Design tokens ─────────────────────────────────────────────── */
 .ls-landing {
-  --ls-teal:        #1D9E75;
-  --ls-teal-light:  #E1F5EE;
-  --ls-teal-mid:    #5DCAA5;
-  --ls-teal-dark:   #0F6E56;
-  --ls-border:      rgba(0,0,0,0.09);
-  --ls-border-md:   rgba(0,0,0,0.16);
+  --ls-teal:        #06b6d4;
+  --ls-teal-light:  rgba(6,182,212,0.12);
+  --ls-teal-mid:    #22d3ee;
+  --ls-teal-dark:   #0369a1;
+  --ls-border:      #d9e3ef;
+  --ls-border-md:   #c6d5e6;
   --ls-bg:          #ffffff;
-  --ls-bg-soft:     #F8F7F4;
-  --ls-text:        #1a1a1a;
-  --ls-muted:       #5F5E5A;
-  --ls-hint:        #888780;
+  --ls-bg-soft:     #f8fafc;
+  --ls-text:        #0f172a;
+  --ls-muted:       #475569;
+  --ls-hint:        #64748b;
   --ls-radius:      8px;
   --ls-radius-lg:   12px;
 }
