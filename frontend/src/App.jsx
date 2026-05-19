@@ -9,6 +9,39 @@ import { Mail, X, ArrowRight, AlertCircle, ChevronRight } from 'lucide-react'
 import './App.css'
 import LandingPage from './components/LandingPage'
 
+/* ── Animated stat counter ───────────────────────────────────────── */
+function StatCounter({ value, suffix = '', label }) {
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    let start = 0
+    const end      = parseInt(value)
+    const duration = 1800
+    const step     = Math.ceil(end / (duration / 16))
+    const timer    = setInterval(() => {
+      start += step
+      if (start >= end) { setDisplay(end); clearInterval(timer) }
+      else setDisplay(start)
+    }, 16)
+    return () => clearInterval(timer)
+  }, [value])
+  return (
+    <div className="stat-card">
+      <div className="stat-number">{display.toLocaleString()}{suffix}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  )
+}
+
+function OrbBackground() {
+  return (
+    <div className="orb-container" aria-hidden>
+      <div className="orb orb-1" /><div className="orb orb-2" /><div className="orb orb-3" />
+      <div className="grid-overlay" />
+    </div>
+  )
+}
+
+
 /* ── Email gate ──────────────────────────────────────────────────── */
 function EmailGate({ onCapture, onDismiss }) {
   const [email,   setEmail]   = useState('')
