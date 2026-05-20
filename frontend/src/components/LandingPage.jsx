@@ -11,8 +11,8 @@ import '../landing.css'
     <LandingPage onGetStarted={() => setShowForm(true)} />
 
   Props:
-    onGetStarted  fn()  — called when any CTA is clicked → show ICPForm
-    onHowItWorks  fn()  — optional, scroll to / show How It Works section
+    onGetStarted  fn()   -  called when any CTA is clicked → show ICPForm
+    onHowItWorks  fn()   -  optional, scroll to / show How It Works section
 */
 
 // ── Proof stats (animated counter targets) ──────────────────────
@@ -141,7 +141,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
 
         <p className="ls-hero-sub ls-fade-up ls-delay-3">
           Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up
-          — and tell you exactly how to walk away with meetings, not business cards.
+           -  and tell you exactly how to walk away with meetings, not business cards.
         </p>
 
         <div className="ls-hero-ctas ls-fade-up ls-delay-4">
@@ -179,9 +179,9 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
               <circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/>
             </svg>
           </div>
-          <div className="ls-path-tag">Attending — hunting meetings</div>
+          <div className="ls-path-tag">Attending  -  hunting meetings</div>
           <h3 className="ls-path-h3">Find your ICP before you fly out</h3>
-          <p className="ls-path-p">Sales, BD, founders. Walk in knowing exactly who to find — and with meetings already on the calendar.</p>
+          <p className="ls-path-p">Sales, BD, founders. Walk in knowing exactly who to find  -  and with meetings already on the calendar.</p>
           <div className="ls-path-arrow" aria-hidden="true">→</div>
         </button>
 
@@ -195,7 +195,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
               <rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/>
             </svg>
           </div>
-          <div className="ls-path-tag">Exhibiting — need booth traffic</div>
+          <div className="ls-path-tag">Exhibiting  -  need booth traffic</div>
           <h3 className="ls-path-h3">Get 5× the qualified meetings around your booth</h3>
           <p className="ls-path-p">Stop waiting for walk-ups. We pre-book your meetings with target buyers before the show floor opens.</p>
           <div className="ls-path-arrow" aria-hidden="true">→</div>
@@ -241,7 +241,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
             >
               <div className="ls-quote-mark" aria-hidden="true">"</div>
               <p className="ls-quote-text">{q.text}</p>
-              <div className="ls-quote-role">— {q.role}</div>
+              <div className="ls-quote-role"> -  {q.role}</div>
             </div>
           ))}
         </div>
@@ -257,7 +257,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
-            Rank my shows — it's free
+            Rank my shows  -  it's free
           </button>
           <button className="ls-btn-outline ls-btn-lg" onClick={() => onGetStarted && onGetStarted('demo')}>
             Book a demo
@@ -266,7 +266,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────── */}
-      <footer className="ls-footer">
+      {/* <footer className="ls-footer">
         <div className="ls-logo" style={{ fontSize: 13 }}>
           <span className="ls-logo-dot" style={{ width: 6, height: 6 }} />
           LeadStrategus
@@ -279,7 +279,7 @@ export default function LandingPage({ onGetStarted, onHowItWorks }) {
           <a href="#">Contact</a>
         </nav>
         <span className="ls-footer-copy">© 2026 LeadStrategus</span>
-      </footer>
+      </footer> */}
 
     </div>
   )
