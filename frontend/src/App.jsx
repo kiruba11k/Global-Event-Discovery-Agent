@@ -258,6 +258,8 @@ export default function App() {
 
   return (
     <div className="app">
+      <OrbBackground />
+      <div className="app-shell">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -394,6 +396,7 @@ export default function App() {
         prefillEmail={userEmail}
       />
       </>
+      </div>
     </div>
   )
 }
