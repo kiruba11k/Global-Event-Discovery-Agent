@@ -112,7 +112,6 @@ export default function App() {
   const [userEmail,        setUserEmail]        = useState('')
   const [showEmailGate,    setShowEmailGate]    = useState(false)
   const [reportSent,       setReportSent]       = useState(false)
-  const [showLanding, setShowLanding] = useState(true)
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
   const onCompanySave = async (data, deckFile) => {
@@ -267,11 +266,12 @@ export default function App() {
           error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
       />
-      {showLanding ? (
-        <LandingPage onGetStarted={() => setShowLanding(false)} onHowItWorks={() => setShowLanding(false)} />
-      ) : (
+      <LandingPage
+        onGetStarted={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
+        onHowItWorks={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+      />
       <>
-      <main className="main-content">
+      <main className="main-content" id="how-it-works">
         {stats && (
           <div className="status-bar">
             <div className="status-dot" />
@@ -334,7 +334,7 @@ export default function App() {
 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 
   <button
-    onClick={() => setShowLanding(true)}
+    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
     style={{
       background: 'transparent',
       border: '1px solid var(--border)',
@@ -393,8 +393,7 @@ export default function App() {
         dealSizeCategory={dealSizeCategory}
         prefillEmail={userEmail}
       />
-           </>
-    )}
+      </>
     </div>
   )
 }
