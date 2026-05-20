@@ -1,8 +1,8 @@
 /*
-  ICPForm.jsx   -   Combined ICP form (v4  -  hero-embedded spec)
+  ICPForm.jsx  —  Combined ICP form (v4 — hero-embedded spec)
 
   New prop:
-    heroMode  bool   -  removes the card wrapper + header so fields render
+    heroMode  bool  — removes the card wrapper + header so fields render
                       flush inside the hero section. The CTA button text
                       becomes "See your meeting forecast →" and the submit
                       label changes to match the hero copy.
@@ -342,7 +342,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           Typical deal value<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint">Per deal  -  used to calculate meeting package pricing</p>
+        <p className="icp-hint">Per deal — used to calculate meeting package pricing</p>
         <div className={heroMode ? 'icp-deal-grid icp-deal-grid--hero' : 'icp-deal-grid'} role="radiogroup">
           {DEAL_BRACKETS.map(b => (
             <button
@@ -415,7 +415,7 @@ export default function ICPForm({
         ? <><span className="icp-spinner" aria-hidden="true" />Ranking your shows…</>
         : heroMode
           ? <>See your meeting forecast →</>
-          : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Rank my shows  -  it's free</>
+          : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Rank my shows — it's free</>
       }
     </button>
   )
@@ -427,7 +427,7 @@ export default function ICPForm({
         <div className="icp-upgrade-icon" aria-hidden="true">✦</div>
         <div>
           <div className="icp-upgrade-title">Want a deeper analysis?</div>
-          <div className="icp-upgrade-sub">Upload your company deck and tell us about your specific event needs  -  we'll personalise this further.</div>
+          <div className="icp-upgrade-sub">Upload your company deck and tell us about your specific event needs — we'll personalise this further.</div>
         </div>
         <button className="icp-upgrade-toggle" onClick={() => setUpgradeOpen(o => !o)} type="button">
           {upgradeOpen ? 'Close' : 'Get started →'}
