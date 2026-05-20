@@ -1,23 +1,42 @@
+/*
+  App.jsx  —  Updated to use combined ICPForm (no separate CompanyForm needed)
+
+  Key changes vs previous version:
+  1. No more CompanyForm step — ICPForm handles email capture inline
+  2. onSearch receives (profile, email) — email captured in form
+  3. showUpgrade prop triggers post-ranking deeper analysis card
+  4. Date filter toggle on results: 3 months / 6 months / 12 months
+  5. New deal size brackets wired through
+
+  ICPProfile → backend mapping:
+    buyer free-text       → company_description (Groq extracts industries/personas)
+    parsedIndustries      → target_industries
+    parsedPersonas        → target_personas
+    geos                  → target_geographies
+    dealSize              → avg_deal_size_category
+    dates                 → date_from / date_to (default: next month → +12m)
+*/
+
 import { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import CompanyForm      from './components/CompanyForm'
 import ICPForm          from './components/ICPForm'
 import EventTable       from './components/EventTable'
 import EmailReportModal from './components/EmailReportModal'
 import { api }          from './api/client'
-import { Mail, X, ArrowRight, AlertCircle, ChevronRight } from 'lucide-react'
+import {
+  Brain, Globe, TrendingUp, ChevronRight,
+  Sparkles, Mail, AlertCircle,
+} from 'lucide-react'
 import './App.css'
-import LandingPage from './components/LandingPage'
 
-/* ── Animated stat counter ───────────────────────────────────────── */
+/* ── Animated stat counter ──────────────────────────────────────── */
 function StatCounter({ value, suffix = '', label }) {
   const [display, setDisplay] = useState(0)
   useEffect(() => {
     let start = 0
-    const end      = parseInt(value)
-    const duration = 1800
-    const step     = Math.ceil(end / (duration / 16))
-    const timer    = setInterval(() => {
+    const end   = parseInt(value)
+    const step  = Math.ceil(end / (1800 / 16))
+    const timer = setInterval(() => {
       start += step
       if (start >= end) { setDisplay(end); clearInterval(timer) }
       else setDisplay(start)
@@ -41,160 +60,126 @@ function OrbBackground() {
   )
 }
 
-
-/* ── Email gate ──────────────────────────────────────────────────── */
-function EmailGate({ onCapture, onDismiss }) {
-  const [email,   setEmail]   = useState('')
-  const [error,   setError]   = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = () => {
-    if (!email.trim())        { setError('Please enter your work email.'); return }
-    if (!email.includes('@')) { setError('Please enter a valid email address.'); return }
-    setLoading(true)
-    setTimeout(() => { onCapture(email.trim()); setLoading(false) }, 400)
-  }
-
+function Hero() {
   return (
-    <>
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(6px)', zIndex: 900 }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 901, width: '100%', maxWidth: 420, padding: '0 16px' }}>
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 32px 80px rgba(15,23,42,0.3)', overflow: 'hidden' }}>
-          <div style={{ background: 'linear-gradient(135deg,#0369a1,#06b6d4 50%,#3b82f6)', padding: '22px 24px', color: '#fff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Mail size={18} />
-              </div>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800 }}>Your report is ready</div>
-                <div style={{ fontSize: 11, opacity: 0.8 }}>Enter your work email to view &amp; receive results</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '20px 24px 24px' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.65, marginBottom: 16 }}>
-              We'll display your personalised event matches on screen and email you a full PDF report with AI analysis and meeting package pricing.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-input)', border: `1.5px solid ${error ? 'var(--skip)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', padding: '11px 14px', marginBottom: 8 }}>
-              <Mail size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
-              <input type="email" autoFocus value={email}
-                onChange={e => { setEmail(e.target.value); setError('') }}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="your@company.com"
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text)' }} />
-            </div>
-            {error && <div style={{ fontSize: 11, color: 'var(--skip)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}><X size={10} /> {error}</div>}
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 16, lineHeight: 1.55 }}>🔒 No spam. Your email is used only to send the event report.</div>
-            <button onClick={handleSubmit} disabled={loading}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: loading ? 'var(--border)' : 'linear-gradient(135deg,var(--accent),var(--accent-2))', color: loading ? 'var(--text-dim)' : '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '13px 24px', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 4px 16px rgba(6,182,212,0.3)' }}>
-              {loading ? 'Loading your results…' : <><ArrowRight size={15} /> View My Results</>}
-            </button>
-          </div>
+    <header className="hero">
+      <OrbBackground />
+      <div className="hero-content">
+        <div className="hero-badge"><Sparkles size={12} /><span>AI-Powered Event Intelligence</span></div>
+        <h1 className="hero-title">
+          Where will your <span className="hero-gradient">buyers</span> be next year?
+        </h1>
+        <p className="hero-subtitle">
+          Tell us who you sell to. We'll rank the trade shows where your ICPs actually show up
+          — and tell you exactly how to walk away with meetings, not business cards.
+        </p>
+        <div className="hero-stats">
+          <StatCounter value={11000} suffix="+" label="B2B Events Ranked"   />
+          <div className="stat-divider" />
+          <StatCounter value={3}              label="AI Ranking Layers"   />
+          <div className="stat-divider" />
+          <StatCounter value={98}   suffix="%" label="Anti-Hallucination"  />
+          <div className="stat-divider" />
+          <StatCounter value={20}   suffix="+" label="Countries Covered"   />
+        </div>
+        <div className="hero-features">
+          {[
+            { icon: Brain,      text: 'Groq LLM + Cross-Validation'    },
+            { icon: Globe,      text: 'Global Coverage — 20+ Countries' },
+            { icon: TrendingUp, text: 'ROI + Meeting Package Pricing'   },
+            { icon: Mail,       text: 'PDF Report Emailed Instantly'    },
+          ].map(({ icon: Icon, text }) => (
+            <div key={text} className="hero-feature"><Icon size={14} /><span>{text}</span></div>
+          ))}
         </div>
       </div>
-    </>
+    </header>
   )
 }
 
-/* ── App root ────────────────────────────────────────────────────── */
+/* ── Date filter tabs ───────────────────────────────────────────── */
+const DATE_WINDOWS = [
+  { label: 'Next 3 months', months: 3  },
+  { label: 'Next 6 months', months: 6  },
+  { label: 'Next 12 months', months: 12 },
+]
+
+function applyDateWindow(events, months) {
+  if (!months) return events
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() + months)
+  const iso = cutoff.toISOString().slice(0, 10)
+  return events.filter(e => !e.date || e.date.slice(0, 10) <= iso)
+}
+
+/* ── Main App ───────────────────────────────────────────────────── */
 export default function App() {
-  const [loading,          setLoading]          = useState(false)
-  const [results,          setResults]          = useState([])
-  const [pendingResults,   setPendingResults]   = useState(null)
-  const [hasSearched,      setHasSearched]      = useState(false)
-  const [profileId,        setProfileId]        = useState('')
-  const [companyData,      setCompanyData]      = useState(null)
-  const [companyProfileId, setCompanyProfileId] = useState(null)
-  const [stats,            setStats]            = useState(null)
-  const [dealSizeCategory, setDealSizeCategory] = useState('medium')
-  const [lastProfile,      setLastProfile]      = useState(null)
-  const [emailModalOpen,   setEmailModalOpen]   = useState(false)
-  const [userEmail,        setUserEmail]        = useState('')
-  const [showEmailGate,    setShowEmailGate]    = useState(false)
-  const [reportSent,       setReportSent]       = useState(false)
+  const [loading,         setLoading]         = useState(false)
+  const [results,         setResults]         = useState([])
+  const [hasSearched,     setHasSearched]     = useState(false)
+  const [profileId,       setProfileId]       = useState('')
+  const [stats,           setStats]           = useState(null)
+  const [dealSizeCategory,setDealSizeCategory]= useState('medium')
+  const [lastProfile,     setLastProfile]     = useState(null)
+  const [emailModalOpen,  setEmailModalOpen]  = useState(false)
+  const [userEmail,       setUserEmail]       = useState('')
+  const [reportSent,      setReportSent]      = useState(false)
+  const [dateWindow,      setDateWindow]      = useState(12)   // months
+
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
-  const onCompanySave = async (data, deckFile) => {
-    try {
-      const formData = new FormData()
-      formData.append('company_data', JSON.stringify(data))
-      if (deckFile) formData.append('deck', deckFile)
-      const res = await api.saveCompanyProfile(formData)
-      setCompanyData(data)
-      setCompanyProfileId(res.id)
-      if (data.email) setUserEmail(data.email)
-      toast.success('Company profile saved!')
-    } catch (err) {
-      toast.error(err.message || 'Failed to save company profile')
-    }
-  }
-
-  const onSearch = async (profile) => {
+  const onSearch = async (profile, email) => {
     if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
     setLastProfile(profile)
+    if (email) setUserEmail(email)
     setLoading(true)
     setReportSent(false)
+    setHasSearched(false)
+
     try {
       const payload = { profile }
-      if (companyProfileId) payload.company_profile_id = companyProfileId
-      const res    = await api.search(payload)
-      const events = res.events || []
+      const res     = await api.search(payload)
+      const events  = res.events || []
       setHasSearched(true)
       setProfileId(res.profile_id || '')
+      setResults(events)
 
-      const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
-      if (displayEvents.length === 0) {
-        setResults(events)
-        toast.error('No events found for the selected date range.')
+      const displayEvts = events.filter(e => e.fit_verdict !== 'SKIP')
+      if (displayEvts.length === 0) {
+        toast.error('No matching events found — try a wider geography or different buyer description.')
         return
       }
+      const goCount = displayEvts.filter(e => e.fit_verdict === 'GO').length
+      toast.success(`Found ${displayEvts.length} events — ${goCount} strong matches`, { duration: 4000 })
 
-      if (!userEmail) {
-        setPendingResults(events)
-        setShowEmailGate(true)
-      } else {
-        setResults(events)
-        const goCount = displayEvents.filter(e => e.fit_verdict === 'GO').length
-        toast.success(`Found ${displayEvents.length} events  -  ${goCount} strong matches`, { duration: 4000 })
-        _autoSendReport(events, profile, userEmail, res.profile_id)
-        setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
+      if (email) {
+        _autoSendReport(events, profile, email, res.profile_id)
       }
+      setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
     } catch (err) {
-      toast.error(err.message || 'Search failed')
+      toast.error(err.message || 'Search failed — please try again')
     } finally {
       setLoading(false)
     }
   }
 
-  const onEmailCaptured = (email) => {
-    setUserEmail(email)
-    setShowEmailGate(false)
-    const events = pendingResults || []
-    setResults(events)
-    setPendingResults(null)
-    const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
-    const goCount       = displayEvents.filter(e => e.fit_verdict === 'GO').length
-    toast.success(`Found ${displayEvents.length} events  -  ${goCount} strong matches`, { duration: 4000 })
-    _autoSendReport(events, lastProfile, email, profileId)
-    setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' }), 300)
+  const onDeeperAnalysis = async (data) => {
+    if (!lastProfile) return
+    const profile = {
+      ...lastProfile,
+      company_name:        data.company_name || lastProfile.company_name,
+      company_description: data.event_needs  || lastProfile.company_description,
+    }
+    onSearch(profile, userEmail)
+    toast.success('Reranking with your company context…')
   }
 
-  /**
-   * FIXED: Now shows clear error messages instead of silently failing.
-   * Checks stats.resend_enabled before attempting send.
-   */
   const _autoSendReport = async (events, profile, email, _profileId) => {
     if (!email || !events?.length) return
-
-    // Check if email service is configured (from /api/stats)
     if (stats && stats.resend_enabled === false) {
-      toast.error(
-        'Email service not configured on server. Use "Resend PDF Report" button to try manually.',
-        { duration: 6000, icon: '⚠️' }
-      )
+      toast.error('Email service not configured. Use "Email PDF Report" button to retry.', { duration: 6000, icon: '⚠️' })
       return
     }
-
     try {
       const displayEvents = events.filter(e => e.fit_verdict !== 'SKIP')
       await api.emailReport({
@@ -215,8 +200,8 @@ export default function App() {
           relevance_score:e.relevance_score,
         })),
         profile: {
-          company_name:        profile?.company_name        || companyData?.company_name || '',
-          company_description: profile?.company_description || companyData?.what_we_do   || '',
+          company_name:        profile?.company_name        || '',
+          company_description: profile?.company_description || '',
           target_industries:   profile?.target_industries   || [],
           target_personas:     profile?.target_personas     || [],
           target_geographies:  profile?.target_geographies  || [],
@@ -228,26 +213,21 @@ export default function App() {
       setReportSent(true)
       toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
     } catch (err) {
-      // FIXED: show clear error instead of silent failure
-      const msg = err.message || 'Unknown error'
-      if (msg.includes('RESEND_API_KEY') || msg.includes('Email service not configured') || msg.includes('503')) {
-        toast.error(
-          'Email not sent: RESEND_API_KEY is not set on the server. Add it in Render → Environment Variables.',
-          { duration: 8000, icon: '🔑' }
-        )
-      } else if (msg.includes('Invalid email')) {
-        toast.error(`Invalid email address: ${email}`)
+      const msg = err.message || ''
+      if (msg.includes('RESEND') || msg.includes('503') || msg.includes('email')) {
+        toast.error('Email not sent: RESEND_API_KEY not set on server. Add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
       } else {
-        toast.error(`Failed to send email report: ${msg}`, { duration: 6000 })
+        toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
       }
     }
   }
 
-  const displayResults = results.filter(e => e.fit_verdict !== 'SKIP')
+  const allDisplay  = results.filter(e => e.fit_verdict !== 'SKIP')
+  const displayResults = applyDateWindow(allDisplay, dateWindow)
 
   const profileSummary = {
-    company_name:        lastProfile?.company_name        || companyData?.company_name || '',
-    company_description: lastProfile?.company_description || companyData?.what_we_do   || '',
+    company_name:        lastProfile?.company_name        || '',
+    company_description: lastProfile?.company_description || '',
     target_industries:   lastProfile?.target_industries   || [],
     target_personas:     lastProfile?.target_personas     || [],
     target_geographies:  lastProfile?.target_geographies  || [],
@@ -258,8 +238,6 @@ export default function App() {
 
   return (
     <div className="app">
-      <OrbBackground />
-      <div className="app-shell">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -268,12 +246,12 @@ export default function App() {
           error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
       />
-      <LandingPage
-        onGetStarted={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
-        onHowItWorks={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-      />
-      <>
-      <main className="main-content" id="how-it-works">
+
+      <Hero />
+
+      <main className="main-content">
+
+        {/* Status bar */}
         {stats && (
           <div className="status-bar">
             <div className="status-dot" />
@@ -283,9 +261,11 @@ export default function App() {
             </span>
             <ChevronRight size={12} />
             <span className="status-apis">
-              {Object.entries(stats.apis_configured || {}).filter(([, v]) => v).map(([k]) => k).join(' · ')}
+              {Object.entries(stats.realtime_apis || stats.apis_configured || {})
+                .filter(([, v]) => v)
+                .map(([k]) => k)
+                .join(' · ')}
             </span>
-            {/* FIXED: Show email service warning if not configured */}
             {stats.resend_enabled === false && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#f59e0b', background: '#fffbeb', border: '1px solid rgba(245,158,11,0.4)', padding: '2px 8px', borderRadius: 100 }}>
                 <AlertCircle size={9} /> Email not configured
@@ -294,30 +274,37 @@ export default function App() {
           </div>
         )}
 
-        <section className="form-section" id="services">
-          <h2 className="step-title">Your Company</h2>
-          <p className="step-sub">Add your company context + work email to receive your PDF report</p>
-          <CompanyForm onSave={onCompanySave} saved={!!companyProfileId} />
+        {/* ── Combined ICP Form ─────────────────────────────────── */}
+        <section className="form-section" id="form">
+          <div className="section-label">
+            <div className="step-badge">01</div>
+            <div>
+              <div className="step-title">Your ICP</div>
+              <div className="step-sub">Tell us who you sell to · 4 fields · 2 minutes</div>
+            </div>
+          </div>
+          <ICPForm
+            onSubmit={onSearch}
+            loading={loading}
+            onDeeperAnalysis={onDeeperAnalysis}
+            showUpgrade={hasSearched && displayResults.length > 0}
+          />
         </section>
 
-        <section className="form-section" id="icp">
-          <h2 className="step-title">Your ICP</h2>
-          <p className="step-sub">Define who you sell to · include deal size for USD meeting package pricing</p>
-          <ICPForm onSubmit={onSearch} loading={loading} companyData={companyData} />
-        </section>
-
-        {hasSearched && displayResults.length === 0 && !showEmailGate && (
+        {/* ── No results ─────────────────────────────────────────── */}
+        {hasSearched && allDisplay.length === 0 && (
           <section id="results" className="results-section">
             <div className="results-header">
               <div>
                 <h2 className="results-title">No matches found</h2>
-                <p className="results-sub">Try wider dates or different geography / industry filters.</p>
+                <p className="results-sub">Try a wider geography, different buyer description, or check back after the event database refreshes.</p>
               </div>
             </div>
           </section>
         )}
 
-        {displayResults.length > 0 && (
+        {/* ── Results ────────────────────────────────────────────── */}
+        {allDisplay.length > 0 && (
           <section id="results" className="results-section">
             <div className="results-header">
               <div>
@@ -332,23 +319,38 @@ export default function App() {
                     </span>
                   )}
                 </p>
-              </div>
-<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 
-  <button
-    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-    style={{
-      background: 'transparent',
-      border: '1px solid var(--border)',
-      padding: '8px 14px',
-      borderRadius: 'var(--radius-sm)',
-      cursor: 'pointer',
-      color: 'var(--text)',
-    }}
-  >
-    ← Start Over
-  </button>
-  {['GO', 'CONSIDER'].map(v => {
+                {/* Date filter toggle */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                  {DATE_WINDOWS.map(w => (
+                    <button
+                      key={w.months}
+                      onClick={() => setDateWindow(w.months)}
+                      style={{
+                        fontSize:     11,
+                        padding:      '4px 12px',
+                        borderRadius: 100,
+                        border:       `1px solid ${dateWindow === w.months ? 'var(--accent)' : 'var(--border)'}`,
+                        background:   dateWindow === w.months ? 'rgba(6,182,212,.12)' : 'transparent',
+                        color:        dateWindow === w.months ? 'var(--accent)' : 'var(--text-dim)',
+                        cursor:       'pointer',
+                        fontWeight:   dateWindow === w.months ? 700 : 400,
+                        transition:   'all .15s',
+                      }}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                  {dateWindow !== 12 && allDisplay.length !== displayResults.length && (
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)', alignSelf: 'center' }}>
+                      ({allDisplay.length - displayResults.length} events outside window hidden)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {['GO', 'CONSIDER'].map(v => {
                   const count = displayResults.filter(e => e.fit_verdict === v).length
                   return (
                     <div key={v} className={`results-pill pill-${v.toLowerCase()}`}>
@@ -356,36 +358,33 @@ export default function App() {
                     </div>
                   )
                 })}
-                <button onClick={() => setEmailModalOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-display)', boxShadow: '0 3px 12px rgba(99,102,241,0.35)' }}>
+                <button
+                  onClick={() => setEmailModalOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-display)', boxShadow: '0 3px 12px rgba(99,102,241,.35)' }}
+                >
                   <Mail size={13} />
                   {reportSent ? 'Resend PDF Report' : 'Email PDF Report'}
                 </button>
               </div>
             </div>
 
-            <EventTable events={displayResults} profileId={profileId} dealSizeCategory={dealSizeCategory} />
+            <EventTable
+              events={displayResults}
+              profileId={profileId}
+              dealSizeCategory={dealSizeCategory}
+            />
           </section>
         )}
       </main>
 
-      <footer className="app-footer" id="resources">
+      <footer className="app-footer">
         <div className="footer-inner">
           <span>Powered by LeadStrategus · Multi-Agent Event Intelligence</span>
-          <button className="footer-rank-btn" onClick={() => document.getElementById('icp')?.scrollIntoView({ behavior: 'smooth' })}>Rank my shows</button>
-          <div className="footer-links"><a href="#how-it-works">How it works</a><a href="#services">Services</a><a href="#resources">Resources</a></div>
+          <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="footer-cta">
+            <b>Book a Demo</b> <ChevronRight size={18} />
+          </a>
         </div>
       </footer>
-
-      {showEmailGate && (
-        <EmailGate
-          onCapture={onEmailCaptured}
-          onDismiss={() => {
-            setShowEmailGate(false)
-            setResults(pendingResults || [])
-            setPendingResults(null)
-          }}
-        />
-      )}
 
       <EmailReportModal
         isOpen={emailModalOpen}
@@ -395,8 +394,6 @@ export default function App() {
         dealSizeCategory={dealSizeCategory}
         prefillEmail={userEmail}
       />
-      </>
-      </div>
     </div>
   )
 }
