@@ -1,5 +1,5 @@
 /*
-  App.jsx   -   Full homepage + results
+  App.jsx  —  Full homepage + results
   Hero flow (single column, centred):
     1. Nav
     2. Hero: headline → sub → bridge line → 4-field form → CTA
@@ -12,7 +12,7 @@
     9. Footer
 
   Uses heroMode prop on ICPForm so form fields sit flush in the
-  hero with no card wrapper  -  the form IS the page, not a widget.
+  hero with no card wrapper — the form IS the page, not a widget.
 */
 
 import { useState, useEffect, useRef } from 'react'
@@ -134,15 +134,15 @@ export default function App() {
       setResults(events)
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
-        toast.error('No matching events found  -  try a wider geography or different buyer description.')
+        toast.error('No matching events found — try a wider geography or different buyer description.')
         return
       }
       const go = display.filter(e => e.fit_verdict === 'GO').length
-      toast.success(`Found ${display.length} events  -  ${go} strong matches`, { duration: 4000 })
+      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 4000 })
       if (email) _autoSendReport(events, profile, email)
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400)
     } catch (err) {
-      toast.error(err.message || 'Search failed  -  please try again')
+      toast.error(err.message || 'Search failed — please try again')
     } finally {
       setLoading(false)
     }
@@ -178,7 +178,7 @@ export default function App() {
       toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
     } catch (err) {
       const msg = err.message || ''
-      if (msg.includes('RESEND') || msg.includes('503')) toast.error('RESEND_API_KEY not set  -  add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
+      if (msg.includes('RESEND') || msg.includes('503')) toast.error('RESEND_API_KEY not set — add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
       else toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
     }
   }
@@ -211,7 +211,7 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ══ 2. HERO  -  single column, form flush inline ════════════ */}
+      {/* ══ 2. HERO — single column, form flush inline ════════════ */}
       <section className="hero hp-hero-solo" aria-label="Find your shows">
         <OrbBackground />
 
@@ -232,7 +232,7 @@ export default function App() {
           {/* Sub */}
           <p className="hp-hero-solo-sub">
             We tell your reps exactly who to meet, which events are worth the flight,
-            and how to walk away with pipeline  -  not business cards.
+            and how to walk away with pipeline — not business cards.
           </p>
 
           {/* Bridge line */}
@@ -241,7 +241,7 @@ export default function App() {
             <strong> which shows are actually worth your time?</strong>
           </p>
 
-          {/* ── 4-FIELD FORM  -  flush in hero, no card wrapper ── */}
+          {/* ── 4-FIELD FORM — flush in hero, no card wrapper ── */}
           <div className="hp-form-zone" id="icp-form">
             <ICPForm
               onSubmit={onSearch}
@@ -279,9 +279,9 @@ export default function App() {
                 <path d="m17 17 3 3"/>
               </svg>
             </div>
-            <div className="hp-path-tag">Attending  -  hunting meetings</div>
+            <div className="hp-path-tag">Attending — hunting meetings</div>
             <h3 className="hp-path-title">Sales, BD, founders. Find your ICPs before you fly out.</h3>
-            <p className="hp-path-desc">Walk in knowing exactly who to find  -  meetings already on the calendar.</p>
+            <p className="hp-path-desc">Walk in knowing exactly who to find — meetings already on the calendar.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Find my shows →</button>
           </div>
           <div className="hp-path-card hp-path-exhibiting">
@@ -293,7 +293,7 @@ export default function App() {
                 <line x1="10" y1="15" x2="14" y2="15"/>
               </svg>
             </div>
-            <div className="hp-path-tag">Exhibiting  -  need booth traffic</div>
+            <div className="hp-path-tag">Exhibiting — need booth traffic</div>
             <h3 className="hp-path-title">Get 5× the qualified meetings around your booth.</h3>
             <p className="hp-path-desc">Stop waiting for walk-ups. Pre-book your target buyers before the floor opens.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Boost my booth →</button>
@@ -337,7 +337,7 @@ export default function App() {
                 style={{ transitionDelay: `${i * 80}ms` }}>
                 <div className="hp-pain-quote-mark" aria-hidden="true">"</div>
                 <p className="hp-pain-quote">{q.text}</p>
-                <div className="hp-pain-role"> -  {q.role}</div>
+                <div className="hp-pain-role">— {q.role}</div>
               </div>
             ))}
           </div>
@@ -351,7 +351,7 @@ export default function App() {
           <h2 className="hp-footer-cta-h2">Rank your shows in 2 minutes.</h2>
           <p className="hp-footer-cta-sub">Tell us your ICP. We'll tell you which events are worth flying to.</p>
           <div className="hp-footer-cta-btns">
-            <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows  -  it's free</button>
+            <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows — it's free</button>
             <a className="hp-cta-outline" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Book a demo</a>
           </div>
         </div>
