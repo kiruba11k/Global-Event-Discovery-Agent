@@ -1,0 +1,615 @@
+/*
+  icp-form.css
+  Drop into: frontend/src/icp-form.css
+  Import in ICPForm.jsx: import '../icp-form.css'
+
+  All selectors are .icp-* scoped — zero collision with existing App.css.
+  Matches LeadStrategus existing dark-card aesthetic (var(--bg-card), var(--accent), etc.)
+*/
+
+/* ── Keyframes ──────────────────────────────────────────────────── */
+@keyframes icp-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes icp-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes icp-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+@keyframes icp-tag-in {
+  from { opacity: 0; transform: scale(.85); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+@keyframes icp-shake {
+  0%, 100%       { transform: translateX(0); }
+  20%, 60%       { transform: translateX(-4px); }
+  40%, 80%       { transform: translateX(4px); }
+}
+
+/* ── Root wrapper ───────────────────────────────────────────────── */
+.icp-form-root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Card shell ─────────────────────────────────────────────────── */
+.icp-card {
+  background:    var(--bg-card, #1e293b);
+  border:        1px solid var(--border, rgba(255,255,255,0.09));
+  border-radius: var(--radius, 14px);
+  padding:       26px 28px 22px;
+  animation:     icp-slide-in .45s ease;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.icp-header {
+  display:        flex;
+  align-items:    center;
+  gap:            12px;
+  margin-bottom:  22px;
+  padding-bottom: 18px;
+  border-bottom:  1px solid var(--border, rgba(255,255,255,0.07));
+}
+.icp-header-icon {
+  width:           36px;
+  height:          36px;
+  border-radius:   10px;
+  background:      linear-gradient(135deg, rgba(6,182,212,.15), rgba(6,182,212,.05));
+  border:          1px solid rgba(6,182,212,.25);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  color:           var(--accent, #06b6d4);
+  flex-shrink:     0;
+}
+.icp-header-title {
+  font-family: var(--font-display, inherit);
+  font-size:   16px;
+  font-weight: 700;
+  color:       var(--text, #f1f5f9);
+  line-height: 1.3;
+}
+.icp-header-sub {
+  font-size:   12px;
+  color:       var(--text-dim, #94a3b8);
+  margin-top:  2px;
+}
+
+/* ── Field groups ───────────────────────────────────────────────── */
+.icp-fields {
+  display:        flex;
+  flex-direction: column;
+  gap:            22px;
+}
+.icp-field-group {
+  display:        flex;
+  flex-direction: column;
+  gap:            6px;
+}
+.icp-label {
+  font-size:   13px;
+  font-weight: 600;
+  color:       var(--text, #f1f5f9);
+  display:     flex;
+  align-items: center;
+  gap:         4px;
+}
+.icp-required {
+  color: var(--accent, #06b6d4);
+}
+.icp-hint {
+  font-size:   11px;
+  color:       var(--text-dim, #94a3b8);
+  line-height: 1.5;
+  margin:      0;
+}
+.icp-error {
+  font-size:  11px;
+  color:      #f43f5e;
+  margin:     0;
+  display:    flex;
+  align-items:center;
+  gap:        4px;
+  animation:  icp-shake .35s ease;
+}
+
+/* ── Base input ─────────────────────────────────────────────────── */
+.icp-input {
+  width:         100%;
+  background:    var(--bg-input, rgba(255,255,255,0.05));
+  border:        1px solid var(--border, rgba(255,255,255,0.09));
+  border-radius: var(--radius-sm, 8px);
+  padding:       11px 14px;
+  font-size:     14px;
+  color:         var(--text, #f1f5f9);
+  font-family:   var(--font-body, inherit);
+  outline:       none;
+  transition:    border-color .2s, box-shadow .2s;
+  box-sizing:    border-box;
+}
+.icp-input:focus {
+  border-color: var(--accent, #06b6d4);
+  box-shadow:   0 0 0 3px rgba(6,182,212,.12);
+}
+.icp-input--error {
+  border-color: #f43f5e;
+  box-shadow:   0 0 0 3px rgba(244,63,94,.1);
+}
+.icp-input::placeholder { color: rgba(148,163,184,.5); }
+.icp-textarea {
+  resize:      vertical;
+  line-height: 1.6;
+  min-height:  80px;
+}
+
+/* ── Suggestions dropdown ────────────────────────────────────────── */
+.icp-suggestions {
+  position:      absolute;
+  top:           calc(100% + 4px);
+  left:          0;
+  right:         0;
+  background:    var(--bg-card, #1e293b);
+  border:        1px solid var(--border, rgba(255,255,255,0.14));
+  border-radius: var(--radius-sm, 8px);
+  z-index:       50;
+  overflow:      hidden;
+  box-shadow:    0 8px 24px rgba(0,0,0,.35);
+  animation:     icp-slide-in .15s ease;
+}
+.icp-sug-item {
+  display:    block;
+  width:      100%;
+  text-align: left;
+  padding:    10px 14px;
+  font-size:  13px;
+  color:      var(--text-sub, #cbd5e1);
+  background: none;
+  border:     none;
+  cursor:     pointer;
+  transition: background .15s;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+.icp-sug-item:last-child { border-bottom: none; }
+.icp-sug-item:hover {
+  background: rgba(6,182,212,.08);
+  color:      var(--text, #f1f5f9);
+}
+
+/* ── Parse preview ──────────────────────────────────────────────── */
+.icp-parse-preview {
+  display:     flex;
+  flex-wrap:   wrap;
+  gap:         5px;
+  align-items: center;
+  margin-top:  4px;
+}
+.icp-parse-label {
+  font-size:  10px;
+  color:      var(--text-dim, #94a3b8);
+  font-weight:600;
+  margin-right:2px;
+}
+.icp-tag {
+  font-size:     10px;
+  font-weight:   600;
+  padding:       3px 9px;
+  border-radius: 100px;
+  animation:     icp-tag-in .2s ease;
+}
+.icp-tag--ind {
+  background: rgba(6,182,212,.12);
+  color:      #06b6d4;
+  border:     1px solid rgba(6,182,212,.25);
+}
+.icp-tag--per {
+  background: rgba(139,92,246,.12);
+  color:      #a78bfa;
+  border:     1px solid rgba(139,92,246,.25);
+}
+
+/* ── Geo chips (selected) ────────────────────────────────────────── */
+.icp-geo-selected {
+  display:  flex;
+  flex-wrap:wrap;
+  gap:      5px;
+  margin-bottom: 6px;
+}
+.icp-geo-chip {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           5px;
+  background:    rgba(6,182,212,.12);
+  border:        1px solid rgba(6,182,212,.25);
+  color:         #06b6d4;
+  font-size:     12px;
+  font-weight:   600;
+  padding:       4px 10px 4px 12px;
+  border-radius: 100px;
+  animation:     icp-tag-in .2s ease;
+}
+.icp-geo-chip-remove {
+  background: none;
+  border:     none;
+  color:      inherit;
+  cursor:     pointer;
+  padding:    0;
+  font-size:  14px;
+  line-height:1;
+  opacity:    .7;
+  transition: opacity .15s;
+}
+.icp-geo-chip-remove:hover { opacity: 1; }
+
+/* ── Geo trigger button ──────────────────────────────────────────── */
+.icp-geo-trigger {
+  width:         100%;
+  display:       flex;
+  align-items:   center;
+  justify-content:space-between;
+  background:    var(--bg-input, rgba(255,255,255,0.05));
+  border:        1px solid var(--border, rgba(255,255,255,0.09));
+  border-radius: var(--radius-sm, 8px);
+  padding:       11px 14px;
+  font-size:     14px;
+  color:         var(--text, #f1f5f9);
+  cursor:        pointer;
+  transition:    border-color .2s, box-shadow .2s;
+  text-align:    left;
+}
+.icp-geo-trigger:focus,
+.icp-geo-trigger:hover {
+  border-color: var(--accent, #06b6d4);
+  box-shadow:   0 0 0 3px rgba(6,182,212,.1);
+  outline:      none;
+}
+
+/* ── Geo dropdown ────────────────────────────────────────────────── */
+.icp-geo-dropdown {
+  position:      absolute;
+  top:           calc(100% + 4px);
+  left:          0;
+  right:         0;
+  background:    var(--bg-card, #1e293b);
+  border:        1px solid var(--border, rgba(255,255,255,0.14));
+  border-radius: var(--radius-sm, 8px);
+  z-index:       50;
+  box-shadow:    0 8px 24px rgba(0,0,0,.35);
+  animation:     icp-slide-in .15s ease;
+}
+.icp-geo-search {
+  width:       100%;
+  background:  var(--bg-input, rgba(255,255,255,0.04));
+  border:      none;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm, 8px) var(--radius-sm, 8px) 0 0;
+  padding:     10px 14px;
+  font-size:   13px;
+  color:       var(--text, #f1f5f9);
+  outline:     none;
+  box-sizing:  border-box;
+}
+.icp-geo-list {
+  max-height:   220px;
+  overflow-y:   auto;
+  padding:      4px 0;
+}
+.icp-geo-option {
+  display:    flex;
+  align-items:center;
+  gap:        8px;
+  width:      100%;
+  text-align: left;
+  padding:    9px 14px;
+  font-size:  13px;
+  color:      var(--text-sub, #cbd5e1);
+  background: none;
+  border:     none;
+  cursor:     pointer;
+  transition: background .12s;
+}
+.icp-geo-option:hover { background: rgba(6,182,212,.07); color: var(--text, #f1f5f9); }
+.icp-geo-option.selected { color: var(--accent, #06b6d4); font-weight: 600; }
+.icp-geo-check {
+  width:    14px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color:    var(--accent, #06b6d4);
+}
+
+/* ── Deal brackets ───────────────────────────────────────────────── */
+.icp-deal-grid {
+  display:               grid;
+  grid-template-columns: 1fr 1fr;
+  gap:                   8px;
+}
+.icp-deal-option {
+  position:      relative;
+  display:       flex;
+  flex-direction:column;
+  align-items:   flex-start;
+  gap:           3px;
+  background:    var(--bg-input, rgba(255,255,255,0.04));
+  border:        1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm, 8px);
+  padding:       12px 14px;
+  cursor:        pointer;
+  text-align:    left;
+  transition:    all .2s;
+  overflow:      hidden;
+}
+.icp-deal-option:hover:not(.disabled) {
+  border-color: var(--deal-border);
+  background:   var(--deal-bg);
+  transform:    translateY(-1px);
+}
+.icp-deal-option.selected {
+  border-color: var(--deal-border);
+  border-width: 1.5px;
+  background:   var(--deal-bg);
+  box-shadow:   0 0 0 3px rgba(from var(--deal-accent) r g b / .1);
+}
+.icp-deal-option.disabled {
+  opacity:0.55;
+  cursor: not-allowed;
+}
+.icp-deal-badge {
+  position:    absolute;
+  top:         6px;
+  right:       8px;
+  font-size:   9px;
+  font-weight: 700;
+  color:       #1D9E75;
+  background:  rgba(29,158,117,.12);
+  border:      1px solid rgba(29,158,117,.3);
+  padding:     2px 7px;
+  border-radius: 100px;
+  letter-spacing: .04em;
+}
+.icp-deal-label {
+  font-size:   13px;
+  font-weight: 700;
+  color:       var(--deal-color, #f1f5f9);
+}
+.icp-deal-sub {
+  font-size:  11px;
+  color:      var(--text-dim, #94a3b8);
+  line-height:1.4;
+}
+.icp-deal-disq {
+  font-size:  10px;
+  color:      #888780;
+  font-style: italic;
+}
+
+/* ── Email row ────────────────────────────────────────────────────── */
+.icp-email-row {
+  position: relative;
+}
+.icp-email-icon {
+  position: absolute;
+  left:     14px;
+  top:      50%;
+  transform:translateY(-50%);
+  color:    var(--text-dim, #94a3b8);
+  pointer-events: none;
+}
+.icp-input--email {
+  padding-left: 38px;
+}
+.icp-privacy {
+  font-size:  10px;
+  color:      var(--text-dim, #94a3b8);
+  margin:     0;
+  opacity:    .7;
+}
+
+/* ── Date notice ─────────────────────────────────────────────────── */
+.icp-date-notice {
+  display:       flex;
+  align-items:   flex-start;
+  gap:           8px;
+  background:    rgba(6,182,212,.05);
+  border:        1px solid rgba(6,182,212,.15);
+  border-radius: var(--radius-sm, 8px);
+  padding:       10px 14px;
+  margin-top:    16px;
+  font-size:     11px;
+  color:         var(--text-dim, #94a3b8);
+  line-height:   1.55;
+}
+.icp-date-notice svg { flex-shrink: 0; margin-top: 1px; color: var(--accent, #06b6d4); }
+.icp-date-notice strong { color: var(--text, #f1f5f9); }
+
+/* ── Submit button ───────────────────────────────────────────────── */
+.icp-submit-btn {
+  display:        flex;
+  align-items:    center;
+  justify-content:center;
+  gap:            8px;
+  width:          100%;
+  margin-top:     20px;
+  background:     linear-gradient(135deg, var(--accent, #06b6d4), var(--accent-2, #6366f1));
+  color:          #fff;
+  border:         none;
+  border-radius:  var(--radius-sm, 10px);
+  padding:        14px 24px;
+  font-family:    var(--font-display, inherit);
+  font-size:      15px;
+  font-weight:    700;
+  cursor:         pointer;
+  box-shadow:     0 4px 20px rgba(6,182,212,.3);
+  transition:     opacity .2s, transform .15s, box-shadow .2s;
+  letter-spacing: .01em;
+}
+.icp-submit-btn:hover:not(:disabled) {
+  opacity:   .95;
+  transform: translateY(-1px);
+  box-shadow:0 6px 24px rgba(6,182,212,.4);
+}
+.icp-submit-btn:active:not(:disabled) { transform: scale(.98); }
+.icp-submit-btn:disabled {
+  opacity:   .65;
+  cursor:    not-allowed;
+  transform: none;
+  box-shadow:none;
+  background:var(--border, rgba(255,255,255,0.1));
+}
+.icp-spinner {
+  display:      inline-block;
+  width:        15px;
+  height:       15px;
+  border:       2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius:100%;
+  animation:    icp-spin .7s linear infinite;
+}
+
+/* ── Upgrade card ────────────────────────────────────────────────── */
+.icp-upgrade-card {
+  background:    var(--bg-card, #1e293b);
+  border:        1px solid rgba(139,92,246,.25);
+  border-radius: var(--radius, 14px);
+  overflow:      hidden;
+  animation:     icp-slide-in .4s ease;
+}
+.icp-upgrade-header {
+  display:     flex;
+  align-items: flex-start;
+  gap:         12px;
+  padding:     18px 20px;
+}
+.icp-upgrade-icon {
+  font-size:  18px;
+  color:      #a78bfa;
+  flex-shrink:0;
+  margin-top: 2px;
+}
+.icp-upgrade-title {
+  font-size:   14px;
+  font-weight: 700;
+  color:       var(--text, #f1f5f9);
+  margin-bottom:3px;
+}
+.icp-upgrade-sub {
+  font-size:  12px;
+  color:      var(--text-dim, #94a3b8);
+  line-height:1.55;
+}
+.icp-upgrade-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  background:  rgba(139,92,246,.12);
+  border:      1px solid rgba(139,92,246,.3);
+  color:       #a78bfa;
+  font-size:   12px;
+  font-weight: 700;
+  padding:     6px 14px;
+  border-radius:100px;
+  cursor:      pointer;
+  white-space: nowrap;
+  transition:  all .2s;
+}
+.icp-upgrade-toggle:hover { background: rgba(139,92,246,.2); }
+
+.icp-upgrade-body {
+  padding:    0 20px 20px;
+  display:    flex;
+  flex-direction:column;
+  gap:        16px;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.07));
+  padding-top:16px;
+}
+
+/* ── Motion grid ─────────────────────────────────────────────────── */
+.icp-motion-grid {
+  display:               grid;
+  grid-template-columns: 1fr 1fr;
+  gap:                   6px;
+}
+.icp-motion-option {
+  display:        flex;
+  flex-direction: column;
+  gap:            2px;
+  background:     var(--bg-input, rgba(255,255,255,0.04));
+  border:         1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius:  8px;
+  padding:        10px 12px;
+  cursor:         pointer;
+  text-align:     left;
+  transition:     all .2s;
+}
+.icp-motion-option:hover {
+  border-color: rgba(139,92,246,.4);
+  background:   rgba(139,92,246,.06);
+}
+.icp-motion-option.selected {
+  border-color: rgba(139,92,246,.5);
+  border-width: 1.5px;
+  background:   rgba(139,92,246,.08);
+}
+.icp-motion-label {
+  font-size:  12px;
+  font-weight:700;
+  color:      var(--text, #f1f5f9);
+}
+.icp-motion-sub {
+  font-size: 10px;
+  color:     var(--text-dim, #94a3b8);
+}
+
+/* ── Upload button ───────────────────────────────────────────────── */
+.icp-upload-btn {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           7px;
+  background:    var(--bg-input, rgba(255,255,255,0.05));
+  border:        1px dashed var(--border, rgba(255,255,255,0.15));
+  border-radius: var(--radius-sm, 8px);
+  padding:       10px 16px;
+  font-size:     13px;
+  color:         var(--text-dim, #94a3b8);
+  cursor:        pointer;
+  transition:    all .2s;
+}
+.icp-upload-btn:hover {
+  border-color: var(--accent, #06b6d4);
+  color:        var(--accent, #06b6d4);
+  background:   rgba(6,182,212,.05);
+}
+
+/* ── Upgrade submit ──────────────────────────────────────────────── */
+.icp-upgrade-submit {
+  background:    linear-gradient(135deg, #7c3aed, #a78bfa);
+  color:         #fff;
+  border:        none;
+  border-radius: var(--radius-sm, 8px);
+  padding:       12px 20px;
+  font-size:     13px;
+  font-weight:   700;
+  cursor:        pointer;
+  transition:    all .2s;
+}
+.icp-upgrade-submit:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+.icp-upgrade-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Upgrade success ─────────────────────────────────────────────── */
+.icp-upgrade-success {
+  border-color:  rgba(29,158,117,.3) !important;
+  padding:       16px 20px;
+  display:       flex;
+  align-items:   center;
+  gap:           12px;
+}
+.icp-upgrade-success .icp-upgrade-icon { color: #1D9E75; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .icp-card         { padding: 18px 16px; }
+  .icp-deal-grid    { grid-template-columns: 1fr; }
+  .icp-motion-grid  { grid-template-columns: 1fr; }
+}
