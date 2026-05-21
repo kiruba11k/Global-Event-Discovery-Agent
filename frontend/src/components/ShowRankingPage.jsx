@@ -1,438 +1,500 @@
 /*
-  ShowDeepDivePage.jsx — Screen 3: Per-show deep dive
+  ShowRankingPage.jsx  —  Screen 2: Your Show Ranking
 
-  Two entry modes:
-    1. CONTEXTUAL  — clicked "#1 Gartner CIO Symposium" from Screen 2.
-       Has event + profile, shows personalised ICP stats immediately.
-    2. SEO / COLD  — landed on /show/medica-2026 from Google.
-       No ICP known. Shows inline ICP form: "Want to know if your
-       buyers will be at Medica 2026? Tell us your ICP."
+  Layout (top → bottom):
+    1. Report banner ("Your shows · CIOs · financial services · $500M+ · NA & EMEA")
+    2. Universe stats: total ICP count · shows worth considering · strongly recommended
+    3. Top-6 ranked list (rank# · show · location/dates · ICP count · fit grade)
+       Rows 1–3: visible immediately
+       Rows 4–6: email-gated (blur + unlock prompt)
+    4. Free downloads: ICP playbook + 90-day checklist
+    5. Soft CTA: "Want us to actually set up the meetings?"
+    6. EventTable (full detail, expandable rows — existing component)
 
-  Sections:
-    1. Back nav (contextual mode only)
-    2. Show header — name · personalised line · location · dates · rank
-    3. Key stats (3 metrics) — ICP count · fit grade · addressable pipeline
-    4. Companies bringing your ICPs — text pills, partial free / gated
-    5. Historical pattern — last year count, YoY growth, sponsors in space
-    6. Inline ICP form (SEO mode only, or if no profile yet)
-    7. Strong CTA panel — meeting setup services
-
-  Props (contextual mode):
-    event       object   — full event from API response
-    profile     object   — {target_industries, target_personas, target_geographies, avg_deal_size_category}
-    rank        number   — 1-based rank from Screen 2
-    onBack      fn()     — navigates back to ranking
-    userEmail   string   — pre-filled email
-
-  Props (SEO mode — event only, no profile):
-    event       object   — fetched by slug from /api/show/{slug}
-    onSubmitICP fn(profile, email) — fires ICPForm submit, re-enters app flow
-
-  URL: /show/medica-2026  → slug built as event_name.toLowerCase().replace(/\s+/g,'-')
+  Props:
+    events         array    — all events from /api/search
+    profile        object   — {company_name, target_industries, target_personas,
+                               target_geographies, avg_deal_size_category, date_from, date_to}
+    userEmail      string   — pre-filled if already captured in ICPForm
+    dealSizeCategory string
+    profileId      string
+    onEmailUnlock  fn(email) — called when user unlocks gated rows
+    onEmailReport  fn()      — trigger email modal
 */
 
 import { useState, useEffect, useRef } from 'react'
-import ICPForm from './ICPForm'
-import '../show-deep-dive.css'
+import EventTable from './EventTable'
+import '../ranking.css'
 
-// ── Company name banks per industry ──────────────────────────────
-// MVP: infer plausible companies from industry tags
-// v2: replace with real attendee company data from exhibitor lists + LinkedIn
-const COMPANY_BANKS = {
-  'Fintech':            ['JPMorgan','Goldman Sachs','Citi','HSBC','Visa','Mastercard','Stripe','Revolut','N26','Klarna','Deutsche Bank','BNP Paribas','Barclays','Société Générale','Wells Fargo','Morgan Stanley','BlackRock','Fidelity'],
-  'Cloud Computing':    ['AWS','Google Cloud','Microsoft Azure','Snowflake','Databricks','HashiCorp','VMware','Red Hat','Cloudflare','Fastly','Twilio','Okta','Datadog','New Relic','Splunk','MongoDB','Elastic'],
-  'Cybersecurity':      ['CrowdStrike','Palo Alto Networks','Fortinet','Check Point','SentinelOne','Zscaler','CyberArk','Rapid7','Tenable','Qualys','Sophos','Trend Micro','Carbon Black','Exabeam','Secureworks'],
-  'Healthcare / Medtech':['Philips','Siemens Healthineers','GE Healthcare','Medtronic','Abbott','Stryker','Boston Scientific','Zimmer Biomet','Becton Dickinson','Baxter','Fresenius','Roche','Johnson & Johnson','Hologic'],
-  'Manufacturing':      ['Siemens','Bosch','ABB','Rockwell Automation','Honeywell','Emerson','Schneider Electric','Parker Hannifin','Eaton','Illinois Tool Works','Danaher','Textron','Roper Technologies'],
-  'Logistics / Supply Chain':['DHL','FedEx','UPS','Maersk','DB Schenker','Kuehne+Nagel','XPO Logistics','Geodis','CEVA','Toll Group','DSV','Flexport','project44','FourKites'],
-  'AI / Machine Learning':['NVIDIA','OpenAI','Google DeepMind','Meta AI','Anthropic','Mistral','Cohere','Scale AI','Hugging Face','DataRobot','C3.ai','Palantir','UiPath','Automation Anywhere'],
-  'Technology':         ['Salesforce','ServiceNow','SAP','Oracle','Workday','Adobe','HubSpot','Zendesk','Atlassian','Slack','Zoom','DocuSign','Box','Dropbox','Twilio','Segment'],
-}
-
-function getCompanyPills(profile, event) {
-  const ind = profile?.target_industries?.[0] || event?.industry?.split(',')?.[0]?.trim() || 'Technology'
-  const bank = COMPANY_BANKS[ind] || COMPANY_BANKS['Technology']
-  // Shuffle deterministically based on event name (stable across renders)
-  const seed = (event?.event_name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  const shuffled = [...bank].sort((a, b) => ((seed * a.charCodeAt(0)) % 97) - ((seed * b.charCodeAt(0)) % 97))
-  return shuffled
-}
-
-// ── Fit grade (same logic as ShowRankingPage) ─────────────────────
+// ── Fit grade from relevance_score + fit_verdict ──────────────────
+// Weighted: ICP density (from score) + deal-size fit + geo match
+// In MVP we use relevance_score as the weighted proxy.
 function getFitGrade(event) {
-  const score   = typeof event?.relevance_score === 'number' ? event.relevance_score : 0
-  const bonus   = event?.fit_verdict === 'GO' ? 18 : event?.fit_verdict === 'CONSIDER' ? 8 : 0
+  const score   = typeof event.relevance_score === 'number' ? event.relevance_score : 0
+  const verdict = event.fit_verdict || ''
+  // Composite: score carries 80%, verdict bonus 20%
+  const bonus   = verdict === 'GO' ? 18 : verdict === 'CONSIDER' ? 8 : 0
   const total   = Math.min(score * 0.82 + bonus, 100)
-  if (total >= 88) return { grade: 'A+', label: 'Exceptional fit', cls: 'ddv-grade-aplus' }
-  if (total >= 75) return { grade: 'A',  label: 'Strong fit',      cls: 'ddv-grade-a'    }
-  if (total >= 62) return { grade: 'B+', label: 'Good fit',        cls: 'ddv-grade-bplus' }
-  if (total >= 48) return { grade: 'B',  label: 'Reasonable fit',  cls: 'ddv-grade-b'    }
-  return               { grade: 'C',  label: 'Marginal fit',    cls: 'ddv-grade-c'    }
+  if (total >= 88) return { grade: 'A+', cls: 'grade-aplus',  label: 'Exceptional fit'   }
+  if (total >= 75) return { grade: 'A',  cls: 'grade-a',      label: 'Strong fit'        }
+  if (total >= 62) return { grade: 'B+', cls: 'grade-bplus',  label: 'Good fit'          }
+  if (total >= 48) return { grade: 'B',  cls: 'grade-b',      label: 'Reasonable fit'    }
+  return                  { grade: 'C',  cls: 'grade-c',      label: 'Marginal fit'      }
 }
 
-// ── ICP count estimate ────────────────────────────────────────────
+// ── Estimate ICP count ────────────────────────────────────────────
+// In MVP: derive from est_attendees + relevance_score.
+// We show as "~N ICPs" — honesty builds trust more than false precision.
 function estimateICPCount(event) {
-  const att   = parseInt(event?.est_attendees) || 0
-  const score = typeof event?.relevance_score === 'number' ? event.relevance_score : 50
-  if (att === 0) return null
-  return Math.round((att * (score / 100) * 0.35) / 10) * 10
+  const att   = parseInt(event.est_attendees) || 0
+  const score = typeof event.relevance_score === 'number' ? event.relevance_score : 50
+  if (att === 0) return null   // unknown — don't show a number
+  // ICPs ≈ attendees × (relevance_score/100) × 0.35 (30-40% are decision-makers)
+  const raw = Math.round(att * (score / 100) * 0.35)
+  if (raw === 0) return null
+  // Round to nearest 10 for honesty
+  return Math.round(raw / 10) * 10
 }
 
-// ── Addressable pipeline estimate ────────────────────────────────
-// ICPs × close-rate proxy × mid-deal value
-const DEAL_MIDPOINTS = { medium: 30000, high: 75000, enterprise: 250000, strategic: 750000 }
-function estimatePipeline(event, dealSizeCategory) {
-  const icpCount = estimateICPCount(event)
-  if (!icpCount) return null
-  const mid      = DEAL_MIDPOINTS[dealSizeCategory] || DEAL_MIDPOINTS.medium
-  const pipeline = Math.round(icpCount * mid * 0.15 / 1000000 * 10) / 10
-  if (pipeline >= 1)  return `$${pipeline}M`
-  if (pipeline >= 0.1) return `$${Math.round(pipeline * 10) / 10}M`
-  return `$${Math.round(icpCount * mid * 0.15 / 1000)}K`
+// ── Build report banner label from profile ────────────────────────
+function buildBannerLabel(profile) {
+  const parts = []
+  if (profile?.target_personas?.length)  parts.push(profile.target_personas.slice(0, 2).join(' · '))
+  if (profile?.target_industries?.length) parts.push(profile.target_industries.slice(0, 2).join(' · '))
+  if (profile?.avg_deal_size_category) {
+    const labels = { medium: '$10K–$50K deals', high: '$50K–$100K deals', enterprise: '$100K–$500K deals', strategic: '$500K+ deals' }
+    parts.push(labels[profile.avg_deal_size_category] || profile.avg_deal_size_category)
+  }
+  if (profile?.target_geographies?.length) parts.push(profile.target_geographies.slice(0, 3).join(' · '))
+  return parts.join('  ·  ')
 }
 
-// ── Historical pattern ────────────────────────────────────────────
-function estimateHistorical(event) {
-  const current = estimateICPCount(event)
-  if (!current) return null
-  const lastYear = Math.round(current * 0.85)
-  const growth   = 17   // % — plausible YoY for most B2B events
-  const sponsors = Math.round(3 + (event?.est_attendees || 1000) / 200)
-  return { lastYear, growth, sponsors: Math.min(sponsors, 48) }
+// ── Build download filename from profile ─────────────────────────
+function buildPlaybookName(profile) {
+  const ind = profile?.target_industries?.[0] || 'B2B'
+  const per = profile?.target_personas?.[0]   || 'decision-maker'
+  return `The ${ind} ${per} trade show playbook`
 }
 
-// ── Animated counter ──────────────────────────────────────────────
-function Counter({ target, prefix = '', suffix = '', triggered }) {
-  const [val, setVal] = useState(0)
-  useEffect(() => {
-    if (!triggered || !target) return
-    const s = performance.now()
-    const go = (now) => {
-      const p = Math.min((now - s) / 850, 1)
-      setVal(Math.round((1 - Math.pow(1 - p, 3)) * target))
-      if (p < 1) requestAnimationFrame(go)
-    }
-    requestAnimationFrame(go)
-  }, [triggered, target])
-  return <>{prefix}{val.toLocaleString()}{suffix}</>
-}
 
 // ═══════════════════════════════════════════════════════════════════
-export default function ShowDeepDivePage({
-  event         = null,
-  profile       = null,
-  rank          = null,
-  onBack        = null,
-  userEmail     = '',
-  onSubmitICP   = null,    // for SEO mode: fires when inline form submitted
+export default function ShowRankingPage({
+  events           = [],
+  profile          = {},
+  userEmail        = '',
   dealSizeCategory = 'medium',
+  profileId        = '',
+  onEmailUnlock,
+  onEmailReport,
+  onShowClick,     // fn(event, rank) — opens Screen 3 deep dive
 }) {
-  const [companyUnlocked, setCompanyUnlocked]  = useState(!!userEmail)
-  const [gateEmail,       setGateEmail]        = useState(userEmail)
-  const [gateError,       setGateError]        = useState('')
-  const [statsVisible,    setStatsVisible]     = useState(false)
-  const [histVisible,     setHistVisible]      = useState(false)
-  const [mounted,         setMounted]          = useState(false)
-
+  const [unlocked,      setUnlocked]      = useState(!!userEmail)
+  const [gateEmail,     setGateEmail]     = useState(userEmail)
+  const [gateError,     setGateError]     = useState('')
+  const [downloading,   setDownloading]   = useState(null)
+  const [statsVisible,  setStatsVisible]  = useState(false)
   const statsRef = useRef(null)
-  const histRef  = useRef(null)
 
-  const isSeoMode = !profile   // no ICP known — show inline form
-
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => { if (userEmail) setCompanyUnlocked(true) }, [userEmail])
+  useEffect(() => {
+    if (userEmail) setUnlocked(true)
+  }, [userEmail])
 
   useEffect(() => {
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.2 })
     if (statsRef.current) io.observe(statsRef.current)
     return () => io.disconnect()
   }, [])
-  useEffect(() => {
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setHistVisible(true) }, { threshold: 0.2 })
-    if (histRef.current) io.observe(histRef.current)
-    return () => io.disconnect()
-  }, [])
 
-  if (!event) {
-    return (
-      <div className="ddv-root ddv-empty">
-        <div className="ddv-empty-icon" aria-hidden="true">📅</div>
-        <h2>Show not found</h2>
-        <p>This event may have moved or been removed from our index.</p>
-        {onBack && <button className="ddv-back-btn" onClick={onBack}>← Back to your ranking</button>}
-      </div>
-    )
-  }
+  // ── Rank + slice ────────────────────────────────────────────────
+  // Already ranked by backend relevance. Take top 6, always 6.
+  const allDisplay = events.filter(e => e.fit_verdict !== 'SKIP')
+  const top6       = allDisplay.slice(0, 6)
+  const remaining  = allDisplay.slice(6)     // 7–23 — available after unlock
 
-  const grade     = getFitGrade(event)
-  const icpCount  = estimateICPCount(event)
-  const pipeline  = estimatePipeline(event, dealSizeCategory || profile?.avg_deal_size_category)
-  const hist      = estimateHistorical(event)
-  const companies = getCompanyPills(profile, event)
-  const FREE_PILLS = 6
-  const visibleCompanies = companyUnlocked ? companies : companies.slice(0, FREE_PILLS)
-  const gatedCount       = companies.length - FREE_PILLS
+  // Universe stats
+  const totalICPs = top6.reduce((sum, e) => {
+    const c = estimateICPCount(e); return c ? sum + c : sum
+  }, 0)
+  const totalConsidering = allDisplay.length
+  const stronglyRec      = allDisplay.filter(e => {
+    const g = getFitGrade(e); return g.grade === 'A+' || g.grade === 'A'
+  }).length
 
-  const handleCompanyUnlock = () => {
-    if (!gateEmail.trim()) { setGateError('Enter your work email to see all companies'); return }
+  // ── Email unlock ────────────────────────────────────────────────
+  const handleUnlock = () => {
+    if (!gateEmail.trim()) { setGateError('Enter your work email to unlock'); return }
     if (!gateEmail.includes('@')) { setGateError('Enter a valid email'); return }
-    setCompanyUnlocked(true)
+    setUnlocked(true)
     setGateError('')
+    onEmailUnlock && onEmailUnlock(gateEmail)
   }
+
+  // ── Simulated download (real PDFs are server-generated) ─────────
+  const handleDownload = (type) => {
+    if (!unlocked) { document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' }); return }
+    setDownloading(type)
+    // In production this calls /api/download/{type}?profile_id={profileId}
+    // For now simulate a 1.2s delay then open a placeholder
+    setTimeout(() => {
+      setDownloading(null)
+      // Placeholder: open contact page
+      window.open('https://leadstrategus.com/contact/', '_blank', 'noopener')
+    }, 1200)
+  }
+
+
+  // ── Animated counter ────────────────────────────────────────────
+  function Counter({ target, prefix = '', suffix = '', triggered }) {
+    const [val, setVal] = useState(0)
+    useEffect(() => {
+      if (!triggered || !target) return
+      const s = performance.now()
+      const go = (now) => {
+        const p = Math.min((now - s) / 900, 1)
+        const e = 1 - Math.pow(1 - p, 3)
+        setVal(Math.round(e * target))
+        if (p < 1) requestAnimationFrame(go)
+      }
+      requestAnimationFrame(go)
+    }, [triggered, target])
+    return <>{prefix}{val.toLocaleString()}{suffix}</>
+  }
+
+  if (!top6.length) return null
+
+  const bannerLabel  = buildBannerLabel(profile)
+  const playbookName = buildPlaybookName(profile)
 
   return (
-    <div
-      className="ddv-root"
-      style={{ opacity: mounted ? 1 : 0, transition: 'opacity .35s ease' }}
-    >
+    <div className="rk-root">
 
-      {/* ── 1. BACK NAV ────────────────────────────────────────── */}
-      {onBack && (
-        <div className="ddv-back-bar">
-          <div className="ddv-back-inner">
-            <button className="ddv-back-btn" onClick={onBack} aria-label="Back to ranking">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m15 18-6-6 6-6"/>
-              </svg>
-              Back to your ranking
-            </button>
-            {rank && (
-              <span className="ddv-back-rank">#{rank} in your ranking</span>
+      {/* ── 1. REPORT BANNER ─────────────────────────────────────── */}
+      <div className="rk-banner">
+        <div className="rk-banner-inner">
+          <div className="rk-banner-left">
+            <div className="rk-banner-eyebrow">
+              <span className="rk-banner-dot" aria-hidden="true" />
+              Your shows
+            </div>
+            <div className="rk-banner-label" aria-label="Your ICP filters">
+              {bannerLabel}
+            </div>
+            <p className="rk-banner-sub">
+              Out of 11,000 shows, here are the{' '}
+              <strong>{top6.length}</strong> where your buyers concentrate.
+            </p>
+          </div>
+          <div className="rk-banner-actions">
+            {onEmailReport && (
+              <button className="rk-btn-email" onClick={onEmailReport}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                Email PDF report
+              </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* ── 2. SHOW HEADER ─────────────────────────────────────── */}
-      <div className="ddv-header">
-        <div className="ddv-header-inner">
-          <div className="ddv-header-left">
-            {profile && (
-              <div className="ddv-header-personalised">
-                <span className="ddv-header-dot" aria-hidden="true" />
-                {profile.target_personas?.[0] || 'Your ICP'} view · personalised
-              </div>
-            )}
-            <h1 className="ddv-show-name">{event.event_name}</h1>
-            <div className="ddv-show-meta">
-              {event.place && (
-                <span className="ddv-meta-item">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                  </svg>
-                  {event.place}
-                </span>
-              )}
-              {event.date && (
-                <span className="ddv-meta-item">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                  </svg>
-                  {event.date}
-                </span>
-              )}
-              {event.event_link && (
-                <a href={event.event_link} target="_blank" rel="noopener noreferrer" className="ddv-meta-item ddv-meta-link">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                  Official site
-                </a>
-              )}
-            </div>
-            {event.what_its_about && (
-              <p className="ddv-show-about">{event.what_its_about}</p>
-            )}
-          </div>
-
-          {/* Grade badge */}
-          {profile && (
-            <div className="ddv-header-grade">
-              <div className={`ddv-grade-badge ${grade.cls}`} aria-label={`Fit grade ${grade.grade}: ${grade.label}`}>
-                {grade.grade}
-              </div>
-              <div className="ddv-grade-label">{grade.label}</div>
-              {rank && <div className="ddv-rank-label">#{rank} for your ICP</div>}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── 3. KEY STATS ────────────────────────────────────────── */}
-      {profile && (
-        <div className="ddv-stats" ref={statsRef} aria-label="Key metrics for your ICP">
-          <div className="ddv-stats-inner">
-            <div className="ddv-stat">
-              <div className="ddv-stat-num ddv-stat-accent">
-                {icpCount ? <>~<Counter target={icpCount} triggered={statsVisible} /></> : '—'}
-              </div>
-              <div className="ddv-stat-label">of your ICPs attending</div>
-              <div className="ddv-stat-note">estimated decision-makers · <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="ddv-method-link">methodology</a></div>
+      {/* ── 2. UNIVERSE STATS ────────────────────────────────────── */}
+      <div className="rk-stats" ref={statsRef} aria-label="Universe statistics">
+        <div className="rk-stats-inner">
+          <div className="rk-stat-card">
+            <div className="rk-stat-num rk-stat-accent">
+              ~<Counter target={totalICPs || 3200} triggered={statsVisible} />
             </div>
-            <div className="ddv-stat-divider" aria-hidden="true" />
-            <div className="ddv-stat">
-              <div className={`ddv-stat-num ddv-grade-inline ${grade.cls}`}>{grade.grade}</div>
-              <div className="ddv-stat-label">fit score for your ICP</div>
-              <div className="ddv-stat-note">{grade.label}</div>
-            </div>
-            <div className="ddv-stat-divider" aria-hidden="true" />
-            <div className="ddv-stat">
-              <div className="ddv-stat-num ddv-stat-go">
-                {pipeline || '—'}
-              </div>
-              <div className="ddv-stat-label">addressable pipeline</div>
-              <div className="ddv-stat-note">at 15% contact × 40% qual × your deal size</div>
+            <div className="rk-stat-label">total ICPs across all relevant shows</div>
+            <div className="rk-stat-method">
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">
+                methodology →
+              </a>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ── 4. COMPANIES BRINGING YOUR ICPs ─────────────────────── */}
-      {profile && (
-        <div className="ddv-companies">
-          <div className="ddv-companies-inner">
-            <div className="ddv-section-eyebrow">Companies sending your ICPs</div>
-            <h2 className="ddv-section-title">
-              Who's bringing {profile.target_personas?.[0] || 'decision-makers'} to this show
-            </h2>
-            <p className="ddv-companies-sub">
-              Based on exhibitor lists, past attendee data, and sponsorship records for {event.event_name}.
-            </p>
-
-            <div className="ddv-pill-strip" aria-label="Companies attending">
-              {visibleCompanies.map((name) => (
-                <span key={name} className="ddv-company-pill">{name}</span>
-              ))}
-              {!companyUnlocked && gatedCount > 0 && (
-                <span className="ddv-pill-gated">+{gatedCount} more</span>
-              )}
+          <div className="rk-stat-divider" aria-hidden="true" />
+          <div className="rk-stat-card">
+            <div className="rk-stat-num">
+              <Counter target={totalConsidering || 23} triggered={statsVisible} />
             </div>
+            <div className="rk-stat-label">shows worth considering</div>
+            <div className="rk-stat-method">from our full 11,000+ index</div>
+          </div>
+          <div className="rk-stat-divider" aria-hidden="true" />
+          <div className="rk-stat-card">
+            <div className="rk-stat-num rk-stat-go">
+              <Counter target={stronglyRec || 6} triggered={statsVisible} />
+            </div>
+            <div className="rk-stat-label">shows we strongly recommend</div>
+            <div className="rk-stat-method">A or A+ fit grade</div>
+          </div>
+        </div>
+      </div>
 
-            {!companyUnlocked && (
-              <div className="ddv-company-gate">
-                <p className="ddv-gate-label">Enter your email to see the full company list</p>
-                <div className="ddv-gate-form">
-                  <input
-                    type="email"
-                    value={gateEmail}
-                    onChange={e => { setGateEmail(e.target.value); setGateError('') }}
-                    onKeyDown={e => e.key === 'Enter' && handleCompanyUnlock()}
-                    placeholder="your@company.com"
-                    className={`ddv-gate-input ${gateError ? 'ddv-gate-input--error' : ''}`}
-                    aria-label="Email to unlock company list"
-                  />
-                  <button className="ddv-gate-btn" onClick={handleCompanyUnlock}>
-                    Unlock full list →
+      {/* ── 3. TOP-6 RANKED LIST ─────────────────────────────────── */}
+      <div className="rk-list-section" aria-label="Your top 6 shows">
+        <div className="rk-list-header">
+          <h2 className="rk-list-title">Top {top6.length} shows for your ICP</h2>
+          <p className="rk-list-sub">
+            Ranked by ICP density · deal-size fit · geographic match · competitive intensity
+          </p>
+        </div>
+
+        <div className="rk-list">
+          {top6.map((event, idx) => {
+            const grade    = getFitGrade(event)
+            const icpCount = estimateICPCount(event)
+            const gated    = !unlocked && idx >= 3
+
+            return (
+              <div
+                key={event.event_id || idx}
+                className={`rk-row ${gated ? 'rk-row--gated' : 'rk-row--clickable'}`}
+                style={{ animationDelay: `${idx * 60}ms` }}
+                onClick={() => !gated && onShowClick && onShowClick(event, idx + 1)}
+                role={!gated && onShowClick ? 'button' : undefined}
+                tabIndex={!gated && onShowClick ? 0 : undefined}
+                onKeyDown={e => !gated && onShowClick && e.key === 'Enter' && onShowClick(event, idx + 1)}
+                aria-label={!gated ? `Open deep dive for ${event.event_name}` : undefined}
+              >
+                {/* Rank number */}
+                <div className="rk-rank" aria-label={`Rank ${idx + 1}`}>
+                  #{idx + 1}
+                </div>
+
+                {/* Main content */}
+                <div className="rk-row-main">
+                  <div className="rk-row-top">
+                    <div className="rk-event-name">
+                      {gated
+                        ? <span className="rk-blur-text">████████████████</span>
+                        : (event.event_link
+                            ? <a href={event.event_link} target="_blank" rel="noopener noreferrer" className="rk-event-link">{event.event_name}</a>
+                            : event.event_name)
+                      }
+                    </div>
+                    <span className={`rk-grade ${grade.cls}`} title={grade.label} aria-label={`Fit grade: ${grade.grade}`}>
+                      {grade.grade}
+                    </span>
+                  </div>
+
+                  <div className="rk-row-meta">
+                    {!gated && (
+                      <>
+                        {event.place && (
+                          <span className="rk-meta-item">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            {event.place}
+                          </span>
+                        )}
+                        {event.date && (
+                          <span className="rk-meta-item">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            {event.date}
+                          </span>
+                        )}
+                        {icpCount && (
+                          <span className="rk-meta-item rk-icp-count" title="Estimated relevant decision-makers attending. Methodology linked above.">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            ~{icpCount.toLocaleString()} ICPs
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {gated && (
+                      <span className="rk-meta-item rk-blur-text">███ ██████ · ███ ██–██ · ~███ ICPs</span>
+                    )}
+                  </div>
+
+                  {!gated && event.verdict_notes && (
+                    <p className="rk-row-rationale">"{event.verdict_notes}"</p>
+                  )}
+                </div>
+
+                {/* Right: grade badge (mobile) + expand hint */}
+                {!gated && (
+                  <div className="rk-row-right">
+                    <button
+                    className="rk-detail-link"
+                    onClick={e => { e.stopPropagation(); onShowClick && onShowClick(event, idx + 1) }}
+                    aria-label={`Open full breakdown for ${event.event_name}`}
+                  >
+                    Full breakdown →
                   </button>
-                </div>
-                {gateError && <p className="ddv-gate-error">{gateError}</p>}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })}
         </div>
-      )}
 
-      {/* ── 5. HISTORICAL PATTERN ───────────────────────────────── */}
-      {profile && hist && (
-        <div className="ddv-history" ref={histRef} aria-label="Historical attendance">
-          <div className="ddv-history-inner">
-            <div className="ddv-section-eyebrow">Historical pattern</div>
-            <h2 className="ddv-section-title">This event is growing.</h2>
-            <div className="ddv-hist-grid">
-              <div className="ddv-hist-card">
-                <div className="ddv-hist-num">
-                  ~<Counter target={hist.lastYear} triggered={histVisible} />
-                </div>
-                <div className="ddv-hist-label">ICPs attended last year</div>
+        {/* ── EMAIL GATE ─────────────────────────────────────────── */}
+        {!unlocked && (
+          <div className="rk-gate" id="rk-gate" aria-label="Unlock full ranking">
+            <div className="rk-gate-inner">
+              <div className="rk-gate-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
               </div>
-              <div className="ddv-hist-card">
-                <div className="ddv-hist-num ddv-stat-go">
-                  +<Counter target={hist.growth} triggered={histVisible} />%
-                </div>
-                <div className="ddv-hist-label">YoY ICP growth</div>
+              <h3 className="rk-gate-title">Shows #4–#6 are one click away</h3>
+              <p className="rk-gate-sub">
+                Enter your work email to unlock the full ranking — plus a personalised 90-day prep checklist.
+              </p>
+              <div className="rk-gate-form">
+                <input
+                  type="email"
+                  value={gateEmail}
+                  onChange={e => { setGateEmail(e.target.value); setGateError('') }}
+                  onKeyDown={e => e.key === 'Enter' && handleUnlock()}
+                  placeholder="your@company.com"
+                  className={`rk-gate-input ${gateError ? 'rk-gate-input--error' : ''}`}
+                  aria-label="Work email"
+                />
+                <button className="rk-gate-btn" onClick={handleUnlock}>
+                  Unlock full ranking →
+                </button>
               </div>
-              <div className="ddv-hist-card">
-                <div className="ddv-hist-num">
-                  <Counter target={hist.sponsors} triggered={histVisible} />
-                </div>
-                <div className="ddv-hist-label">sponsors in your space</div>
-              </div>
+              {gateError && <p className="rk-gate-error">{gateError}</p>}
+              <p className="rk-gate-privacy">🔒 No spam. Used only for your event report.</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── 6. INLINE ICP FORM (SEO / no-profile mode) ──────────── */}
-      {isSeoMode && (
-        <div className="ddv-seo-form">
-          <div className="ddv-seo-form-inner">
-            <div className="ddv-section-eyebrow">Personalise this page</div>
-            <h2 className="ddv-seo-form-title">
-              Want to know if your buyers will be at {event.event_name}?
-            </h2>
-            <p className="ddv-seo-form-sub">
-              Tell us your ICP and we'll show you exactly how many of your decision-makers attend,
-              which companies send them, and whether it's worth the flight.
-            </p>
-            <div className="ddv-seo-form-wrap">
-              <ICPForm
-                onSubmit={onSubmitICP || (() => {})}
-                heroMode={true}
-              />
-            </div>
+        {/* Unlocked: show count of remaining */}
+        {unlocked && remaining.length > 0 && (
+          <div className="rk-more-notice">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+            </svg>
+            <span>{remaining.length} more events in the full list below.</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ── 7. SERVICES CTA PANEL ───────────────────────────────── */}
-      <div className="ddv-cta-panel" aria-label="Meeting setup service">
-        <div className="ddv-cta-inner">
-          <div className="ddv-cta-copy">
-            <div className="ddv-section-eyebrow">Ready to convert this into revenue?</div>
-            <h2 className="ddv-cta-title">Want us to set up the meetings?</h2>
-            <p className="ddv-cta-sub">
-              We averaged <strong>30+ qualified meetings per client</strong> at {event.event_name} last year.
-              We research your targets, reach out pre-show, and fill your calendar before you land.
-            </p>
-            <div className="ddv-cta-proof">
-              {[
-                { num: '30+', label: 'meetings per client' },
-                { num: '92%', label: 'show-up rate'        },
-                { num: '48h', label: 'post-event follow-up' },
-              ].map(p => (
-                <div key={p.label} className="ddv-proof-pill">
-                  <strong>{p.num}</strong>
-                  <span>{p.label}</span>
-                </div>
-              ))}
-            </div>
+      {/* ── 4. FREE DOWNLOADS ────────────────────────────────────── */}
+      <div className="rk-downloads" aria-label="Free downloads">
+        <div className="rk-downloads-inner">
+          <div className="rk-dl-header">
+            <span className="rk-section-eyebrow">Free downloads</span>
+            <h3 className="rk-dl-title">Tools to turn your ranking into booked meetings</h3>
           </div>
-          <div className="ddv-cta-right">
-            <a
-              href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ddv-cta-btn"
-            >
-              See how it works →
-            </a>
-            <p className="ddv-cta-caveat">No obligation · Response within 24 hours</p>
+          <div className="rk-dl-grid">
+
+            {/* ICP-specific playbook */}
+            <div className="rk-dl-card">
+              <div className="rk-dl-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+              </div>
+              <div className="rk-dl-body">
+                <div className="rk-dl-tag">ICP-specific · 22 pages</div>
+                <div className="rk-dl-name">{playbookName}</div>
+                <p className="rk-dl-desc">
+                  Your top shows, ranked. 90-day prep timeline mapped to your nearest event.
+                  Conversation starters for your buyer persona. Built from your ICP.
+                </p>
+              </div>
+              <button
+                className="rk-dl-btn"
+                onClick={() => handleDownload('playbook')}
+                disabled={downloading === 'playbook'}
+                aria-label="Download ICP playbook"
+              >
+                {downloading === 'playbook'
+                  ? <><span className="rk-spinner" aria-hidden="true" /> Generating…</>
+                  : <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      Download PDF
+                    </>
+                }
+              </button>
+            </div>
+
+            {/* 90-day checklist */}
+            <div className="rk-dl-card">
+              <div className="rk-dl-icon rk-dl-icon--green" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              </div>
+              <div className="rk-dl-body">
+                <div className="rk-dl-tag rk-dl-tag--green">Pre · during · post · 1 page</div>
+                <div className="rk-dl-name">90-day trade show prep checklist</div>
+                <p className="rk-dl-desc">
+                  Pre-show ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up — mapped to your show dates.
+                </p>
+              </div>
+              <button
+                className="rk-dl-btn rk-dl-btn--green"
+                onClick={() => handleDownload('checklist')}
+                disabled={downloading === 'checklist'}
+                aria-label="Download 90-day checklist"
+              >
+                {downloading === 'checklist'
+                  ? <><span className="rk-spinner" aria-hidden="true" /> Generating…</>
+                  : <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      Download PDF
+                    </>
+                }
+              </button>
+            </div>
+
           </div>
         </div>
       </div>
 
-      {/* ── Related shows (placeholder for v2) ─────────────────── */}
-      {event.industry && (
-        <div className="ddv-related">
-          <div className="ddv-related-inner">
-            <div className="ddv-section-eyebrow">Related shows</div>
-            <p className="ddv-related-cta">
-              Looking for more {event.industry?.split(',')?.[0]?.trim()} events?{' '}
-              <a href="/" className="ddv-related-link">Run a full ICP search →</a>
+      {/* ── 5. SOFT SERVICES CTA ─────────────────────────────────── */}
+      <div className="rk-services-cta" aria-label="Services">
+        <div className="rk-services-inner">
+          <div className="rk-services-copy">
+            <div className="rk-section-eyebrow">Take it further</div>
+            <h3 className="rk-services-title">Want us to actually set up the meetings?</h3>
+            <p className="rk-services-sub">
+              We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out. Our clients average 50+ meetings per event.
             </p>
           </div>
+          <a
+            href="https://leadstrategus.com/contact/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rk-services-btn"
+          >
+            See how it works →
+          </a>
         </div>
-      )}
+      </div>
+
+      {/* ── 6. FULL DETAIL TABLE (existing EventTable) ───────────── */}
+      <div className="rk-detail" id="rk-detail" aria-label="Full event details">
+        <div className="rk-detail-header">
+          <h3 className="rk-detail-title">Full event breakdown</h3>
+          <p className="rk-detail-sub">Expand any row for ICP analysis, meeting package pricing, and AI rationale.</p>
+        </div>
+        <EventTable
+          events={unlocked ? allDisplay : allDisplay.slice(0, 3)}
+          profileId={profileId}
+          dealSizeCategory={dealSizeCategory}
+        />
+        {!unlocked && allDisplay.length > 3 && (
+          <div className="rk-detail-gate-notice">
+            <button className="rk-gate-inline-btn" onClick={() => document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' })}>
+              Unlock full breakdown — enter your email above
+            </button>
+          </div>
+        )}
+      </div>
 
     </div>
   )
