@@ -19,6 +19,7 @@ import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import ICPForm           from './components/ICPForm'
 import ShowRankingPage   from './components/ShowRankingPage'
+import ShowDeepDivePage  from './components/ShowDeepDivePage'
 import EmailReportModal  from './components/EmailReportModal'
 import { api }          from './api/client'
 import { Mail, ChevronRight, AlertCircle } from 'lucide-react'
@@ -92,6 +93,9 @@ export default function App() {
   const [dateWindow,       setDateWindow]       = useState(12)
   const [statsVisible,     setStatsVisible]     = useState(false)
   const [visibleCards,     setVisibleCards]     = useState([])
+  // Screen 3 — deep dive
+  const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
+  const [deepDiveRank,     setDeepDiveRank]     = useState(null)
 
   const statsRef   = useRef(null)
   const resultsRef = useRef(null)
@@ -390,7 +394,7 @@ export default function App() {
         )}
 
         {/* Screen 2: ranked shows */}
-        {allDisplay.length > 0 && (
+        {allDisplay.length > 0 && !deepDiveEvent && (
           <ShowRankingPage
             events={displayResults}
             profile={lastProfile}
@@ -402,6 +406,31 @@ export default function App() {
               if (!reportSent) _autoSendReport(results, lastProfile, email)
             }}
             onEmailReport={() => setEmailModalOpen(true)}
+            onShowClick={(event, rank) => {
+              setDeepDiveEvent(event)
+              setDeepDiveRank(rank)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+              // update URL for shareability / SEO
+              const slug = event.event_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+              window.history.pushState({}, '', `/show/${slug}`)
+            }}
+          />
+        )}
+
+        {/* Screen 3: per-show deep dive */}
+        {deepDiveEvent && (
+          <ShowDeepDivePage
+            event={deepDiveEvent}
+            profile={lastProfile}
+            rank={deepDiveRank}
+            userEmail={userEmail}
+            dealSizeCategory={dealSizeCategory}
+            onBack={() => {
+              setDeepDiveEvent(null)
+              setDeepDiveRank(null)
+              window.history.pushState({}, '', '/')
+              setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            }}
           />
         )}
       </main>
