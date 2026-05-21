@@ -1,0 +1,571 @@
+/*
+  show-deep-dive.css
+  Drop into: frontend/src/show-deep-dive.css
+  Imported by ShowDeepDivePage.jsx
+
+  All selectors .ddv-* — zero collision with App.css / homepage.css / ranking.css.
+  Uses existing CSS variables only.
+*/
+
+/* ── Keyframes ──────────────────────────────────────────────────── */
+@keyframes ddv-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes ddv-pill-in {
+  from { opacity: 0; transform: scale(.88); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+@keyframes ddv-pulse {
+  0%,100% { opacity: 1; transform: scale(1);   }
+  50%     { opacity: .6; transform: scale(1.45); }
+}
+
+/* ── Root ───────────────────────────────────────────────────────── */
+.ddv-root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.ddv-empty {
+  padding: 72px 28px;
+  text-align: center;
+  color: var(--text-sub);
+}
+.ddv-empty-icon { font-size: 40px; margin-bottom: 12px; }
+.ddv-empty h2   { font-family: var(--font-display,inherit); color: var(--text); margin: 0 0 8px; }
+.ddv-empty p    { font-size: 14px; margin: 0 0 20px; }
+
+/* ════════════════════════════════════════════════════════════════
+   1. BACK NAV
+   ════════════════════════════════════════════════════════════════ */
+.ddv-back-bar {
+  border-bottom: 1px solid var(--border);
+  background:    rgba(15,23,42,.7);
+  padding:       0 28px;
+}
+.ddv-back-inner {
+  max-width:       1160px;
+  margin:          0 auto;
+  height:          46px;
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+}
+.ddv-back-btn {
+  display:     inline-flex;
+  align-items: center;
+  gap:         6px;
+  background:  none;
+  border:      none;
+  color:       var(--text-dim);
+  font-size:   13px;
+  font-weight: 600;
+  cursor:      pointer;
+  padding:     0;
+  transition:  color .15s;
+  font-family: inherit;
+}
+.ddv-back-btn:hover { color: var(--accent); }
+.ddv-back-rank {
+  font-size:  11px;
+  color:      var(--accent);
+  font-weight:700;
+  background: rgba(6,182,212,.1);
+  border:     1px solid rgba(6,182,212,.2);
+  padding:    3px 10px;
+  border-radius: 100px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   2. SHOW HEADER
+   ════════════════════════════════════════════════════════════════ */
+.ddv-header {
+  background:    linear-gradient(135deg, rgba(6,182,212,.05), rgba(99,102,241,.04));
+  border-bottom: 1px solid var(--border);
+  padding:       36px 28px;
+  animation:     ddv-fade-up .45s ease;
+}
+.ddv-header-inner {
+  max-width:       1160px;
+  margin:          0 auto;
+  display:         flex;
+  align-items:     flex-start;
+  justify-content: space-between;
+  gap:             28px;
+}
+.ddv-header-left { flex: 1; min-width: 0; }
+.ddv-header-personalised {
+  display:     inline-flex;
+  align-items: center;
+  gap:         6px;
+  font-size:   11px;
+  font-weight: 700;
+  color:       var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 10px;
+}
+.ddv-header-dot {
+  display:       inline-block;
+  width:         6px;
+  height:        6px;
+  border-radius: 50%;
+  background:    var(--accent);
+  animation:     ddv-pulse 2s ease-in-out infinite;
+}
+.ddv-show-name {
+  font-family:   var(--font-display, inherit);
+  font-size:     clamp(24px, 3.5vw, 38px);
+  font-weight:   800;
+  color:         var(--text);
+  margin:        0 0 12px;
+  line-height:   1.2;
+}
+.ddv-show-meta {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       8px 18px;
+  margin-bottom: 14px;
+}
+.ddv-meta-item {
+  display:     inline-flex;
+  align-items: center;
+  gap:         5px;
+  font-size:   13px;
+  color:       var(--text-dim);
+}
+.ddv-meta-link {
+  color:           var(--accent);
+  text-decoration: none;
+  font-weight:     600;
+  transition:      opacity .15s;
+}
+.ddv-meta-link:hover { opacity: .75; }
+.ddv-show-about {
+  font-size:   14px;
+  color:       var(--text-sub);
+  line-height: 1.65;
+  margin:      0;
+  max-width:   600px;
+}
+
+/* Grade badge (right col) */
+.ddv-header-grade {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            6px;
+  flex-shrink:    0;
+}
+.ddv-grade-badge {
+  width:           64px;
+  height:          64px;
+  border-radius:   16px;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  font-family:     var(--font-display, inherit);
+  font-size:       22px;
+  font-weight:     900;
+  letter-spacing: -.04em;
+}
+.ddv-grade-label {
+  font-size:  12px;
+  color:      var(--text-dim);
+  text-align: center;
+}
+.ddv-rank-label {
+  font-size:   11px;
+  font-weight: 700;
+  color:       var(--accent);
+  text-align:  center;
+}
+
+/* Grade colours — shared with ShowRankingPage approach */
+.ddv-grade-aplus { background: rgba(16,185,129,.15); color: #10b981; border: 2px solid rgba(16,185,129,.4);  }
+.ddv-grade-a     { background: rgba(6,182,212,.14);  color: var(--accent); border: 2px solid rgba(6,182,212,.35);   }
+.ddv-grade-bplus { background: rgba(99,102,241,.13); color: var(--accent-2); border: 2px solid rgba(99,102,241,.3); }
+.ddv-grade-b     { background: rgba(245,158,11,.1);  color: var(--consider,#f59e0b); border: 2px solid rgba(245,158,11,.3); }
+.ddv-grade-c     { background: rgba(148,163,184,.1); color: var(--text-dim); border: 2px solid rgba(148,163,184,.2); }
+
+/* Inline grade in stats */
+.ddv-grade-inline {
+  font-family:  var(--font-display, inherit);
+  font-size:    clamp(28px,4vw,44px);
+  font-weight:  900;
+  line-height:  1;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   3. KEY STATS
+   ════════════════════════════════════════════════════════════════ */
+.ddv-stats {
+  background:    var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding:       32px 28px;
+}
+.ddv-stats-inner {
+  max-width:       900px;
+  margin:          0 auto;
+  display:         flex;
+  align-items:     stretch;
+  justify-content: center;
+}
+.ddv-stat {
+  flex:       1;
+  text-align: center;
+  padding:    0 28px;
+}
+.ddv-stat-num {
+  font-family:          var(--font-display, inherit);
+  font-size:            clamp(26px,4vw,42px);
+  font-weight:          800;
+  line-height:          1.1;
+  margin-bottom:        5px;
+  font-variant-numeric: tabular-nums;
+  color:                var(--text);
+}
+.ddv-stat-accent { color: var(--accent); }
+.ddv-stat-go     { color: var(--go, #10b981); }
+.ddv-stat-label  { font-size: 13px; color: var(--text-sub); margin-bottom: 4px; }
+.ddv-stat-note   { font-size: 10px; color: var(--text-dim); }
+.ddv-method-link {
+  color:           var(--accent);
+  text-decoration: none;
+  font-weight:     600;
+}
+.ddv-method-link:hover { text-decoration: underline; }
+.ddv-stat-divider {
+  width:       1px;
+  background:  var(--border);
+  flex-shrink: 0;
+  margin:      8px 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   4. COMPANIES BRINGING YOUR ICPs
+   ════════════════════════════════════════════════════════════════ */
+.ddv-companies {
+  padding:       48px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.ddv-companies-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-section-eyebrow {
+  font-size:      11px;
+  font-weight:    700;
+  color:          var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  margin-bottom:  8px;
+  display:        block;
+}
+.ddv-section-title {
+  font-family:  var(--font-display, inherit);
+  font-size:    clamp(18px,2.5vw,24px);
+  font-weight:  800;
+  color:        var(--text);
+  margin:       0 0 8px;
+  line-height:  1.3;
+}
+.ddv-companies-sub {
+  font-size:   13px;
+  color:       var(--text-dim);
+  margin:      0 0 22px;
+  line-height: 1.55;
+}
+
+/* Pill strip */
+.ddv-pill-strip {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       8px;
+  margin-bottom: 18px;
+}
+.ddv-company-pill {
+  background:    var(--bg-card);
+  border:        1px solid var(--border);
+  border-radius: 100px;
+  padding:       6px 14px;
+  font-size:     13px;
+  font-weight:   600;
+  color:         var(--text-sub);
+  transition:    border-color .2s, color .2s;
+  animation:     ddv-pill-in .25s ease both;
+}
+.ddv-company-pill:hover { border-color: rgba(6,182,212,.3); color: var(--text); }
+.ddv-pill-gated {
+  background:    rgba(6,182,212,.08);
+  border:        1px dashed rgba(6,182,212,.3);
+  border-radius: 100px;
+  padding:       6px 14px;
+  font-size:     13px;
+  font-weight:   700;
+  color:         var(--accent);
+  cursor:        pointer;
+}
+
+/* Company gate */
+.ddv-company-gate {
+  background:    rgba(6,182,212,.04);
+  border:        1px solid rgba(6,182,212,.15);
+  border-radius: var(--radius, 14px);
+  padding:       18px 20px;
+  max-width:     480px;
+}
+.ddv-gate-label {
+  font-size:   13px;
+  color:       var(--text-sub);
+  margin:      0 0 12px;
+}
+.ddv-gate-form {
+  display: flex;
+  gap:     8px;
+}
+.ddv-gate-input {
+  flex:          1;
+  background:    var(--bg-input, rgba(255,255,255,.05));
+  border:        1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding:       10px 14px;
+  font-size:     14px;
+  color:         var(--text);
+  outline:       none;
+  transition:    border-color .2s, box-shadow .2s;
+  font-family:   var(--font-body, inherit);
+}
+.ddv-gate-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(6,182,212,.12); }
+.ddv-gate-input--error { border-color: #f43f5e; }
+.ddv-gate-input::placeholder { color: rgba(148,163,184,.45); }
+.ddv-gate-btn {
+  background:    var(--accent);
+  color:         #0f172a;
+  border:        none;
+  border-radius: var(--radius-sm, 8px);
+  padding:       10px 18px;
+  font-family:   var(--font-display, inherit);
+  font-size:     13px;
+  font-weight:   700;
+  cursor:        pointer;
+  white-space:   nowrap;
+  transition:    all .2s;
+}
+.ddv-gate-btn:hover { filter: brightness(1.1); }
+.ddv-gate-error { font-size: 11px; color: #f43f5e; margin: 8px 0 0; }
+
+/* ════════════════════════════════════════════════════════════════
+   5. HISTORICAL PATTERN
+   ════════════════════════════════════════════════════════════════ */
+.ddv-history {
+  background:    rgba(30,41,59,.5);
+  border-top:    1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding:       48px 28px;
+}
+.ddv-history-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-hist-grid {
+  display:               grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:                   16px;
+  margin-top:            24px;
+}
+.ddv-hist-card {
+  background:    var(--bg-card);
+  border:        1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  padding:       22px 20px;
+  text-align:    center;
+  transition:    border-color .2s;
+}
+.ddv-hist-card:hover { border-color: rgba(6,182,212,.2); }
+.ddv-hist-num {
+  font-family:   var(--font-display, inherit);
+  font-size:     clamp(24px,3.5vw,36px);
+  font-weight:   800;
+  color:         var(--text);
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.ddv-hist-label {
+  font-size:   13px;
+  color:       var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   6. SEO INLINE ICP FORM
+   ════════════════════════════════════════════════════════════════ */
+.ddv-seo-form {
+  background:    rgba(6,182,212,.04);
+  border-top:    1px solid rgba(6,182,212,.15);
+  border-bottom: 1px solid rgba(6,182,212,.15);
+  padding:       56px 28px;
+}
+.ddv-seo-form-inner {
+  max-width: 680px;
+  margin:    0 auto;
+  text-align:center;
+}
+.ddv-seo-form-title {
+  font-family:  var(--font-display, inherit);
+  font-size:    clamp(22px, 3vw, 30px);
+  font-weight:  800;
+  color:        var(--text);
+  margin:       0 0 12px;
+  line-height:  1.3;
+}
+.ddv-seo-form-sub {
+  font-size:   14px;
+  color:       var(--text-sub);
+  line-height: 1.65;
+  margin:      0 0 28px;
+}
+.ddv-seo-form-wrap {
+  text-align: left;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   7. CTA PANEL
+   ════════════════════════════════════════════════════════════════ */
+.ddv-cta-panel {
+  background:    linear-gradient(135deg, rgba(6,182,212,.06), rgba(99,102,241,.06));
+  border-top:    1px solid var(--border);
+  padding:       52px 28px;
+}
+.ddv-cta-inner {
+  max-width:       1000px;
+  margin:          0 auto;
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             40px;
+  flex-wrap:       wrap;
+}
+.ddv-cta-copy { flex: 1; min-width: 0; }
+.ddv-cta-title {
+  font-family:  var(--font-display, inherit);
+  font-size:    clamp(22px, 3vw, 28px);
+  font-weight:  800;
+  color:        var(--text);
+  margin:       0 0 10px;
+  line-height:  1.25;
+}
+.ddv-cta-sub {
+  font-size:   14px;
+  color:       var(--text-sub);
+  line-height: 1.65;
+  margin:      0 0 18px;
+  max-width:   520px;
+}
+.ddv-cta-sub strong { color: var(--text); }
+.ddv-cta-proof {
+  display:   flex;
+  gap:       10px;
+  flex-wrap: wrap;
+}
+.ddv-proof-pill {
+  display:       flex;
+  flex-direction:column;
+  align-items:   center;
+  gap:           2px;
+  background:    var(--bg-card);
+  border:        1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding:       10px 18px;
+  min-width:     90px;
+}
+.ddv-proof-pill strong {
+  font-family:  var(--font-display, inherit);
+  font-size:    20px;
+  font-weight:  800;
+  color:        var(--accent);
+  line-height:  1;
+}
+.ddv-proof-pill span {
+  font-size:  11px;
+  color:      var(--text-dim);
+  text-align: center;
+}
+.ddv-cta-right {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            8px;
+  flex-shrink:    0;
+}
+.ddv-cta-btn {
+  display:         inline-flex;
+  align-items:     center;
+  background:      linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:           #fff;
+  text-decoration: none;
+  font-family:     var(--font-display, inherit);
+  font-size:       15px;
+  font-weight:     700;
+  padding:         14px 28px;
+  border-radius:   var(--radius-sm, 10px);
+  white-space:     nowrap;
+  box-shadow:      0 4px 18px rgba(6,182,212,.3);
+  transition:      all .2s;
+}
+.ddv-cta-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(6,182,212,.4); }
+.ddv-cta-caveat {
+  font-size:  11px;
+  color:      var(--text-dim);
+  text-align: center;
+  margin:     0;
+  opacity:    .7;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   8. RELATED SHOWS
+   ════════════════════════════════════════════════════════════════ */
+.ddv-related {
+  padding: 28px;
+  border-top: 1px solid var(--border);
+}
+.ddv-related-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-related-cta {
+  font-size:   14px;
+  color:       var(--text-dim);
+  margin:      0;
+}
+.ddv-related-link {
+  color:           var(--accent);
+  text-decoration: none;
+  font-weight:     700;
+}
+.ddv-related-link:hover { text-decoration: underline; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .ddv-header       { padding: 28px 16px; }
+  .ddv-header-inner { flex-direction: column; gap: 18px; }
+  .ddv-header-grade { flex-direction: row; align-items: center; gap: 12px; }
+  .ddv-grade-badge  { width: 48px; height: 48px; font-size: 18px; }
+  .ddv-stats        { padding: 24px 16px; }
+  .ddv-stats-inner  { flex-direction: column; gap: 0; }
+  .ddv-stat         { padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .ddv-stat:last-child { border-bottom: none; }
+  .ddv-stat-divider { display: none; }
+  .ddv-companies    { padding: 32px 16px; }
+  .ddv-history      { padding: 32px 16px; }
+  .ddv-hist-grid    { grid-template-columns: 1fr; gap: 10px; }
+  .ddv-cta-panel    { padding: 36px 16px; }
+  .ddv-cta-inner    { flex-direction: column; gap: 24px; }
+  .ddv-cta-right    { width: 100%; }
+  .ddv-cta-btn      { width: 100%; justify-content: center; }
+  .ddv-seo-form     { padding: 40px 16px; }
+  .ddv-gate-form    { flex-direction: column; }
+  .ddv-gate-btn     { width: 100%; text-align: center; }
+  .ddv-back-bar     { padding: 0 16px; }
+}
