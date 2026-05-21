@@ -17,9 +17,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import ICPForm          from './components/ICPForm'
-import EventTable       from './components/EventTable'
-import EmailReportModal from './components/EmailReportModal'
+import ICPForm           from './components/ICPForm'
+import ShowRankingPage   from './components/ShowRankingPage'
+import EmailReportModal  from './components/EmailReportModal'
 import { api }          from './api/client'
 import { Mail, ChevronRight, AlertCircle } from 'lucide-react'
 import './App.css'
@@ -357,9 +357,10 @@ export default function App() {
         </div>
       </section>
 
-      {/* ══ 8. RESULTS ═══════════════════════════════════════════ */}
-      <main className="main-content" aria-label="Search results">
+      {/* ══ 8. RESULTS — Screen 2: Show Ranking Page ═════════════ */}
+      <main className="main-content" aria-label="Search results" ref={resultsRef}>
 
+        {/* Status bar */}
         {stats && (
           <div className="status-bar">
             <div className="status-dot" />
@@ -376,8 +377,9 @@ export default function App() {
           </div>
         )}
 
+        {/* No results */}
         {hasSearched && allDisplay.length === 0 && (
-          <section ref={resultsRef} className="results-section">
+          <section className="results-section">
             <div className="results-header">
               <div>
                 <h2 className="results-title">No matches found</h2>
@@ -387,50 +389,20 @@ export default function App() {
           </section>
         )}
 
+        {/* Screen 2: ranked shows */}
         {allDisplay.length > 0 && (
-          <section ref={resultsRef} id="results" className="results-section" aria-label="Ranked events">
-            <div className="results-header">
-              <div>
-                <h2 className="results-title">
-                  <span className="results-count">{displayResults.length}</span> Events Ranked
-                </h2>
-                <p className="results-sub">
-                  Sorted by AI relevance · Expand any row for package details &amp; meeting pricing
-                  {reportSent && userEmail && <span style={{ marginLeft:8, color:'var(--go)', fontWeight:600 }}>· Report sent to {userEmail}</span>}
-                </p>
-                {/* Date filter */}
-                <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
-                  {[3, 6, 12].map(m => (
-                    <button key={m} onClick={() => setDateWindow(m)} style={{
-                      fontSize:11, padding:'4px 12px', borderRadius:100,
-                      border:`1px solid ${dateWindow === m ? 'var(--accent)' : 'var(--border)'}`,
-                      background: dateWindow === m ? 'rgba(6,182,212,.12)' : 'transparent',
-                      color: dateWindow === m ? 'var(--accent)' : 'var(--text-dim)',
-                      cursor:'pointer', fontWeight: dateWindow === m ? 700 : 400, transition:'all .15s',
-                    }}>Next {m} months</button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-                {['GO','CONSIDER'].map(v => (
-                  <div key={v} className={`results-pill pill-${v.toLowerCase()}`}>
-                    <span>{v}</span>
-                    <span className="pill-count">{displayResults.filter(e => e.fit_verdict === v).length}</span>
-                  </div>
-                ))}
-                <button onClick={() => setEmailModalOpen(true)} style={{
-                  display:'inline-flex', alignItems:'center', gap:7,
-                  background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff',
-                  border:'none', borderRadius:'var(--radius-sm)', padding:'8px 16px',
-                  fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--font-display)',
-                  boxShadow:'0 3px 12px rgba(99,102,241,.35)',
-                }}>
-                  <Mail size={13} />{reportSent ? 'Resend PDF Report' : 'Email PDF Report'}
-                </button>
-              </div>
-            </div>
-            <EventTable events={displayResults} profileId={profileId} dealSizeCategory={dealSizeCategory} />
-          </section>
+          <ShowRankingPage
+            events={displayResults}
+            profile={lastProfile}
+            userEmail={userEmail}
+            dealSizeCategory={dealSizeCategory}
+            profileId={profileId}
+            onEmailUnlock={(email) => {
+              setUserEmail(email)
+              if (!reportSent) _autoSendReport(results, lastProfile, email)
+            }}
+            onEmailReport={() => setEmailModalOpen(true)}
+          />
         )}
       </main>
 
