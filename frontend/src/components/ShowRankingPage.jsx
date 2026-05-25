@@ -1,81 +1,85 @@
 /*
-  ShowRankingPage.jsx  —  Screen 2: Your Show Ranking
+  ShowRankingPage.jsx — Screen 2: Your Show Ranking
 
-  Layout (top → bottom):
-    1. Report banner ("Your shows · CIOs · financial services · $500M+ · NA & EMEA")
-    2. Universe stats: total ICP count · shows worth considering · strongly recommended
-    3. Top-6 ranked list (rank# · show · location/dates · ICP count · fit grade)
-       Rows 1–3: visible immediately
-       Rows 4–6: email-gated (blur + unlock prompt)
-    4. Free downloads: ICP playbook + 90-day checklist
-    5. Soft CTA: "Want us to actually set up the meetings?"
-    6. EventTable (full detail, expandable rows — existing component)
+  Data policy:
+  • ICP count     = est_attendees × (relevance_score/100) × 0.35, rounded to nearest 10.
+                    If est_attendees is 0/null → shows "—" (unknown), never a fake number.
+  • Fit grade     = weighted formula on relevance_score + fit_verdict (A+/A/B+/B/C).
+                    No hardcoded values.
+  • Universe stats = derived from the actual events array returned by the API.
+  • Company pills  = from event.sponsors field (real backend data).
+                    If sponsors is empty → section hidden.
+  • Historical     = REMOVED (no real data in MVP). Will be added in v2.
 
-  Props:
-    events         array    — all events from /api/search
-    profile        object   — {company_name, target_industries, target_personas,
-                               target_geographies, avg_deal_size_category, date_from, date_to}
-    userEmail      string   — pre-filled if already captured in ICPForm
-    dealSizeCategory string
-    profileId      string
-    onEmailUnlock  fn(email) — called when user unlocks gated rows
-    onEmailReport  fn()      — trigger email modal
+  Date filter: 3 / 6 / 12 months toggle. Filters top-6 and full EventTable.
 */
 
 import { useState, useEffect, useRef } from 'react'
 import EventTable from './EventTable'
 import '../ranking.css'
 
-// ── Fit grade from relevance_score + fit_verdict ──────────────────
-// Weighted: ICP density (from score) + deal-size fit + geo match
-// In MVP we use relevance_score as the weighted proxy.
+// ── Fit grade from real event data ────────────────────────────────
 function getFitGrade(event) {
-  const score   = typeof event.relevance_score === 'number' ? event.relevance_score : 0
-  const verdict = event.fit_verdict || ''
-  // Composite: score carries 80%, verdict bonus 20%
-  const bonus   = verdict === 'GO' ? 18 : verdict === 'CONSIDER' ? 8 : 0
-  const total   = Math.min(score * 0.82 + bonus, 100)
-  if (total >= 88) return { grade: 'A+', cls: 'grade-aplus',  label: 'Exceptional fit'   }
-  if (total >= 75) return { grade: 'A',  cls: 'grade-a',      label: 'Strong fit'        }
-  if (total >= 62) return { grade: 'B+', cls: 'grade-bplus',  label: 'Good fit'          }
-  if (total >= 48) return { grade: 'B',  cls: 'grade-b',      label: 'Reasonable fit'    }
-  return                  { grade: 'C',  cls: 'grade-c',      label: 'Marginal fit'      }
+  const score  = typeof event.relevance_score === 'number' ? event.relevance_score : 0
+  const bonus  = event.fit_verdict === 'GO' ? 18 : event.fit_verdict === 'CONSIDER' ? 8 : 0
+  const total  = Math.min(score * 0.82 + bonus, 100)
+  if (total >= 88) return { grade: 'A+', cls: 'grade-aplus', label: 'Exceptional fit'  }
+  if (total >= 75) return { grade: 'A',  cls: 'grade-a',     label: 'Strong fit'       }
+  if (total >= 62) return { grade: 'B+', cls: 'grade-bplus', label: 'Good fit'         }
+  if (total >= 48) return { grade: 'B',  cls: 'grade-b',     label: 'Reasonable fit'   }
+  return               { grade: 'C',  cls: 'grade-c',     label: 'Marginal fit'     }
 }
 
-// ── Estimate ICP count ────────────────────────────────────────────
-// In MVP: derive from est_attendees + relevance_score.
-// We show as "~N ICPs" — honesty builds trust more than false precision.
-function estimateICPCount(event) {
+// ── ICP count: derived from real API fields ───────────────────────
+// est_attendees × (relevance_score / 100) × 0.35
+// Logic: ~35% of total attendees at a B2B show are decision-makers;
+// relevance_score scales that down to only YOUR target personas.
+// Returns null when est_attendees is unknown (0 or missing).
+function calcICPCount(event) {
   const att   = parseInt(event.est_attendees) || 0
   const score = typeof event.relevance_score === 'number' ? event.relevance_score : 50
-  if (att === 0) return null   // unknown — don't show a number
-  // ICPs ≈ attendees × (relevance_score/100) × 0.35 (30-40% are decision-makers)
-  const raw = Math.round(att * (score / 100) * 0.35)
-  if (raw === 0) return null
-  // Round to nearest 10 for honesty
-  return Math.round(raw / 10) * 10
+  if (att === 0) return null          // truly unknown — don't show a fake number
+  const raw = att * (score / 100) * 0.35
+  return Math.max(1, Math.round(raw / 10) * 10)  // round to nearest 10
 }
 
-// ── Build report banner label from profile ────────────────────────
-function buildBannerLabel(profile) {
-  const parts = []
-  if (profile?.target_personas?.length)  parts.push(profile.target_personas.slice(0, 2).join(' · '))
-  if (profile?.target_industries?.length) parts.push(profile.target_industries.slice(0, 2).join(' · '))
-  if (profile?.avg_deal_size_category) {
-    const labels = { medium: '$10K–$50K deals', high: '$50K–$100K deals', enterprise: '$100K–$500K deals', strategic: '$500K+ deals' }
-    parts.push(labels[profile.avg_deal_size_category] || profile.avg_deal_size_category)
-  }
-  if (profile?.target_geographies?.length) parts.push(profile.target_geographies.slice(0, 3).join(' · '))
-  return parts.join('  ·  ')
+// ── Pipeline estimate: formula-driven ────────────────────────────
+// ICP count × deal midpoint × 0.15 (15% contact rate × 40% qual × 25% close proxy)
+const DEAL_MID = { medium: 30000, high: 75000, enterprise: 250000, strategic: 750000 }
+function calcPipeline(event, dealSizeCategory) {
+  const icp = calcICPCount(event)
+  if (!icp) return null
+  const mid = DEAL_MID[dealSizeCategory] || DEAL_MID.medium
+  const val = icp * mid * 0.15
+  if (val >= 1e6)  return `$${(val / 1e6).toFixed(1)}M`
+  if (val >= 1000) return `$${Math.round(val / 1000)}K`
+  return `$${Math.round(val)}`
 }
 
-// ── Build download filename from profile ─────────────────────────
-function buildPlaybookName(profile) {
-  const ind = profile?.target_industries?.[0] || 'B2B'
-  const per = profile?.target_personas?.[0]   || 'decision-maker'
-  return `The ${ind} ${per} trade show playbook`
+// ── Date window filter ────────────────────────────────────────────
+function applyDateFilter(events, months) {
+  if (!months) return events
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() + months)
+  const iso = cutoff.toISOString().slice(0, 10)
+  return events.filter(e => !e.date || e.date.slice(0, 10) <= iso)
 }
 
+// ── Animated counter ──────────────────────────────────────────────
+function Counter({ target, prefix = '', suffix = '', triggered }) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!triggered || !target) return
+    const s = performance.now()
+    const go = (now) => {
+      const p = Math.min((now - s) / 900, 1)
+      setVal(Math.round((1 - Math.pow(1 - p, 3)) * target))
+      if (p < 1) requestAnimationFrame(go)
+    }
+    requestAnimationFrame(go)
+  }, [triggered, target])
+  return <>{prefix}{val.toLocaleString()}{suffix}</>
+}
 
 // ═══════════════════════════════════════════════════════════════════
 export default function ShowRankingPage({
@@ -84,20 +88,21 @@ export default function ShowRankingPage({
   userEmail        = '',
   dealSizeCategory = 'medium',
   profileId        = '',
+  reportSent       = false,
   onEmailUnlock,
   onEmailReport,
-  onShowClick,     // fn(event, rank) — opens Screen 3 deep dive
+  onShowClick,     // fn(event, rank) → opens Screen 3
+  onBackHome,      // fn() → back to homepage form
 }) {
-  const [unlocked,      setUnlocked]      = useState(!!userEmail)
-  const [gateEmail,     setGateEmail]     = useState(userEmail)
-  const [gateError,     setGateError]     = useState('')
-  const [downloading,   setDownloading]   = useState(null)
-  const [statsVisible,  setStatsVisible]  = useState(false)
+  const [unlocked,     setUnlocked]     = useState(!!userEmail)
+  const [gateEmail,    setGateEmail]    = useState(userEmail)
+  const [gateError,    setGateError]    = useState('')
+  const [statsVisible, setStatsVisible] = useState(false)
+  const [dateWindow,   setDateWindow]   = useState(12)   // 3 | 6 | 12
+
   const statsRef = useRef(null)
 
-  useEffect(() => {
-    if (userEmail) setUnlocked(true)
-  }, [userEmail])
+  useEffect(() => { if (userEmail) setUnlocked(true) }, [userEmail])
 
   useEffect(() => {
     const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.2 })
@@ -105,22 +110,30 @@ export default function ShowRankingPage({
     return () => io.disconnect()
   }, [])
 
-  // ── Rank + slice ────────────────────────────────────────────────
-  // Already ranked by backend relevance. Take top 6, always 6.
-  const allDisplay = events.filter(e => e.fit_verdict !== 'SKIP')
-  const top6       = allDisplay.slice(0, 6)
-  const remaining  = allDisplay.slice(6)     // 7–23 — available after unlock
+  // Apply date filter to all events
+  const dateFiltered = applyDateFilter(events, dateWindow)
 
-  // Universe stats
-  const totalICPs = top6.reduce((sum, e) => {
-    const c = estimateICPCount(e); return c ? sum + c : sum
+  // Top 6 from date-filtered list
+  const top6      = dateFiltered.slice(0, 6)
+  const remaining = dateFiltered.slice(6)
+
+  // Universe stats — purely from real API data
+  const totalICPsAcrossShows = top6.reduce((sum, e) => {
+    const c = calcICPCount(e); return c ? sum + c : sum
   }, 0)
-  const totalConsidering = allDisplay.length
-  const stronglyRec      = allDisplay.filter(e => {
+  const totalConsidering = dateFiltered.length
+  const strongCount      = dateFiltered.filter(e => {
     const g = getFitGrade(e); return g.grade === 'A+' || g.grade === 'A'
   }).length
 
-  // ── Email unlock ────────────────────────────────────────────────
+  // Banner label from profile
+  const bannerParts = []
+  if (profile?.target_personas?.length)   bannerParts.push(profile.target_personas.slice(0, 2).join(' · '))
+  if (profile?.target_industries?.length) bannerParts.push(profile.target_industries.slice(0, 2).join(' · '))
+  const dealLabels = { medium: '$10K–$50K', high: '$50K–$100K', enterprise: '$100K–$500K', strategic: '$500K+' }
+  if (profile?.avg_deal_size_category) bannerParts.push(`${dealLabels[profile.avg_deal_size_category] || ''} deals`)
+  if (profile?.target_geographies?.length) bannerParts.push(profile.target_geographies.slice(0, 3).join(' · '))
+
   const handleUnlock = () => {
     if (!gateEmail.trim()) { setGateError('Enter your work email to unlock'); return }
     if (!gateEmail.includes('@')) { setGateError('Enter a valid email'); return }
@@ -129,46 +142,39 @@ export default function ShowRankingPage({
     onEmailUnlock && onEmailUnlock(gateEmail)
   }
 
-  // ── Simulated download (real PDFs are server-generated) ─────────
-  const handleDownload = (type) => {
-    if (!unlocked) { document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' }); return }
-    setDownloading(type)
-    // In production this calls /api/download/{type}?profile_id={profileId}
-    // For now simulate a 1.2s delay then open a placeholder
-    setTimeout(() => {
-      setDownloading(null)
-      // Placeholder: open contact page
-      window.open('https://leadstrategus.com/contact/', '_blank', 'noopener')
-    }, 1200)
+  if (!top6.length) {
+    return (
+      <div className="rk-empty">
+        <p>No events matched your criteria for this time window.</p>
+        <button className="rk-gate-inline-btn" onClick={onBackHome}>← Adjust your ICP</button>
+      </div>
+    )
   }
-
-
-  // ── Animated counter ────────────────────────────────────────────
-  function Counter({ target, prefix = '', suffix = '', triggered }) {
-    const [val, setVal] = useState(0)
-    useEffect(() => {
-      if (!triggered || !target) return
-      const s = performance.now()
-      const go = (now) => {
-        const p = Math.min((now - s) / 900, 1)
-        const e = 1 - Math.pow(1 - p, 3)
-        setVal(Math.round(e * target))
-        if (p < 1) requestAnimationFrame(go)
-      }
-      requestAnimationFrame(go)
-    }, [triggered, target])
-    return <>{prefix}{val.toLocaleString()}{suffix}</>
-  }
-
-  if (!top6.length) return null
-
-  const bannerLabel  = buildBannerLabel(profile)
-  const playbookName = buildPlaybookName(profile)
 
   return (
     <div className="rk-root">
 
-      {/* ── 1. REPORT BANNER ─────────────────────────────────────── */}
+      {/* ── STICKY NAV (ranking screen) ─────────────────────── */}
+      <nav className="rk-topnav" aria-label="Navigation">
+        <div className="rk-topnav-inner">
+          <button className="rk-topnav-back" onClick={onBackHome} aria-label="Back to search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            New search
+          </button>
+          <div className="rk-topnav-logo">
+            <span className="rk-topnav-dot" aria-hidden="true" />
+            LeadStrategus
+          </div>
+          {onEmailReport && (
+            <button className="rk-btn-email" onClick={onEmailReport}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              {reportSent ? 'Resend report' : 'Email PDF report'}
+            </button>
+          )}
+        </div>
+      </nav>
+
+      {/* ── 1. REPORT BANNER ─────────────────────────────────── */}
       <div className="rk-banner">
         <div className="rk-banner-inner">
           <div className="rk-banner-left">
@@ -176,53 +182,70 @@ export default function ShowRankingPage({
               <span className="rk-banner-dot" aria-hidden="true" />
               Your shows
             </div>
-            <div className="rk-banner-label" aria-label="Your ICP filters">
-              {bannerLabel}
-            </div>
-            <p className="rk-banner-sub">
-              Out of 11,000 shows, here are the{' '}
-              <strong>{top6.length}</strong> where your buyers concentrate.
-            </p>
-          </div>
-          <div className="rk-banner-actions">
-            {onEmailReport && (
-              <button className="rk-btn-email" onClick={onEmailReport}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                </svg>
-                Email PDF report
-              </button>
+            {bannerParts.length > 0 && (
+              <div className="rk-banner-label">{bannerParts.join('  ·  ')}</div>
             )}
+            <p className="rk-banner-sub">
+              Out of 11,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* ── 2. UNIVERSE STATS ────────────────────────────────────── */}
+      {/* ── DATE FILTER ──────────────────────────────────────── */}
+      <div className="rk-date-filter" aria-label="Filter by time window">
+        <div className="rk-date-filter-inner">
+          <span className="rk-date-label">Showing events in:</span>
+          {[3, 6, 12].map(m => (
+            <button
+              key={m}
+              onClick={() => setDateWindow(m)}
+              className={`rk-date-pill ${dateWindow === m ? 'rk-date-pill--active' : ''}`}
+              aria-pressed={dateWindow === m}
+            >
+              Next {m} months
+            </button>
+          ))}
+          {dateFiltered.length !== events.length && (
+            <span className="rk-date-count">
+              {dateFiltered.length} of {events.length} events
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── 2. UNIVERSE STATS ────────────────────────────────── */}
       <div className="rk-stats" ref={statsRef} aria-label="Universe statistics">
         <div className="rk-stats-inner">
-          <div className="rk-stat-card">
-            <div className="rk-stat-num rk-stat-accent">
-              ~<Counter target={totalICPs || 3200} triggered={statsVisible} />
+          {totalICPsAcrossShows > 0 ? (
+            <div className="rk-stat-card">
+              <div className="rk-stat-num rk-stat-accent">
+                ~<Counter target={totalICPsAcrossShows} triggered={statsVisible} />
+              </div>
+              <div className="rk-stat-label">total ICPs across all relevant shows</div>
+              <div className="rk-stat-method">
+                <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">methodology →</a>
+              </div>
             </div>
-            <div className="rk-stat-label">total ICPs across all relevant shows</div>
-            <div className="rk-stat-method">
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">
-                methodology →
-              </a>
+          ) : (
+            <div className="rk-stat-card">
+              <div className="rk-stat-num rk-stat-accent">—</div>
+              <div className="rk-stat-label">ICP count pending attendee data</div>
+              <div className="rk-stat-method">Attendee figures not yet published for these events</div>
             </div>
-          </div>
+          )}
           <div className="rk-stat-divider" aria-hidden="true" />
           <div className="rk-stat-card">
             <div className="rk-stat-num">
-              <Counter target={totalConsidering || 23} triggered={statsVisible} />
+              <Counter target={totalConsidering} triggered={statsVisible} />
             </div>
             <div className="rk-stat-label">shows worth considering</div>
-            <div className="rk-stat-method">from our full 11,000+ index</div>
+            <div className="rk-stat-method">from our 11,000+ index in this window</div>
           </div>
           <div className="rk-stat-divider" aria-hidden="true" />
           <div className="rk-stat-card">
             <div className="rk-stat-num rk-stat-go">
-              <Counter target={stronglyRec || 6} triggered={statsVisible} />
+              <Counter target={strongCount} triggered={statsVisible} />
             </div>
             <div className="rk-stat-label">shows we strongly recommend</div>
             <div className="rk-stat-method">A or A+ fit grade</div>
@@ -230,36 +253,32 @@ export default function ShowRankingPage({
         </div>
       </div>
 
-      {/* ── 3. TOP-6 RANKED LIST ─────────────────────────────────── */}
-      <div className="rk-list-section" aria-label="Your top 6 shows">
+      {/* ── 3. TOP-6 RANKED LIST ─────────────────────────────── */}
+      <div className="rk-list-section" aria-label="Your top shows">
         <div className="rk-list-header">
           <h2 className="rk-list-title">Top {top6.length} shows for your ICP</h2>
-          <p className="rk-list-sub">
-            Ranked by ICP density · deal-size fit · geographic match · competitive intensity
-          </p>
+          <p className="rk-list-sub">Ranked by ICP density · deal-size fit · geographic match. Click any row for the full breakdown.</p>
         </div>
 
         <div className="rk-list">
           {top6.map((event, idx) => {
             const grade    = getFitGrade(event)
-            const icpCount = estimateICPCount(event)
+            const icpCount = calcICPCount(event)
             const gated    = !unlocked && idx >= 3
 
             return (
               <div
-                key={event.event_id || idx}
+                key={event.event_id || event.event_name || idx}
                 className={`rk-row ${gated ? 'rk-row--gated' : 'rk-row--clickable'}`}
-                style={{ animationDelay: `${idx * 60}ms` }}
+                style={{ animationDelay: `${idx * 55}ms` }}
                 onClick={() => !gated && onShowClick && onShowClick(event, idx + 1)}
-                role={!gated && onShowClick ? 'button' : undefined}
-                tabIndex={!gated && onShowClick ? 0 : undefined}
-                onKeyDown={e => !gated && onShowClick && e.key === 'Enter' && onShowClick(event, idx + 1)}
-                aria-label={!gated ? `Open deep dive for ${event.event_name}` : undefined}
+                role={!gated ? 'button' : undefined}
+                tabIndex={!gated ? 0 : undefined}
+                onKeyDown={e => !gated && e.key === 'Enter' && onShowClick && onShowClick(event, idx + 1)}
+                aria-label={!gated ? `Open details for ${event.event_name}` : undefined}
               >
-                {/* Rank number */}
-                <div className="rk-rank" aria-label={`Rank ${idx + 1}`}>
-                  #{idx + 1}
-                </div>
+                {/* Rank */}
+                <div className="rk-rank" aria-label={`Rank ${idx + 1}`}>#{idx + 1}</div>
 
                 {/* Main content */}
                 <div className="rk-row-main">
@@ -267,9 +286,7 @@ export default function ShowRankingPage({
                     <div className="rk-event-name">
                       {gated
                         ? <span className="rk-blur-text">████████████████</span>
-                        : (event.event_link
-                            ? <a href={event.event_link} target="_blank" rel="noopener noreferrer" className="rk-event-link">{event.event_name}</a>
-                            : event.event_name)
+                        : event.event_name
                       }
                     </div>
                     <span className={`rk-grade ${grade.cls}`} title={grade.label} aria-label={`Fit grade: ${grade.grade}`}>
@@ -282,32 +299,30 @@ export default function ShowRankingPage({
                       <>
                         {event.place && (
                           <span className="rk-meta-item">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                             {event.place}
                           </span>
                         )}
                         {event.date && (
                           <span className="rk-meta-item">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                            </svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                             {event.date}
                           </span>
                         )}
-                        {icpCount && (
-                          <span className="rk-meta-item rk-icp-count" title="Estimated relevant decision-makers attending. Methodology linked above.">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                            </svg>
+                        {icpCount !== null ? (
+                          <span className="rk-meta-item rk-icp-count" title="Estimated relevant decision-makers attending your profile">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                             ~{icpCount.toLocaleString()} ICPs
+                          </span>
+                        ) : (
+                          <span className="rk-meta-item" style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                            Attendee data pending
                           </span>
                         )}
                       </>
                     )}
                     {gated && (
-                      <span className="rk-meta-item rk-blur-text">███ ██████ · ███ ██–██ · ~███ ICPs</span>
+                      <span className="rk-meta-item rk-blur-text">███ · ███ ██–██ · ~███ ICPs</span>
                     )}
                   </div>
 
@@ -316,16 +331,15 @@ export default function ShowRankingPage({
                   )}
                 </div>
 
-                {/* Right: grade badge (mobile) + expand hint */}
                 {!gated && (
                   <div className="rk-row-right">
                     <button
-                    className="rk-detail-link"
-                    onClick={e => { e.stopPropagation(); onShowClick && onShowClick(event, idx + 1) }}
-                    aria-label={`Open full breakdown for ${event.event_name}`}
-                  >
-                    Full breakdown →
-                  </button>
+                      className="rk-detail-link"
+                      onClick={e => { e.stopPropagation(); onShowClick && onShowClick(event, idx + 1) }}
+                      aria-label={`Open breakdown for ${event.event_name}`}
+                    >
+                      Full breakdown →
+                    </button>
                   </div>
                 )}
               </div>
@@ -333,32 +347,22 @@ export default function ShowRankingPage({
           })}
         </div>
 
-        {/* ── EMAIL GATE ─────────────────────────────────────────── */}
+        {/* EMAIL GATE */}
         {!unlocked && (
           <div className="rk-gate" id="rk-gate" aria-label="Unlock full ranking">
             <div className="rk-gate-inner">
               <div className="rk-gate-icon" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </div>
               <h3 className="rk-gate-title">Shows #4–#6 are one click away</h3>
-              <p className="rk-gate-sub">
-                Enter your work email to unlock the full ranking — plus a personalised 90-day prep checklist.
-              </p>
+              <p className="rk-gate-sub">Enter your work email to unlock the full ranking and a personalised 90-day prep checklist.</p>
               <div className="rk-gate-form">
-                <input
-                  type="email"
-                  value={gateEmail}
-                  onChange={e => { setGateEmail(e.target.value); setGateError('') }}
+                <input type="email" value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateError('') }}
                   onKeyDown={e => e.key === 'Enter' && handleUnlock()}
                   placeholder="your@company.com"
                   className={`rk-gate-input ${gateError ? 'rk-gate-input--error' : ''}`}
-                  aria-label="Work email"
-                />
-                <button className="rk-gate-btn" onClick={handleUnlock}>
-                  Unlock full ranking →
-                </button>
+                  aria-label="Work email" />
+                <button className="rk-gate-btn" onClick={handleUnlock}>Unlock full ranking →</button>
               </div>
               {gateError && <p className="rk-gate-error">{gateError}</p>}
               <p className="rk-gate-privacy">🔒 No spam. Used only for your event report.</p>
@@ -366,128 +370,80 @@ export default function ShowRankingPage({
           </div>
         )}
 
-        {/* Unlocked: show count of remaining */}
         {unlocked && remaining.length > 0 && (
           <div className="rk-more-notice">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-            </svg>
-            <span>{remaining.length} more events in the full list below.</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <span>{remaining.length} more events in the full breakdown below.</span>
           </div>
         )}
       </div>
 
-      {/* ── 4. FREE DOWNLOADS ────────────────────────────────────── */}
+      {/* ── 4. DOWNLOADS ────────────────────────────────────── */}
       <div className="rk-downloads" aria-label="Free downloads">
         <div className="rk-downloads-inner">
           <div className="rk-dl-header">
             <span className="rk-section-eyebrow">Free downloads</span>
-            <h3 className="rk-dl-title">Tools to turn your ranking into booked meetings</h3>
+            <h3 className="rk-dl-title">Turn your ranking into booked meetings</h3>
           </div>
           <div className="rk-dl-grid">
-
-            {/* ICP-specific playbook */}
             <div className="rk-dl-card">
               <div className="rk-dl-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                </svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
               </div>
               <div className="rk-dl-body">
                 <div className="rk-dl-tag">ICP-specific · 22 pages</div>
-                <div className="rk-dl-name">{playbookName}</div>
-                <p className="rk-dl-desc">
-                  Your top shows, ranked. 90-day prep timeline mapped to your nearest event.
-                  Conversation starters for your buyer persona. Built from your ICP.
-                </p>
+                <div className="rk-dl-name">
+                  The {profile?.target_industries?.[0] || 'B2B'} {profile?.target_personas?.[0] || 'decision-maker'} trade show playbook
+                </div>
+                <p className="rk-dl-desc">Your top shows by name, 90-day prep timeline, and conversation starters — built from your ICP.</p>
               </div>
-              <button
-                className="rk-dl-btn"
-                onClick={() => handleDownload('playbook')}
-                disabled={downloading === 'playbook'}
-                aria-label="Download ICP playbook"
-              >
-                {downloading === 'playbook'
-                  ? <><span className="rk-spinner" aria-hidden="true" /> Generating…</>
-                  : <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                      Download PDF
-                    </>
-                }
-              </button>
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download PDF
+              </a>
             </div>
-
-            {/* 90-day checklist */}
             <div className="rk-dl-card">
               <div className="rk-dl-icon rk-dl-icon--green" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
               <div className="rk-dl-body">
                 <div className="rk-dl-tag rk-dl-tag--green">Pre · during · post · 1 page</div>
                 <div className="rk-dl-name">90-day trade show prep checklist</div>
-                <p className="rk-dl-desc">
-                  Pre-show ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up — mapped to your show dates.
-                </p>
+                <p className="rk-dl-desc">ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up — mapped to your nearest show.</p>
               </div>
-              <button
-                className="rk-dl-btn rk-dl-btn--green"
-                onClick={() => handleDownload('checklist')}
-                disabled={downloading === 'checklist'}
-                aria-label="Download 90-day checklist"
-              >
-                {downloading === 'checklist'
-                  ? <><span className="rk-spinner" aria-hidden="true" /> Generating…</>
-                  : <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                      Download PDF
-                    </>
-                }
-              </button>
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn rk-dl-btn--green">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download PDF
+              </a>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* ── 5. SOFT SERVICES CTA ─────────────────────────────────── */}
-      <div className="rk-services-cta" aria-label="Services">
+      {/* ── 5. SERVICES CTA ─────────────────────────────────── */}
+      <div className="rk-services-cta">
         <div className="rk-services-inner">
           <div className="rk-services-copy">
             <div className="rk-section-eyebrow">Take it further</div>
             <h3 className="rk-services-title">Want us to actually set up the meetings?</h3>
-            <p className="rk-services-sub">
-              We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out. Our clients average 50+ meetings per event.
-            </p>
+            <p className="rk-services-sub">We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out. Our clients average 50+ meetings per event.</p>
           </div>
-          <a
-            href="https://leadstrategus.com/contact/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rk-services-btn"
-          >
-            See how it works →
-          </a>
+          <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-services-btn">See how it works →</a>
         </div>
       </div>
 
-      {/* ── 6. FULL DETAIL TABLE (existing EventTable) ───────────── */}
+      {/* ── 6. FULL DETAIL TABLE ─────────────────────────────── */}
       <div className="rk-detail" id="rk-detail" aria-label="Full event details">
         <div className="rk-detail-header">
           <h3 className="rk-detail-title">Full event breakdown</h3>
           <p className="rk-detail-sub">Expand any row for ICP analysis, meeting package pricing, and AI rationale.</p>
         </div>
         <EventTable
-          events={unlocked ? allDisplay : allDisplay.slice(0, 3)}
+          events={unlocked ? dateFiltered : dateFiltered.slice(0, 3)}
           profileId={profileId}
           dealSizeCategory={dealSizeCategory}
         />
-        {!unlocked && allDisplay.length > 3 && (
+        {!unlocked && dateFiltered.length > 3 && (
           <div className="rk-detail-gate-notice">
             <button className="rk-gate-inline-btn" onClick={() => document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' })}>
               Unlock full breakdown — enter your email above
