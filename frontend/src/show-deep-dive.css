@@ -569,3 +569,87 @@
   .ddv-gate-btn     { width: 100%; text-align: center; }
   .ddv-back-bar     { padding: 0 16px; }
 }
+
+/* ── Key numbers block ──────────────────────────────────────────── */
+.ddv-key-numbers {
+  padding:       28px;
+  border-bottom: 1px solid var(--border);
+  background:    rgba(6,182,212,.03);
+}
+.ddv-key-numbers-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-key-numbers-text {
+  font-size:   15px;
+  color:       var(--accent);
+  font-weight: 600;
+  line-height: 1.6;
+  margin:      6px 0 0;
+}
+
+/* ── Personas section ───────────────────────────────────────────── */
+.ddv-personas {
+  padding:       36px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.ddv-personas-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-persona-pills {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       7px;
+  margin:    12px 0 8px;
+}
+.ddv-persona-pill {
+  background:    rgba(99,102,241,.1);
+  border:        1px solid rgba(99,102,241,.25);
+  color:         var(--accent-2);
+  border-radius: 100px;
+  padding:       5px 13px;
+  font-size:     12px;
+  font-weight:   600;
+}
+.ddv-industry-pills {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       6px;
+  margin-top:6px;
+}
+.ddv-industry-pill {
+  background:    rgba(6,182,212,.08);
+  border:        1px solid rgba(6,182,212,.2);
+  color:         var(--accent);
+  border-radius: 100px;
+  padding:       4px 11px;
+  font-size:     11px;
+  font-weight:   600;
+}
+
+/* ── AI rationale block ─────────────────────────────────────────── */
+.ddv-rationale {
+  padding:       32px 28px;
+  border-top:    1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background:    rgba(30,41,59,.4);
+}
+.ddv-rationale-inner {
+  max-width: 900px;
+  margin:    0 auto;
+}
+.ddv-rationale-quote {
+  font-size:   14px;
+  color:       var(--text-sub);
+  line-height: 1.7;
+  font-style:  italic;
+  margin:      8px 0 10px;
+  padding-left:14px;
+  border-left: 3px solid rgba(6,182,212,.3);
+}
+.ddv-rationale-note {
+  font-size:  11px;
+  color:      var(--text-dim);
+  margin:     0;
+}
