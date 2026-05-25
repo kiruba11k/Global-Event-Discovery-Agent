@@ -1,28 +1,21 @@
 /*
-  App.jsx  —  Full homepage + results
-  Hero flow (single column, centred):
-    1. Nav
-    2. Hero: headline → sub → bridge line → 4-field form → CTA
-    3. Dual-path cards
-    4. Logo ticker
-    5. Proof row (animated counters)
-    6. Pain section
-    7. Footer CTA band
-    8. Results section (after search)
-    9. Footer
+  App.jsx  — three-screen app with simple state router
 
-  Uses heroMode prop on ICPForm so form fields sit flush in the
-  hero with no card wrapper — the form IS the page, not a widget.
+  screen === 'home'     → homepage + hero form
+  screen === 'ranking'  → ShowRankingPage (full page, scroll to top)
+  screen === 'deepdive' → ShowDeepDivePage (full page, scroll to top)
+
+  No react-router needed. URL is updated via history.pushState for shareability.
 */
 
 import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import ICPForm           from './components/ICPForm'
-import ShowRankingPage   from './components/ShowRankingPage'
-import ShowDeepDivePage  from './components/ShowDeepDivePage'
-import EmailReportModal  from './components/EmailReportModal'
+import ICPForm          from './components/ICPForm'
+import ShowRankingPage  from './components/ShowRankingPage'
+import ShowDeepDivePage from './components/ShowDeepDivePage'
+import EmailReportModal from './components/EmailReportModal'
 import { api }          from './api/client'
-import { Mail, ChevronRight, AlertCircle } from 'lucide-react'
+import { Mail, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import './App.css'
 import './homepage.css'
 
@@ -58,7 +51,7 @@ function StatCounter({ target, prefix = '', suffix = '', label, decimal = false,
   )
 }
 
-/* ─── Data ──────────────────────────────────────────────────────── */
+/* ─── Static data ───────────────────────────────────────────────── */
 const LOGOS = [
   'Dreamforce','Medica','Gartner Symposium','BSMA','CES',
   'Money20/20','Web Summit','AWS re:Invent','HIMSS','Salesforce World Tour',
@@ -70,35 +63,30 @@ const PAIN_QUOTES = [
   { text: "I'll meet maybe 5 decision-makers in 3 days.",                role: 'Founder, enterprise SaaS' },
 ]
 
-function applyDateWindow(events, months) {
-  if (!months) return events
-  const cutoff = new Date()
-  cutoff.setMonth(cutoff.getMonth() + months)
-  const iso = cutoff.toISOString().slice(0, 10)
-  return events.filter(e => !e.date || e.date.slice(0, 10) <= iso)
-}
-
 /* ═══════════════════════════════════════════════════════════════ */
 export default function App() {
+  /* ── Screen router ─────────────────────────────────────────── */
+  const [screen,           setScreen]           = useState('home')   // 'home' | 'ranking' | 'deepdive'
+
+  /* ── Search state ──────────────────────────────────────────── */
   const [loading,          setLoading]          = useState(false)
   const [results,          setResults]          = useState([])
-  const [hasSearched,      setHasSearched]      = useState(false)
   const [profileId,        setProfileId]        = useState('')
   const [stats,            setStats]            = useState(null)
   const [dealSizeCategory, setDealSizeCategory] = useState('medium')
   const [lastProfile,      setLastProfile]      = useState(null)
-  const [emailModalOpen,   setEmailModalOpen]   = useState(false)
   const [userEmail,        setUserEmail]        = useState('')
   const [reportSent,       setReportSent]       = useState(false)
-  const [dateWindow,       setDateWindow]       = useState(12)
-  const [statsVisible,     setStatsVisible]     = useState(false)
-  const [visibleCards,     setVisibleCards]     = useState([])
-  // Screen 3 — deep dive
+  const [emailModalOpen,   setEmailModalOpen]   = useState(false)
+
+  /* ── Deep dive ─────────────────────────────────────────────── */
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
 
-  const statsRef   = useRef(null)
-  const resultsRef = useRef(null)
+  /* ── Homepage animation state ──────────────────────────────── */
+  const [statsVisible,     setStatsVisible]     = useState(false)
+  const [visibleCards,     setVisibleCards]     = useState([])
+  const statsRef = useRef(null)
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
@@ -121,30 +109,46 @@ export default function App() {
     return () => io.disconnect()
   }, [])
 
-  const scrollToForm = () => document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' })
+  /* ── Navigation helpers ────────────────────────────────────── */
+  const goTo = (s, url = '/') => {
+    setScreen(s)
+    window.scrollTo({ top: 0, behavior: 'instant' })
+    try { window.history.pushState({}, '', url) } catch (_) {}
+  }
 
+  const scrollToForm = () => {
+    if (screen !== 'home') { goTo('home'); setTimeout(() => document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' }), 100); return }
+    document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  /* ── Search handler ────────────────────────────────────────── */
   const onSearch = async (profile, email) => {
     if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
     setLastProfile(profile)
     if (email) setUserEmail(email)
     setLoading(true)
     setReportSent(false)
-    setHasSearched(false)
+
     try {
       const res    = await api.search({ profile })
       const events = res.events || []
-      setHasSearched(true)
       setProfileId(res.profile_id || '')
       setResults(events)
+
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
         toast.error('No matching events found — try a wider geography or different buyer description.')
+        setLoading(false)
         return
       }
+
       const go = display.filter(e => e.fit_verdict === 'GO').length
-      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 4000 })
+      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 3500 })
+
       if (email) _autoSendReport(events, profile, email)
-      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400)
+
+      // Navigate to ranking page
+      goTo('ranking', '/')
     } catch (err) {
       toast.error(err.message || 'Search failed — please try again')
     } finally {
@@ -160,7 +164,7 @@ export default function App() {
 
   const _autoSendReport = async (events, profile, email) => {
     if (!email || !events?.length) return
-    if (stats?.resend_enabled === false) { toast.error('Email service not configured.', { duration: 5000, icon: '⚠️' }); return }
+    if (stats?.resend_enabled === false) { toast.error('Email service not configured.', { icon: '⚠️', duration: 5000 }); return }
     try {
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       await api.emailReport({
@@ -187,9 +191,63 @@ export default function App() {
     }
   }
 
-  const allDisplay     = results.filter(e => e.fit_verdict !== 'SKIP')
-  const displayResults = applyDateWindow(allDisplay, dateWindow)
+  const allDisplay = results.filter(e => e.fit_verdict !== 'SKIP')
 
+  /* ── Screen: Ranking ───────────────────────────────────────── */
+  if (screen === 'ranking') {
+    return (
+      <div className="app">
+        <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
+        <ShowRankingPage
+          events={allDisplay}
+          profile={lastProfile}
+          userEmail={userEmail}
+          dealSizeCategory={dealSizeCategory}
+          profileId={profileId}
+          reportSent={reportSent}
+          onEmailUnlock={(email) => {
+            setUserEmail(email)
+            if (!reportSent) _autoSendReport(results, lastProfile, email)
+          }}
+          onEmailReport={() => setEmailModalOpen(true)}
+          onShowClick={(event, rank) => {
+            setDeepDiveEvent(event)
+            setDeepDiveRank(rank)
+            const slug = event.event_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+            goTo('deepdive', `/show/${slug}`)
+          }}
+          onBackHome={scrollToForm}
+        />
+        <EmailReportModal
+          isOpen={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+          events={allDisplay}
+          profile={{ company_name: lastProfile?.company_name || '', company_description: lastProfile?.company_description || '', target_industries: lastProfile?.target_industries || [], target_personas: lastProfile?.target_personas || [], target_geographies: lastProfile?.target_geographies || [], deal_size_category: dealSizeCategory, date_from: lastProfile?.date_from || null, date_to: lastProfile?.date_to || null }}
+          dealSizeCategory={dealSizeCategory}
+          prefillEmail={userEmail}
+        />
+      </div>
+    )
+  }
+
+  /* ── Screen: Deep Dive ─────────────────────────────────────── */
+  if (screen === 'deepdive') {
+    return (
+      <div className="app">
+        <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
+        <ShowDeepDivePage
+          event={deepDiveEvent}
+          profile={lastProfile}
+          rank={deepDiveRank}
+          userEmail={userEmail}
+          dealSizeCategory={dealSizeCategory}
+          onBack={() => goTo('ranking', '/')}
+        />
+      </div>
+    )
+  }
+
+  /* ── Screen: Home ──────────────────────────────────────────── */
   return (
     <div className="app">
       <Toaster position="top-right" toastOptions={{
@@ -198,7 +256,7 @@ export default function App() {
         error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
       }} />
 
-      {/* ══ 1. NAV ════════════════════════════════════════════════ */}
+      {/* NAV */}
       <nav className="hp-nav" aria-label="Main navigation">
         <div className="hp-nav-inner">
           <div className="hp-logo">
@@ -215,73 +273,53 @@ export default function App() {
         </div>
       </nav>
 
-      {/* ══ 2. HERO — single column, form flush inline ════════════ */}
+      {/* HERO */}
       <section className="hero hp-hero-solo" aria-label="Find your shows">
         <OrbBackground />
-
         <div className="hp-hero-solo-inner">
-
-          {/* Eyebrow */}
           <div className="hero-badge hp-hero-eyebrow">
-            <span className="hp-eyebrow-dot" aria-hidden="true" />
-            11,000+ B2B trade shows · ranked for your ICP
+            <Sparkles size={11} aria-hidden="true" />
+            <span>11,000+ B2B trade shows · ranked for your ICP</span>
           </div>
-
-          {/* Headline */}
           <h1 className="hp-hero-solo-h1">
             Your personal sales director.<br />
             At every trade show.
           </h1>
-
-          {/* Sub */}
           <p className="hp-hero-solo-sub">
             We tell your reps exactly who to meet, which events are worth the flight,
             and how to walk away with pipeline — not business cards.
           </p>
-
-          {/* Bridge line */}
           <p className="hp-hero-bridge">
             Start with the question every CMO gets wrong:
             <strong> which shows are actually worth your time?</strong>
           </p>
-
-          {/* ── 4-FIELD FORM — flush in hero, no card wrapper ── */}
           <div className="hp-form-zone" id="icp-form">
+            {stats?.resend_enabled === false && (
+              <div className="hp-status-notice">
+                <AlertCircle size={11} /><span>Email service not configured on server</span>
+              </div>
+            )}
             <ICPForm
               onSubmit={onSearch}
               loading={loading}
               onDeeperAnalysis={onDeeperAnalysis}
-              showUpgrade={hasSearched && displayResults.length > 0}
+              showUpgrade={false}
               heroMode={true}
             />
           </div>
-
-          {/* Microcopy below CTA */}
           <p className="hp-microcopy">Free · 90 seconds · no sales call</p>
-
-          {/* Escape hatch */}
-          <a
-            className="hp-escape-link"
-            href="https://leadstrategus.com/contact/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a className="hp-escape-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
             Already know your show? Get show-specific intel →
           </a>
-
         </div>
       </section>
 
-      {/* ══ 3. DUAL-PATH CARDS ═══════════════════════════════════ */}
+      {/* DUAL-PATH CARDS */}
       <div className="hp-paths" aria-label="How we help">
         <div className="hp-paths-inner">
           <div className="hp-path-card hp-path-attending">
             <div className="hp-path-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/>
-                <path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/>
-                <path d="m17 17 3 3"/>
-              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/></svg>
             </div>
             <div className="hp-path-tag">Attending — hunting meetings</div>
             <h3 className="hp-path-title">Sales, BD, founders. Find your ICPs before you fly out.</h3>
@@ -290,12 +328,7 @@ export default function App() {
           </div>
           <div className="hp-path-card hp-path-exhibiting">
             <div className="hp-path-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="9" width="18" height="13" rx="2"/>
-                <path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/>
-                <line x1="12" y1="13" x2="12" y2="17"/>
-                <line x1="10" y1="15" x2="14" y2="15"/>
-              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
             </div>
             <div className="hp-path-tag">Exhibiting — need booth traffic</div>
             <h3 className="hp-path-title">Get 5× the qualified meetings around your booth.</h3>
@@ -305,31 +338,29 @@ export default function App() {
         </div>
       </div>
 
-      {/* ══ 4. LOGO TICKER ═══════════════════════════════════════ */}
+      {/* LOGO TICKER */}
       <div className="hp-ticker-wrap" aria-label="Events we cover">
         <div className="hp-ticker-inner" aria-hidden="true">
           {[...LOGOS, ...LOGOS].map((name, i) => (
-            <span key={i} className="hp-ticker-item">
-              {name}<span className="hp-ticker-dot" />
-            </span>
+            <span key={i} className="hp-ticker-item">{name}<span className="hp-ticker-dot" /></span>
           ))}
         </div>
       </div>
 
-      {/* ══ 5. PROOF ROW ════════════════════════════════════════= */}
+      {/* PROOF ROW */}
       <section className="hp-proof" ref={statsRef} aria-label="Results we've delivered">
         <div className="hp-proof-inner">
-          <StatCounter target={50}  suffix="+" label="meetings, single event"    triggered={statsVisible} />
+          <StatCounter target={50}  suffix="+" label="meetings, single event"       triggered={statsVisible} />
           <div className="hp-proof-divider" aria-hidden="true" />
           <StatCounter target={1}   prefix="$" suffix="M" label="pipeline per show" triggered={statsVisible} />
           <div className="hp-proof-divider" aria-hidden="true" />
-          <StatCounter target={12}  label="Fortune 50 meetings, BSMA"            triggered={statsVisible} />
+          <StatCounter target={12}  label="Fortune 50 meetings, BSMA"               triggered={statsVisible} />
           <div className="hp-proof-divider" aria-hidden="true" />
-          <StatCounter target={5.0} suffix="" label="Clutch rating" decimal={true} triggered={statsVisible} />
+          <StatCounter target={5.0} suffix="" label="Clutch rating" decimal={true}  triggered={statsVisible} />
         </div>
       </section>
 
-      {/* ══ 6. PAIN SECTION ══════════════════════════════════════ */}
+      {/* PAIN SECTION */}
       <section className="hp-pain" id="how-it-works" aria-labelledby="pain-heading">
         <div className="hp-pain-inner">
           <div className="hp-section-eyebrow">Sound familiar?</div>
@@ -348,7 +379,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* ══ 7. FOOTER CTA BAND ═══════════════════════════════════ */}
+      {/* FOOTER CTA */}
       <section className="hp-footer-cta" aria-label="Get started">
         <div className="hp-footer-cta-inner">
           <div className="hp-section-eyebrow" style={{ textAlign: 'center' }}>Ready to stop guessing?</div>
@@ -361,85 +392,11 @@ export default function App() {
         </div>
       </section>
 
-      {/* ══ 8. RESULTS — Screen 2: Show Ranking Page ═════════════ */}
-      <main className="main-content" aria-label="Search results" ref={resultsRef}>
-
-        {/* Status bar */}
-        {stats && (
-          <div className="status-bar">
-            <div className="status-dot" />
-            <span>Agent online · {stats.total_events_in_db?.toLocaleString()} events indexed · Groq {stats.groq_enabled ? 'active' : 'inactive'}</span>
-            <ChevronRight size={12} aria-hidden="true" />
-            <span className="status-apis">
-              {Object.entries(stats.realtime_apis || stats.apis_configured || {}).filter(([, v]) => v).map(([k]) => k).join(' · ')}
-            </span>
-            {stats.resend_enabled === false && (
-              <span style={{ display:'inline-flex',alignItems:'center',gap:4,fontSize:10,color:'#f59e0b',background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',padding:'2px 8px',borderRadius:100 }}>
-                <AlertCircle size={9} /> Email not configured
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* No results */}
-        {hasSearched && allDisplay.length === 0 && (
-          <section className="results-section">
-            <div className="results-header">
-              <div>
-                <h2 className="results-title">No matches found</h2>
-                <p className="results-sub">Try a wider geography, different buyer description, or check back after the event database refreshes.</p>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Screen 2: ranked shows */}
-        {allDisplay.length > 0 && !deepDiveEvent && (
-          <ShowRankingPage
-            events={displayResults}
-            profile={lastProfile}
-            userEmail={userEmail}
-            dealSizeCategory={dealSizeCategory}
-            profileId={profileId}
-            onEmailUnlock={(email) => {
-              setUserEmail(email)
-              if (!reportSent) _autoSendReport(results, lastProfile, email)
-            }}
-            onEmailReport={() => setEmailModalOpen(true)}
-            onShowClick={(event, rank) => {
-              setDeepDiveEvent(event)
-              setDeepDiveRank(rank)
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-              // update URL for shareability / SEO
-              const slug = event.event_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-              window.history.pushState({}, '', `/show/${slug}`)
-            }}
-          />
-        )}
-
-        {/* Screen 3: per-show deep dive */}
-        {deepDiveEvent && (
-          <ShowDeepDivePage
-            event={deepDiveEvent}
-            profile={lastProfile}
-            rank={deepDiveRank}
-            userEmail={userEmail}
-            dealSizeCategory={dealSizeCategory}
-            onBack={() => {
-              setDeepDiveEvent(null)
-              setDeepDiveRank(null)
-              window.history.pushState({}, '', '/')
-              setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-            }}
-          />
-        )}
-      </main>
-
-      {/* ══ 9. FOOTER ════════════════════════════════════════════ */}
+      {/* FOOTER */}
       <footer className="app-footer hp-app-footer">
         <div className="footer-inner">
-          <div className="hp-logo" style={{ fontSize:13 }}>
-            <span className="hp-logo-dot" style={{ width:6, height:6 }} aria-hidden="true" />
+          <div className="hp-logo" style={{ fontSize: 13 }}>
+            <span className="hp-logo-dot" style={{ width: 6, height: 6 }} aria-hidden="true" />
             LeadStrategus
           </div>
           <nav className="hp-footer-links" aria-label="Footer">
@@ -452,24 +409,6 @@ export default function App() {
           </a>
         </div>
       </footer>
-
-      <EmailReportModal
-        isOpen={emailModalOpen}
-        onClose={() => setEmailModalOpen(false)}
-        events={displayResults}
-        profile={{
-          company_name:        lastProfile?.company_name        || '',
-          company_description: lastProfile?.company_description || '',
-          target_industries:   lastProfile?.target_industries   || [],
-          target_personas:     lastProfile?.target_personas     || [],
-          target_geographies:  lastProfile?.target_geographies  || [],
-          deal_size_category:  dealSizeCategory,
-          date_from:           lastProfile?.date_from || null,
-          date_to:             lastProfile?.date_to   || null,
-        }}
-        dealSizeCategory={dealSizeCategory}
-        prefillEmail={userEmail}
-      />
     </div>
   )
 }
