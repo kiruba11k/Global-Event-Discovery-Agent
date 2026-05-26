@@ -429,7 +429,7 @@
    4. FREE DOWNLOADS
    ════════════════════════════════════════════════════════════════ */
 .rk-downloads {
-  background:    rgba(30,41,59,.6);
+  background:    rgb(230,243,255);
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding:       48px 28px;
