@@ -653,3 +653,11 @@
   color:      var(--text-dim);
   margin:     0;
 }
+
+/* ── Search fallback link indicator ─────────────────────────────── */
+.ddv-meta-link--search {
+  color:        var(--text-dim) !important;
+  font-style:   italic;
+  border-bottom:1px dashed rgba(148,163,184,.4);
+}
+.ddv-meta-link--search:hover { color: var(--text-sub) !important; }
