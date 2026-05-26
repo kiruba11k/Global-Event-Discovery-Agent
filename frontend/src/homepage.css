@@ -408,7 +408,7 @@
   padding:       14px 0;
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  background:    rgb(230,243,255);
+  /* background:    rgb(230,243,255); */
 }
 .hp-ticker-inner {
   display:     flex;
@@ -441,7 +441,7 @@
    PROOF ROW
    ════════════════════════════════════════════════════════════════ */
 .hp-proof {
-  background:    rgb(230,243,255);
+  /* background:    rgb(230,243,255); */
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding:       40px 28px;
