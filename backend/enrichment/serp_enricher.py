@@ -160,6 +160,62 @@ def _is_venue_url(url: str) -> bool:
     return False
 
 
+def _is_homepage_url(url: str) -> bool:
+    """
+    Returns True when the URL is a root domain or a shallow generic section
+    with no event-specific path — i.e. likely the organiser's homepage, not
+    the specific event edition page.
+
+    Examples that return True (homepage / too shallow):
+      https://marketingfestival.in/
+      https://peoplematters.in/techhr/
+      https://aws.amazon.com/events/
+      https://example.com
+
+    Examples that return False (looks edition-specific):
+      https://peoplematters.in/techhr/techhr-india-2026/
+      https://marketingfestival.in/summit/2026
+      https://ciscolive.com/emea/attend/register.html
+    """
+    if not url:
+        return True
+    try:
+        parsed = urlparse(url)
+        # Strip leading/trailing slashes and split path segments
+        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+        # Root domain with no path → homepage
+        if not path_parts:
+            return True
+        # Exactly one shallow segment with no digit (year) → generic section
+        # e.g. /techhr/ or /events/ or /conference/
+        if len(path_parts) == 1:
+            segment = path_parts[0].lower()
+            # If the segment contains a 4-digit year → edition-specific, keep it
+            if re.search(r"\b20\d{2}\b", segment):
+                return False
+            # Generic section names that are never event-specific
+            generic_sections = {
+                "events", "event", "conferences", "conference", "register",
+                "registration", "attend", "summit", "expo", "fair",
+                "news", "blog", "press", "media", "about", "contact",
+            }
+            if segment in generic_sections:
+                return True
+            # Single-word segment with no year and short (≤8 chars) — likely a section
+            if len(segment) <= 8:
+                return True
+        # Two segments but second is purely generic
+        if len(path_parts) == 2:
+            second = path_parts[1].lower()
+            if not re.search(r"\b20\d{2}\b", second) and second in {
+                "register", "attend", "overview", "home", "index", "info",
+            }:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _is_eventseye_event_page(url: str) -> bool:
     return bool(url and "eventseye.com/fairs/f-" in url.lower())
 
@@ -235,7 +291,19 @@ def _infer_personas(full_text: str, industry_tags: str) -> str:
     return ""
 
 
-def _best_event_link(organic: list, event_name: str, source_url: str) -> str:
+def _best_event_link(organic: list, event_name: str, source_url: str, year: str = "") -> str:
+    """
+    Pick the best event URL from SerpAPI organic results.
+
+    Scoring (higher = better):
+      +1 per event-name token in title/snippet/url
+      +2 per signal word (register, official, conference, …)
+      +5 if the URL contains the event year (e.g. /2026/ or -2026)  ← KEY FIX
+      -3 if the URL is a homepage/shallow generic page               ← KEY FIX
+      -5 if it's a known aggregator (10times, eventseye, bizzabo…)   ← KEY FIX
+
+    Returns the best URL, or "" if nothing reliable found.
+    """
     name_tokens = [
         w.lower() for w in re.split(r"[\s\-&,]+", event_name)
         if len(w) > 3 and not w.isdigit()
@@ -244,19 +312,58 @@ def _best_event_link(organic: list, event_name: str, source_url: str) -> str:
         "official", "register", "registration", "event", "expo",
         "conference", "summit", "fair", "show", "congress", "forum",
     }
-    candidates: list[tuple[int, str]] = []
-    for item in (organic or [])[:10]:
+    # Aggregator domains that list events but are not the event's own page
+    aggregator_domains = {
+        "10times.com", "eventseye.com", "bizzabo.com", "evensi.com",
+        "allevents.in", "lanyrd.com", "confhub.com", "meetup.com",
+        "eventbrite.com", "konferencje.pl", "conferencealerts.com",
+        "papercrowd.com", "conference-service.com", "allconferences.com",
+    }
+
+    current_year = year or ""
+
+    candidates: list[tuple[float, str]] = []
+    for item in (organic or [])[:12]:
         link = str(item.get("link", "")).strip()
         if not link.startswith(("http://", "https://")):
             continue
         if _is_venue_url(link):
             continue
+
+        try:
+            link_domain = urlparse(link).netloc.lower().lstrip("www.")
+        except Exception:
+            link_domain = ""
+
+        # Skip aggregators
+        if any(agg in link_domain for agg in aggregator_domains):
+            continue
+
         haystack = f"{item.get('title','')} {item.get('snippet','')} {link}".lower()
-        score = sum(1 for t in name_tokens if t in haystack)
-        score += sum(2 for s in signals if s in haystack)
+        score: float = 0.0
+
+        # Name token matches
+        score += sum(1.0 for t in name_tokens if t in haystack)
+        # Signal word matches
+        score += sum(2.0 for s in signals if s in haystack)
+
+        # Year-in-URL bonus — strong signal that this is the right edition
+        if current_year and current_year in link:
+            score += 5.0
+        elif re.search(r"/20\d{2}[/\-]?|[\-_]20\d{2}[\-_/.]", link):
+            # Any 4-digit year in URL path
+            score += 3.0
+
+        # Homepage / shallow URL penalty
+        if _is_homepage_url(link):
+            score -= 3.0
+
         candidates.append((score, link))
 
-    candidates.sort(key=lambda x: -x[0])
+    # Sort by score descending; break ties by preferring shorter URLs
+    # (shorter URLs are often the canonical edition page)
+    candidates.sort(key=lambda x: (-x[0], len(x[1])))
+
     if candidates and candidates[0][0] > 0:
         return candidates[0][1]
 
@@ -366,7 +473,7 @@ async def enrich_event(
 
         # Event link
         if need_link:
-            link = _best_event_link(organic, clean_name, source_url)
+            link = _best_event_link(organic, clean_name, source_url, year=year)
             if link:
                 result["event_link"] = link
                 result["website"]    = link
@@ -458,7 +565,17 @@ async def enrich_events_batch(
             (event.registration_url or "").strip() or
             (event.source_url or "").strip()
         )
-        need_link = _is_venue_url(current_url) or not current_url.startswith("http")
+        # Need a new link if:
+        #   a) no URL at all
+        #   b) it's a venue/blocked domain
+        #   c) it's just the organiser's homepage or a shallow generic section
+        #      (e.g. marketingfestival.in/ or peoplematters.in/techhr/)
+        need_link = (
+            not current_url or
+            not current_url.startswith("http") or
+            _is_venue_url(current_url) or
+            _is_homepage_url(current_url)
+        )
 
         if any([need_att, need_prc, need_desc, need_link]):
             to_enrich.append((event, need_att, need_prc, need_desc, need_link))
