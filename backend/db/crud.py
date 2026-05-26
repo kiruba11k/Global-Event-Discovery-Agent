@@ -118,29 +118,51 @@ def _dialect_insert(orm_class):
 # Event CRUD
 # ══════════════════════════════════════════════════════════════════════
 
-async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
-    """Insert or skip-on-conflict. Returns True if a new row was inserted."""
+async def upsert_event(db: AsyncSession, event) -> bool:
+    """
+    Insert or skip-on-conflict (dedup_hash).
+    Accepts either an EventCreate Pydantic model OR a plain dict
+    (from platform_normaliser.normalise()).
+    Returns True if a new row was inserted.
+    """
+    # Support both Pydantic model and raw dict (from normaliser)
+    if isinstance(event, dict):
+        d = event
+    else:
+        d = event.dict() if hasattr(event, "dict") else vars(event)
+
     try:
         stmt = (
             _dialect_insert(EventORM)
             .values(
-                id=event.id, source_platform=event.source_platform,
-                source_url=event.source_url, dedup_hash=event.dedup_hash,
-                name=event.name, description=event.description,
-                short_summary=event.short_summary, edition_number=event.edition_number,
-                start_date=event.start_date, end_date=event.end_date,
-                duration_days=event.duration_days, venue_name=event.venue_name,
-                address=event.address, city=event.city, country=event.country,
-                is_virtual=event.is_virtual, is_hybrid=event.is_hybrid,
-                est_attendees=event.est_attendees, category=event.category,
-                industry_tags=event.industry_tags, audience_personas=event.audience_personas,
-                ticket_price_usd=event.ticket_price_usd,
-                price_description=event.price_description,
-                registration_url=event.registration_url, sponsors=event.sponsors,
-                speakers_url=event.speakers_url, agenda_url=event.agenda_url,
-                event_cities=event.event_cities, event_venues=event.event_venues,
-                related_industries=event.related_industries, website=event.website,
-                ingested_at=datetime.utcnow(), last_verified_at=datetime.utcnow(),
+                id                = d.get("id") or str(uuid.uuid4()),
+                source_platform   = d.get("source_platform", ""),
+                source_url        = d.get("source_url", ""),
+                dedup_hash        = d.get("dedup_hash", ""),
+                name              = d.get("name", ""),
+                description       = d.get("description", ""),
+                category          = d.get("category", ""),
+                start_date        = d.get("start_date", ""),
+                end_date          = d.get("end_date", ""),
+                venue_name        = d.get("venue_name", ""),
+                city              = d.get("city", ""),
+                country           = d.get("country", ""),
+                industry_tags     = d.get("industry_tags", ""),
+                audience_personas = d.get("audience_personas", ""),
+                est_attendees     = int(d.get("est_attendees") or 0),
+                price_description = d.get("price_description", ""),
+                registration_url  = d.get("registration_url", ""),
+                website           = d.get("website", ""),
+                sponsors          = d.get("sponsors", ""),
+                speakers_url      = d.get("speakers_url", ""),
+                agenda_url        = d.get("agenda_url", ""),
+                relevance_score   = float(d.get("relevance_score") or 0.0),
+                relevance_tier    = d.get("relevance_tier", ""),
+                rationale         = d.get("rationale", ""),
+                confidence_score  = float(d.get("confidence_score") or 0.8),
+                ingested_at       = datetime.utcnow(),
+                last_verified_at  = datetime.utcnow(),
+                serpapi_enriched  = bool(d.get("serpapi_enriched", False)),
             )
             .on_conflict_do_nothing(index_elements=["dedup_hash"])
         )
@@ -148,7 +170,7 @@ async def upsert_event(db: AsyncSession, event: EventCreate) -> bool:
         await db.commit()
         return result.rowcount != 0
     except Exception as exc:
-        logger.error(f"upsert_event error [{event.name[:40]}]: {exc}")
+        logger.error(f"upsert_event error [{d.get('name','?')[:40]}]: {exc}")
         await db.rollback()
         return False
 
@@ -173,24 +195,37 @@ async def batch_upsert_events(
         if not event.start_date:
             skipped += 1
             continue
+        # Accept Pydantic model or dict (from platform_normaliser)
+        d = event if isinstance(event, dict) else (event.dict() if hasattr(event, "dict") else vars(event))
         rows.append(dict(
-            id=event.id, source_platform=event.source_platform,
-            source_url=event.source_url, dedup_hash=event.dedup_hash,
-            name=event.name, description=event.description,
-            short_summary=event.short_summary, edition_number=event.edition_number,
-            start_date=event.start_date, end_date=event.end_date,
-            duration_days=event.duration_days, venue_name=event.venue_name,
-            address=event.address, city=event.city, country=event.country,
-            is_virtual=event.is_virtual, is_hybrid=event.is_hybrid,
-            est_attendees=event.est_attendees, category=event.category,
-            industry_tags=event.industry_tags, audience_personas=event.audience_personas,
-            ticket_price_usd=event.ticket_price_usd,
-            price_description=event.price_description,
-            registration_url=event.registration_url, sponsors=event.sponsors,
-            speakers_url=event.speakers_url, agenda_url=event.agenda_url,
-            event_cities=event.event_cities, event_venues=event.event_venues,
-            related_industries=event.related_industries, website=event.website,
-            ingested_at=datetime.utcnow(), last_verified_at=datetime.utcnow(),
+            id                = d.get("id") or str(uuid.uuid4()),
+            source_platform   = d.get("source_platform", ""),
+            source_url        = d.get("source_url", ""),
+            dedup_hash        = d.get("dedup_hash", ""),
+            name              = d.get("name", ""),
+            description       = d.get("description", ""),
+            category          = d.get("category", ""),
+            start_date        = d.get("start_date", ""),
+            end_date          = d.get("end_date", ""),
+            venue_name        = d.get("venue_name", ""),
+            city              = d.get("city", ""),
+            country           = d.get("country", ""),
+            industry_tags     = d.get("industry_tags", ""),
+            audience_personas = d.get("audience_personas", ""),
+            est_attendees     = int(d.get("est_attendees") or 0),
+            price_description = d.get("price_description", ""),
+            registration_url  = d.get("registration_url", ""),
+            website           = d.get("website", ""),
+            sponsors          = d.get("sponsors", ""),
+            speakers_url      = d.get("speakers_url", ""),
+            agenda_url        = d.get("agenda_url", ""),
+            relevance_score   = float(d.get("relevance_score") or 0.0),
+            relevance_tier    = d.get("relevance_tier", ""),
+            rationale         = d.get("rationale", ""),
+            confidence_score  = float(d.get("confidence_score") or 0.8),
+            ingested_at       = datetime.utcnow(),
+            last_verified_at  = datetime.utcnow(),
+            serpapi_enriched  = bool(d.get("serpapi_enriched", False)),
         ))
 
     if not rows:
