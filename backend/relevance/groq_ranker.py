@@ -156,37 +156,140 @@ def _google_fallback(event: EventORM) -> str:
     return f"https://www.google.com/search?q={quote_plus(q)}"
 
 
+# ── URL validation helpers ────────────────────────────────────────
+# Domains that are known event-platform sources; source_url from these
+# is always event-specific because it was scraped from that platform's
+# event detail page, not a listing or homepage.
+_EVENT_PLATFORM_DOMAINS: frozenset[str] = frozenset({
+    "eventseye.com",        # source_url = /fairs/f-{slug}-{id}-1.html
+    "ticketmaster.com",     # source_url = /event/{event-slug}/event/{id}
+    "ticketmaster.co.uk",
+    "ticketmaster.com.au",
+    "eventbrite.com",       # source_url = /e/{slug}-{id}/
+    "predicthq.com",        # internal API source
+    "allevents.in",
+    "luma.com",             # luma event pages
+    "lu.ma",
+    "10times.com",          # only source_url (event detail), not organic results
+    "konfhub.com",
+    "townscript.com",
+    "imtj.com",
+    "10times.in",
+})
+
+def _is_platform_event_url(url: str) -> bool:
+    """
+    Returns True if the URL is from a known event platform where the
+    source_url is always a specific event detail page (not a listing).
+    EventsEye, Ticketmaster, Eventbrite, PredictHQ, etc.
+    """
+    if not url or not url.startswith(("http://", "https://")):
+        return False
+    try:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc.lower().lstrip("www.")
+        path   = urlparse(url).path or ""
+        for pd in _EVENT_PLATFORM_DOMAINS:
+            if domain == pd or domain.endswith("." + pd):
+                # Extra guard: path must not be just "/" or empty
+                clean_path = path.strip("/")
+                if clean_path:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _is_homepage_url(url: str) -> bool:
+    """
+    True when a URL is the organiser's root domain or a shallow generic
+    section — i.e. NOT an edition-specific event page.
+
+    Returns True (= homepage/useless) for:
+      https://marketingfestival.in/          no path
+      https://peoplematters.in/techhr/       1 short segment, no year
+      https://aws.amazon.com/events/         generic section name
+
+    Returns False (= keep it) for:
+      https://peoplematters.in/techhr/techhr-india-2026/    has year
+      https://marketingfestival.in/summit/2026-edition/     has year
+      https://www.idc.com/ap/events/india-2026              has year
+    """
+    if not url:
+        return True
+    try:
+        from urllib.parse import urlparse
+        parsed     = urlparse(url)
+        path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+
+        if not path_parts:                       # root domain — homepage
+            return True
+
+        full_path = "/".join(path_parts).lower()
+
+        # If a 4-digit year appears anywhere in the path → edition-specific
+        if re.search(r"20\d{2}", full_path):
+            return False
+
+        # Single segment
+        if len(path_parts) == 1:
+            seg = path_parts[0].lower()
+            _GENERIC = {
+                "events", "event", "conferences", "conference", "register",
+                "registration", "attend", "summit", "expo", "fair",
+                "news", "blog", "press", "media", "about", "contact",
+                "en", "home", "index", "default",
+            }
+            if seg in _GENERIC:
+                return True
+            if len(seg) <= 10:      # short single segment with no year
+                return True
+
+        # Two segments where second is generic
+        if len(path_parts) == 2:
+            second = path_parts[1].lower()
+            if second in {"register", "attend", "overview", "home", "index",
+                          "info", "events", "en", "default"}:
+                return True
+
+    except Exception:
+        pass
+    return False
+
+
 def _best_link(event: EventORM, enrichments: dict) -> str:
     """
-    Priority order (most reliable → least):
-      1. SerpAPI enriched link — came from live search, year-specific scoring
-      2. DB source_url if it's an EventsEye event-specific page
-      3. DB registration_url / website IF it's not a homepage or venue site
-      4. Google search fallback (always returns something)
+    Returns the best verified event URL, or "" if nothing reliable found.
 
-    Homepage-level URLs (e.g. marketingfestival.in/, peoplematters.in/techhr/)
-    are treated as "not found" — we'd rather show a Google search than silently
-    link to the organiser's generic homepage.
+    Priority (all must pass venue + homepage guards):
+      1. source_url from a known event platform (EventsEye, Ticketmaster,
+         Eventbrite, PredictHQ…) — always event-specific by construction
+      2. SerpAPI-enriched link — live search, year-specific scoring
+      3. DB registration_url / website — only if it looks edition-specific
+
+    NEVER returns a Google search URL or an organiser homepage/section URL.
+    Empty string → frontend shows "Link not available".
     """
-    from enrichment.serp_enricher import _is_eventseye_event_page, _is_homepage_url
+    # 1. source_url from a known event platform (most reliable — always event-specific)
+    src = (event.source_url or "").strip()
+    if src and _is_platform_event_url(src):
+        return src
 
-    # 1. SerpAPI enriched link (always most reliable — year-specific scoring)
-    serp_link = enrichments.get("event_link") or enrichments.get("website") or ""
+    # 2. SerpAPI enriched link (live verified, year-specific scoring)
+    serp_link = (enrichments.get("event_link") or enrichments.get("website") or "").strip()
     if serp_link and not _is_venue_url(serp_link) and not _is_homepage_url(serp_link):
         return serp_link
 
-    # 2. EventsEye source_url (edition-specific page)
-    src = event.source_url or ""
-    if _is_eventseye_event_page(src):
-        return src
-
-    # 3. DB registration_url / website — only if it looks edition-specific
-    reg = (getattr(event, "website", "") or "").strip() or (event.registration_url or "").strip()
+    # 3. DB registration_url / website — only if edition-specific
+    reg = (
+        (getattr(event, "website", "") or "").strip() or
+        (event.registration_url or "").strip()
+    )
     if reg and not _is_venue_url(reg) and not _is_homepage_url(reg):
         return reg
 
-    # 4. Google search fallback — honest and always works
-    return _google_fallback(event)
+    # Nothing reliable found
+    return ""
 
 
 def _personas(event: EventORM, enrichments: dict, llm_value: str = "") -> str:
