@@ -158,26 +158,34 @@ def _google_fallback(event: EventORM) -> str:
 
 def _best_link(event: EventORM, enrichments: dict) -> str:
     """
-    Priority:
-      1. SerpAPI enriched event_link / website
-      2. source_url if it's an EventsEye event page
-      3. registration_url if it's NOT a venue site
-      4. Google search fallback
-    """
-    from enrichment.serp_enricher import _is_eventseye_event_page
+    Priority order (most reliable → least):
+      1. SerpAPI enriched link — came from live search, year-specific scoring
+      2. DB source_url if it's an EventsEye event-specific page
+      3. DB registration_url / website IF it's not a homepage or venue site
+      4. Google search fallback (always returns something)
 
+    Homepage-level URLs (e.g. marketingfestival.in/, peoplematters.in/techhr/)
+    are treated as "not found" — we'd rather show a Google search than silently
+    link to the organiser's generic homepage.
+    """
+    from enrichment.serp_enricher import _is_eventseye_event_page, _is_homepage_url
+
+    # 1. SerpAPI enriched link (always most reliable — year-specific scoring)
     serp_link = enrichments.get("event_link") or enrichments.get("website") or ""
-    if serp_link and not _is_venue_url(serp_link):
+    if serp_link and not _is_venue_url(serp_link) and not _is_homepage_url(serp_link):
         return serp_link
 
+    # 2. EventsEye source_url (edition-specific page)
     src = event.source_url or ""
     if _is_eventseye_event_page(src):
         return src
 
+    # 3. DB registration_url / website — only if it looks edition-specific
     reg = (getattr(event, "website", "") or "").strip() or (event.registration_url or "").strip()
-    if reg and not _is_venue_url(reg):
+    if reg and not _is_venue_url(reg) and not _is_homepage_url(reg):
         return reg
 
+    # 4. Google search fallback — honest and always works
     return _google_fallback(event)
 
 
@@ -569,7 +577,6 @@ async def rank_with_groq(
         llm_about   = ""
         llm_persona = ""
         llm_pricing = ""
-        llm_link    = ""
         llm_att     = 0
         llm_nums    = ""
 
@@ -585,9 +592,7 @@ async def rank_with_groq(
                 llm_about   = gr.what_its_about or ""
                 llm_persona = gr.buyer_persona  or ""
                 llm_pricing = gr.pricing        or ""
-                # NOTE: llm_link intentionally NOT read from gr.event_link
-                # The LLM never receives or generates URLs — links always come
-                # from _best_link() which uses real DB + SerpAPI data only.
+                # URL never read from LLM response — _best_link() handles all links
                 llm_att     = gr.est_attendees  or 0
                 llm_nums    = gr.key_numbers    or ""
         else:
