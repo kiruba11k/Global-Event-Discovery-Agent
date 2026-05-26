@@ -41,7 +41,7 @@
    ════════════════════════════════════════════════════════════════ */
 .ddv-back-bar {
   border-bottom: 1px solid var(--border);
-  background:    rgba(15,23,42,.7);
+  background:    rgb(230,243,255);
   padding:       0 28px;
 }
 .ddv-back-inner {
@@ -633,7 +633,7 @@
   padding:       32px 28px;
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  background:    rgba(30,41,59,.4);
+  background:    rgb(230,243,255);
 }
 .ddv-rationale-inner {
   max-width: 900px;
