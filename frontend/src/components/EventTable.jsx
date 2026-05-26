@@ -2,11 +2,11 @@ import { useState } from 'react'
 import {
   ExternalLink, ChevronDown, ChevronUp, ArrowUpDown,
   TrendingUp, Phone, Users, CalendarCheck, ClipboardList,
-  Headphones, Mail, AlertTriangle, Info, Search,
+  Headphones, Mail, AlertTriangle, Info,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════
-   PRICING MATRIX  -  USD
+   PRICING MATRIX — USD
    ═══════════════════════════════════════════════════════════ */
 const PRICING_MATRIX = {
   low:        { 5: 2700,  10: 4500,  15: 6000,  20: 7800  },
@@ -27,7 +27,7 @@ const fmt = (n) => `$${n.toLocaleString('en-US')}`
 /**
  * FIXED: Always returns at least [5] so pricing is shown even when
  * est_attendees = 0 (unknown, not actually zero attendees).
- * This is the root cause of the " - " in Meetings Range / Package columns.
+ * This is the root cause of the "—" in Meetings Range / Package columns.
  */
 function getAvailablePackages(attendees) {
   const n = parseInt(attendees) || 0
@@ -63,8 +63,8 @@ function estimatePipeline(meetings, dealSizeCategory) {
    ───────────────────────────────────────────────────────── */
 const INCLUSIONS = [
   { icon: Users,         title: 'Pre-show ICP outreach',          desc: 'We research and contact your exact target accounts 3–4 weeks before the event, generating confirmed interest before you step on site.' },
-  { icon: CalendarCheck, title: 'Confirmed meeting scheduling',    desc: 'Every meeting is booked, confirmed, and placed on your calendar. No cold walks  -  only qualified decision-makers.' },
-  { icon: ClipboardList, title: 'Pre-meeting briefs',              desc: 'You receive a detailed profile of each attendee  -  company, role, pain points, conversation starters  -  before you walk in.' },
+  { icon: CalendarCheck, title: 'Confirmed meeting scheduling',    desc: 'Every meeting is booked, confirmed, and placed on your calendar. No cold walks — only qualified decision-makers.' },
+  { icon: ClipboardList, title: 'Pre-meeting briefs',              desc: 'You receive a detailed profile of each attendee — company, role, pain points, conversation starters — before you walk in.' },
   { icon: Headphones,    title: 'On-site coordination',            desc: 'A dedicated LeadStrategus rep manages logistics on the day: keeps meetings on track, handles no-shows, reschedules when needed.' },
   { icon: Mail,          title: 'Post-event follow-up',            desc: 'Meeting summaries, warm email introductions, and deal-momentum support delivered within 48 hours of the event closing.' },
 ]
@@ -127,18 +127,18 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
       <div className="pc-header">
         <div className="pc-title">
           <span>{tierInfo.tag}</span>
-          <span>LeadStrategus Meeting Packages  -  {tierInfo.tier}</span>
+          <span>LeadStrategus Meeting Packages — {tierInfo.tier}</span>
         </div>
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', background: 'rgba(255,255,255,0.7)', border: '1px solid var(--border)', padding: '4px 10px', borderRadius: 100 }}>
           Pricing in USD · {DEAL_LABELS[category]}
         </div>
       </div>
 
-      {/* Notice when attendees unknown  -  info, not a blocker */}
+      {/* Notice when attendees unknown — info, not a blocker */}
       {unknownAttendees && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(6,182,212,0.05)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 2, fontSize: 11, color: 'var(--text-sub)' }}>
           <Info size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
-          Attendee count not yet available for this event. Showing our starter package  -  <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
+          Attendee count not yet available for this event. Showing our starter package — <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
         </div>
       )}
 
@@ -181,7 +181,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 
       {/* Reference table */}
       <div className="pc-table-wrap">
-        <div className="pc-table-label">All packages  -  prices in USD</div>
+        <div className="pc-table-label">All packages — prices in USD</div>
         <table className="pc-table">
           <thead>
             <tr>
@@ -222,22 +222,67 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
    Helpers
    ───────────────────────────────────────────────────────── */
 function isSearchFallback(url) {
-  return url && url.startsWith('https://www.google.com/search')
+  return !!(url && url.startsWith('https://www.google.com/search'))
+}
+
+// Known venue / social / aggregator domains — never a real event page
+const BLOCKED_DOMAINS = new Set([
+  'singaporeexpo.com.sg','excel.london','expoforum-center.ru','fierapordenone.it',
+  'twtc.org.tw','thecharlottecountyfair.com','fair.ee','biec.in','necc.co.in',
+  'cticc.co.za','sunteccity.com.sg','bitec.com','thelalit.com','marriott.com',
+  'hilton.com','hyatt.com','sheratonhotels.com','ihg.com','accor.com',
+  'facebook.com','m.facebook.com','fb.com','twitter.com','x.com',
+  'linkedin.com','instagram.com','youtube.com','meetup.com','wikipedia.org',
+  'jiexpo.com','bigsight.jp','messe-berlin.de','gouda.nl','uzexpocentre.uz',
+  'visitumea.se','stazione-leopolda.com',
+])
+
+function isBadUrl(url) {
+  if (!url) return true
+  if (isSearchFallback(url)) return true
+  try {
+    const u    = new URL(url)
+    const host = u.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '')
+    if (BLOCKED_DOMAINS.has(host)) return true
+    for (const bd of BLOCKED_DOMAINS) {
+      if (host.endsWith('.' + bd)) return true
+    }
+    const parts = u.pathname.replace(/^\/|\/$/g, '').split('/').filter(Boolean)
+    const full  = parts.join('/').toLowerCase()
+    if (!parts.length) return true
+    if (/20\d{2}/.test(full)) return false
+    const GENERIC = new Set([
+      'events','event','conferences','conference','register','registration',
+      'attend','summit','expo','fair','news','blog','press','media','about',
+      'contact','en','home','index','default','ap','us',
+    ])
+    if (parts.length === 1) {
+      if (GENERIC.has(parts[0].toLowerCase())) return true
+      if (parts[0].length <= 10) return true
+    }
+    if (parts.length === 2) {
+      const s = parts[1].toLowerCase()
+      if (['register','attend','overview','home','index','info','events','en','default'].includes(s))
+        return true
+    }
+  } catch (_) {}
+  return false
 }
 
 function ELink({ href, text }) {
-  if (!href) return <span style={{ color: 'var(--text-dim)', fontSize: 11 }}> - </span>
-  const isSearch = isSearchFallback(href)
+  if (isBadUrl(href)) {
+    return (
+      <span style={{ color: 'var(--text-dim)', fontSize: 11, fontStyle: 'italic' }}>
+        Link not available
+      </span>
+    )
+  }
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="expand-link"
-      title={isSearch ? 'No direct link found  -  opens Google search' : undefined}>
-      {isSearch
-        ? <><Search size={10} /> Search for Event Page</>
-        : <>{text} <ExternalLink size={10} /></>}
+    <a href={href} target="_blank" rel="noopener noreferrer" className="expand-link">
+      {text} <ExternalLink size={10} />
     </a>
   )
 }
-
 function Verdict({ v }) {
   const cls = { GO: 'verdict-go', CONSIDER: 'verdict-consider', SKIP: 'verdict-skip' }
   const dot = { GO: '●', CONSIDER: '◆', SKIP: '○' }
@@ -282,14 +327,14 @@ function EventRow({ event, index, dealSizeCategory }) {
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        {/* FIXED: Always show meeting range  -  never show " - " */}
+        {/* FIXED: Always show meeting range — never show "—" */}
         <td style={{ fontSize: 11, textAlign: 'center' }}>
           {pkgs.length > 1
             ? `${pkgs[0]}–${pkgs[pkgs.length - 1]}`
             : <span style={{ fontSize: 10 }}>{pkgs[0]} meetings</span>
           }
         </td>
-        {/* FIXED: Always show package price  -  never show " - " */}
+        {/* FIXED: Always show package price — never show "—" */}
         <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
           {pkgs.length > 1
             ? `${fmt(prices[pkgs[0]])} – ${fmt(prices[pkgs[pkgs.length - 1]])}`
@@ -310,12 +355,12 @@ function EventRow({ event, index, dealSizeCategory }) {
               <div className="expand-grid">
                 <div>
                   <div className="expand-block-label">What It's About</div>
-                  <div className="expand-block-text">{event.what_its_about || ' - '}</div>
+                  <div className="expand-block-text">{event.what_its_about || '—'}</div>
                 </div>
                 <div>
                   <div className="expand-block-label">Key Numbers</div>
                   <div className="expand-block-text" style={{ color: 'var(--accent)' }}>
-                    {event.key_numbers || ' - '}
+                    {event.key_numbers || '—'}
                   </div>
                 </div>
                 <div>
@@ -324,12 +369,12 @@ function EventRow({ event, index, dealSizeCategory }) {
                     ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {personas.map((p, i) => <span key={i} className="persona-chip">{p.trim()}</span>)}
                       </div>
-                    : <span style={{ fontSize: 11, color: 'var(--text-dim)' }}> - </span>
+                    : <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>—</span>
                   }
                 </div>
                 <div>
                   <div className="expand-block-label">Ticket price / entry fee</div>
-                  <div className="expand-block-text">{event.pricing || ' - '}</div>
+                  <div className="expand-block-text">{event.pricing || '—'}</div>
                 </div>
                 <div>
                   <div className="expand-block-label">Links</div>
@@ -348,7 +393,7 @@ function EventRow({ event, index, dealSizeCategory }) {
                   <div className="expand-block-label" style={{ marginBottom: 6 }}>AI Relevance Analysis</div>
                   <div className="ai-rationale-text">"{event.verdict_notes}"</div>
                 </div>
-                {/* FIXED: PricingCard always rendered  -  no attendees check gate */}
+                {/* FIXED: PricingCard always rendered — no attendees check gate */}
                 <PricingCard
                   attendees={event.est_attendees}
                   eventName={event.event_name}
@@ -462,7 +507,7 @@ export default function EventTable({ events, dealSizeCategory }) {
             </div>
             <div style={{ fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 10px', borderRadius: 100, display: 'flex', alignItems: 'center', gap: 4 }}>
               <AlertTriangle size={9} />
-              Prices are estimates  -  request a quote for firm fees
+              Prices are estimates — request a quote for firm fees
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
