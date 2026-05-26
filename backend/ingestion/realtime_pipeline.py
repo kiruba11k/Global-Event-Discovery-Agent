@@ -26,7 +26,7 @@ from ingestion.serpapi_events import run_serpapi_queries
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
 from ingestion.predicthq_realtime import run_predicthq_queries
-from models.event import EventCreate, EventORM
+from models.event import EventORM
 from models.icp_profile import ICPProfile
 
 settings = get_settings()
@@ -151,12 +151,15 @@ async def fetch_realtime_candidates(
             logger.debug(f"  — {src}: key not configured")
 
     # ── Step 4: Deduplicate across all sources ─────────────────────
-    new_events: list[EventCreate] = []
+    # All connectors now return list[dict] via platform_normaliser
+    new_events: list[dict] = []
     seen: set[str] = set()
     for evs in [serp_evs, tm_evs, eb_evs, phq_evs]:
         for ev in evs:
-            if ev.dedup_hash not in seen:
-                seen.add(ev.dedup_hash)
+            # Support both dict and legacy EventCreate pydantic model
+            dh = ev.get("dedup_hash") if isinstance(ev, dict) else getattr(ev, "dedup_hash", "")
+            if dh and dh not in seen:
+                seen.add(dh)
                 new_events.append(ev)
 
     logger.info(
