@@ -51,8 +51,11 @@ class GroqEventResult(BaseModel):
     what_its_about: str = ""
     buyer_persona:  str = ""
     pricing:        str = ""
-    event_link:     str = ""
+    # event_link intentionally absent — LLM never generates URLs.
+    # Extra fields from old prompts are silently ignored via model_config.
     est_attendees:  int = 0
+
+    model_config = {"extra": "ignore"}  # ignore event_link if LLM still returns it
 
     @field_validator("fit_verdict")
     @classmethod
@@ -350,20 +353,33 @@ def _profile_dict(profile: ICPProfile) -> dict:
 
 
 def _ranking_prompt(events_dicts: list, profile_dict: dict) -> str:
+    # Strip event_link from every event dict sent to the LLM.
+    # The LLM must NEVER generate or modify links — it hallucinates them.
+    # Links are resolved exclusively by _best_link() after the LLM call.
+    safe_events = []
+    for ev in events_dicts:
+        ev_copy = dict(ev)
+        ev_copy.pop("event_link", None)
+        ev_copy.pop("website", None)
+        ev_copy.pop("registration_url", None)
+        ev_copy.pop("source_url", None)
+        safe_events.append(ev_copy)
+
     return f"""CLIENT ICP:
 {json.dumps(profile_dict, indent=2)}
 
 EVENTS:
-{json.dumps(events_dicts, indent=2)}
+{json.dumps(safe_events, indent=2)}
 
 For each event:
 - what_its_about: describe based on industry_focus + description fields ONLY
 - buyer_persona: use typical_attendees field, or infer from industry_focus
 - pricing: use pricing field from event data, or extract from serpapi_text
-- event_link: use event_link field from event data
 - est_attendees: extract number from serpapi_text if available, else 0
 - key_numbers: attendee count + any numeric facts from serpapi_text; empty string if unknown
 - verdict_notes: explain the relevance in plain sales-analyst language
+
+DO NOT generate or guess any URLs. Links are resolved from the database separately.
 
 Return JSON:
 {{
@@ -376,7 +392,6 @@ Return JSON:
       "what_its_about": "<what this event covers based on its own data>",
       "buyer_persona": "<who attends based on industry>",
       "pricing": "<from serpapi_text or 'See website'>",
-      "event_link": "<from event_link field>",
       "est_attendees": 0
     }}
   ]
@@ -570,19 +585,17 @@ async def rank_with_groq(
                 llm_about   = gr.what_its_about or ""
                 llm_persona = gr.buyer_persona  or ""
                 llm_pricing = gr.pricing        or ""
-                llm_link    = gr.event_link     or ""
+                # NOTE: llm_link intentionally NOT read from gr.event_link
+                # The LLM never receives or generates URLs — links always come
+                # from _best_link() which uses real DB + SerpAPI data only.
                 llm_att     = gr.est_attendees  or 0
                 llm_nums    = gr.key_numbers    or ""
         else:
             verdict   = tier
             rationale = build_fallback_rationale(event, profile, detail, score, tier)
 
-        # Resolve final values with full fallback chain
-        final_link = (
-            (llm_link if llm_link and not _is_generic(llm_link) and
-             not _is_venue_url(llm_link) else "")
-            or _best_link(event, ev_en)
-        )
+        # Link resolution: DB/SerpAPI only — LLM output never used for links
+        final_link = _best_link(event, ev_en)
         final_att  = (
             event.est_attendees or
             llm_att or
