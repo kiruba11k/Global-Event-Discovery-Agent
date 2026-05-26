@@ -72,6 +72,40 @@ function Counter({ target, prefix = '', suffix = '', triggered }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+
+// ── URL validation (mirrors backend logic) ───────────────────────
+const _DDV_BLOCKED = new Set([
+  'singaporeexpo.com.sg','excel.london','expoforum-center.ru','fierapordenone.it',
+  'twtc.org.tw','thecharlottecountyfair.com','fair.ee','biec.in','necc.co.in',
+  'cticc.co.za','sunteccity.com.sg','bitec.com','thelalit.com','marriott.com',
+  'hilton.com','hyatt.com','sheratonhotels.com','ihg.com','accor.com',
+  'facebook.com','m.facebook.com','fb.com','twitter.com','x.com',
+  'linkedin.com','instagram.com','youtube.com','meetup.com','wikipedia.org',
+  'jiexpo.com','bigsight.jp','messe-berlin.de','gouda.nl','uzexpocentre.uz',
+  'visitumea.se','stazione-leopolda.com',
+])
+function _ddvBadUrl(url) {
+  if (!url) return true
+  if (url.startsWith('https://www.google.com/search')) return true
+  try {
+    const u    = new URL(url)
+    const host = u.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '')
+    if (_DDV_BLOCKED.has(host)) return true
+    for (const bd of _DDV_BLOCKED) { if (host.endsWith('.' + bd)) return true }
+    const parts = u.pathname.replace(/^\/|\/$/g, '').split('/').filter(Boolean)
+    if (!parts.length) return true
+    if (/20\d{2}/.test(parts.join('/').toLowerCase())) return false
+    const G = new Set(['events','event','conferences','conference','register',
+      'registration','attend','expo','fair','news','blog','about','contact',
+      'en','home','index','default','ap','us'])
+    if (parts.length === 1 && (G.has(parts[0].toLowerCase()) || parts[0].length <= 10)) return true
+    if (parts.length === 2 &&
+        ['register','attend','overview','home','index','info','events','en','default']
+          .includes(parts[1].toLowerCase())) return true
+  } catch (_) {}
+  return false
+}
+
 export default function ShowDeepDivePage({
   event            = null,
   profile          = null,
@@ -184,17 +218,13 @@ export default function ShowDeepDivePage({
                   {event.date}
                 </span>
               )}
-              {event.event_link && (() => {
-                const isSearch = event.event_link.startsWith('https://www.google.com/search')
-                return (
-                  <a href={event.event_link} target="_blank" rel="noopener noreferrer"
-                    className={`ddv-meta-item ddv-meta-link ${isSearch ? 'ddv-meta-link--search' : ''}`}
-                    title={isSearch ? 'No direct link found — opens Google search' : undefined}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    {isSearch ? 'Search for event page' : 'Official site'}
-                  </a>
-                )
-              })()}
+              {!_ddvBadUrl(event.event_link) && (
+                <a href={event.event_link} target="_blank" rel="noopener noreferrer"
+                  className="ddv-meta-item ddv-meta-link">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Official site
+                </a>
+              )}
             </div>
             {event.what_its_about && (
               <p className="ddv-show-about">{event.what_its_about}</p>
