@@ -70,6 +70,18 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"
 
+        # ── Fit scorer tuning (configurable via .env / Render env vars) ──
+    # Fraction of B2B show attendees who are decision-makers (not vendors/booth staff)
+    dm_ratio:             float = 0.35
+    # ±% confidence interval around ICP estimate (shown as range in UI)
+    icp_uncertainty:      float = 0.30
+    # Round ICP estimate to nearest N for honest uncertainty display
+    icp_round_to:         int   = 10
+    # Minimum show scale per deal tier (for deal-size fit scoring)
+    deal_min_strategic:   int   = 5000   # $500K+ deals need flagship events
+    deal_min_enterprise:  int   = 1000   # $100K+ deals need significant events
+    deal_min_high:        int   = 500    # $50K+ deals need mid-size events
+
     # ── Seed protection ───────────────────────────
     seed_admin_token: str = ""
 
