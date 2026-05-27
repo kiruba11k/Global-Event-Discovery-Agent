@@ -22,9 +22,12 @@ Smart upsert (merge strategy):
 
   This means re-running ingestion is always safe — it only improves the data.
 
-Mount in main.py:
+Mount in main.py — add AFTER app = FastAPI(...) is defined:
   from api.routes_admin import router as admin_router
   app.include_router(admin_router, prefix="/admin", tags=["admin"])
+
+  IMPORTANT: this line must come AFTER  app = FastAPI(lifespan=lifespan)
+  NOT at the top of the file before app is created.
 """
 from __future__ import annotations
 
