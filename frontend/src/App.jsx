@@ -77,6 +77,7 @@ export default function App() {
   const [lastProfile,      setLastProfile]      = useState(null)
   const [userEmail,        setUserEmail]        = useState('')
   const [reportSent,       setReportSent]       = useState(false)
+  const [universeStats,    setUniverseStats]    = useState(null)
   const [emailModalOpen,   setEmailModalOpen]   = useState(false)
 
   /* ── Deep dive ─────────────────────────────────────────────── */
@@ -134,6 +135,8 @@ export default function App() {
       const events = res.events || []
       setProfileId(res.profile_id || '')
       setResults(events)
+      // universe_stats comes from the backend SearchResponse
+      if (res.universe_stats) setUniverseStats(res.universe_stats)
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
@@ -205,6 +208,7 @@ export default function App() {
           dealSizeCategory={dealSizeCategory}
           profileId={profileId}
           reportSent={reportSent}
+          universeStats={universeStats}
           onEmailUnlock={(email) => {
             setUserEmail(email)
             if (!reportSent) _autoSendReport(results, lastProfile, email)
@@ -347,16 +351,36 @@ export default function App() {
         </div>
       </div>
 
-      {/* PROOF ROW */}
-      <section className="hp-proof" ref={statsRef} aria-label="Results we've delivered">
+      {/* PROOF ROW: real DB stats from /api/stats */}
+      <section className="hp-proof" ref={statsRef} aria-label="Our event index">
         <div className="hp-proof-inner">
-          <StatCounter target={50}  suffix="+" label="meetings, single event"       triggered={statsVisible} />
-          <div className="hp-proof-divider" aria-hidden="true" />
-          <StatCounter target={1}   prefix="$" suffix="M" label="pipeline per show" triggered={statsVisible} />
-          <div className="hp-proof-divider" aria-hidden="true" />
-          <StatCounter target={12}  label="Fortune 50 meetings, BSMA"               triggered={statsVisible} />
-          <div className="hp-proof-divider" aria-hidden="true" />
-          <StatCounter target={5.0} suffix="" label="Clutch rating" decimal={true}  triggered={statsVisible} />
+          {stats?.total_events_in_db > 0 ? (
+            <>
+              <div className="hp-stat-item">
+                <div className="hp-stat-num">{(stats.total_events_in_db || 0).toLocaleString()}+</div>
+                <div className="hp-stat-label">B2B events indexed</div>
+              </div>
+              <div className="hp-proof-divider" aria-hidden="true" />
+              <div className="hp-stat-item">
+                <div className="hp-stat-num">20+</div>
+                <div className="hp-stat-label">countries covered</div>
+              </div>
+              <div className="hp-proof-divider" aria-hidden="true" />
+              <div className="hp-stat-item">
+                <div className="hp-stat-num">90s</div>
+                <div className="hp-stat-label">to your ranked list</div>
+              </div>
+              <div className="hp-proof-divider" aria-hidden="true" />
+              <div className="hp-stat-item">
+                <div className="hp-stat-num">Free</div>
+                <div className="hp-stat-label">top 6 always free</div>
+              </div>
+            </>
+          ) : (
+            <div className="hp-stat-item" style={{textAlign:'center',flex:'none'}}>
+              <div className="hp-stat-num" style={{fontSize:18}}>Loading…</div>
+            </div>
+          )}
         </div>
       </section>
 
