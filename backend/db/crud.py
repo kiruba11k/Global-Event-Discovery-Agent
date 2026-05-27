@@ -189,14 +189,14 @@ async def batch_upsert_events(
     rows: list = []
 
     for event in events:
-        if skip_past and event.start_date and event.start_date < today:
-            skipped += 1
-            continue
-        if not event.start_date:
-            skipped += 1
-            continue
-        # Accept Pydantic model or dict (from platform_normaliser)
+        # Resolve to dict first — handles both Pydantic models and plain dicts
         d = event if isinstance(event, dict) else (event.dict() if hasattr(event, "dict") else vars(event))
+        if skip_past and d.get("start_date") and d.get("start_date") < today:
+            skipped += 1
+            continue
+        if not d.get("start_date"):
+            skipped += 1
+            continue
         rows.append(dict(
             id                = d.get("id") or str(uuid.uuid4()),
             source_platform   = d.get("source_platform", ""),
