@@ -34,27 +34,37 @@ function getFitGrade(event) {
 // ── ICP count from real API data ──────────────────────────────────
 // est_attendees × (relevance_score/100) × 0.35
 // Returns null when est_attendees is missing/zero.
-function calcICPCount(event) {
-  const att   = parseInt(event?.est_attendees) || 0
-  const score = typeof event?.relevance_score === 'number' ? event.relevance_score : 50
+function getICPData(event, profile) {
+  // Prefer backend-calculated icp_count (from fit_scorer.estimate_icp_count)
+  if (event.icp_count && event.icp_count.estimate) {
+    return event.icp_count
+  }
+  // Local fallback
+  const att   = parseInt(event.est_attendees) || 0
+  const score = typeof event.relevance_score === 'number' ? event.relevance_score : 50
   if (att === 0) return null
-  return Math.max(1, Math.round((att * (score / 100) * 0.35) / 10) * 10)
+  const density = Math.min(score / 100, 1)
+  const est  = Math.max(10, Math.round((att * 0.35 * density) / 10) * 10)
+  const low  = Math.max(10, Math.round(est * 0.70 / 10) * 10)
+  const high = Math.round(est * 1.30 / 10) * 10
+  return {
+    estimate: est, low, high,
+    display: `~${est.toLocaleString()}`,
+    range_display: `${low.toLocaleString()} – ${high.toLocaleString()}`,
+    methodology: `Based on ${att.toLocaleString()} total attendees × 35% decision-maker ratio × ${Math.round(density*100)}% ICP density. Range shows ±30% uncertainty.`
+  }
 }
 
-// ── Pipeline from formula ─────────────────────────────────────────
-// ICP count × deal midpoint × 0.15
-// (15% contact-to-meeting rate × 40% qualification × 25% close proxy = ~1.5%)
-const DEAL_MID = { medium: 30000, high: 75000, enterprise: 250000, strategic: 750000 }
 function calcPipeline(event, dealSizeCategory) {
-  const icp = calcICPCount(event)
+  const icp = getICPData(event)
   if (!icp) return null
+  const DEAL_MID = { medium: 30000, high: 75000, enterprise: 250000, strategic: 750000 }
   const mid = DEAL_MID[dealSizeCategory] || DEAL_MID.medium
-  const val = icp * mid * 0.15
+  const val = icp.estimate * mid * 0.15
   if (val >= 1e6)  return `$${(val / 1e6).toFixed(1)}M`
   if (val >= 1000) return `$${Math.round(val / 1000)}K`
   return `$${Math.round(val)}`
 }
-
 // ── Animated counter ──────────────────────────────────────────────
 function Counter({ target, prefix = '', suffix = '', triggered }) {
   const [val, setVal] = useState(0)
@@ -145,7 +155,7 @@ export default function ShowDeepDivePage({
   }
 
   const grade    = getFitGrade(event)
-  const icpCount = calcICPCount(event)
+  const icpCount = getICPData(event)
   const pipeline = calcPipeline(event, dealSizeCategory || profile?.avg_deal_size_category)
 
   // Sponsors: parse from real backend field (comma-separated string)
@@ -250,23 +260,30 @@ export default function ShowDeepDivePage({
 
             {/* ICP count */}
             <div className="ddv-stat">
-              {icpCount !== null ? (
-                <>
-                  <div className="ddv-stat-num ddv-stat-accent">
-                    ~<Counter target={icpCount} triggered={statsVisible} />
-                  </div>
-                  <div className="ddv-stat-label">of your ICPs attending</div>
-                  <div className="ddv-stat-note">
-                    est. decision-makers · <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="ddv-method-link">methodology</a>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22 }}>Data pending</div>
-                  <div className="ddv-stat-label">ICP count not yet available</div>
-                  <div className="ddv-stat-note">Attendee figures not published for this event</div>
-                </>
-              )}
+              {(() => {
+                const icpData = getICPData(event, profile)
+                if (!icpData) return (
+                  <>
+                    <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22, color: 'var(--text-dim)' }}>—</div>
+                    <div className="ddv-stat-label">Attendee data not yet published</div>
+                    <div className="ddv-stat-note">ICP count will appear once organiser publishes figures</div>
+                  </>
+                )
+                return (
+                  <>
+                    <div className="ddv-stat-num ddv-stat-accent">
+                      {icpData.display}
+                    </div>
+                    <div className="ddv-stat-label">of your ICPs attending</div>
+                    <div className="ddv-stat-note">
+                      range: {icpData.range_display} est. decision-makers ·{' '}
+                      <span className="ddv-method-link" title={icpData.methodology} style={{cursor:'help',borderBottom:'1px dotted'}}>
+                        methodology ⓘ
+                      </span>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
 
             <div className="ddv-stat-divider" aria-hidden="true" />
@@ -275,7 +292,14 @@ export default function ShowDeepDivePage({
             <div className="ddv-stat">
               <div className={`ddv-stat-num ddv-grade-inline ${grade.cls}`}>{grade.grade}</div>
               <div className="ddv-stat-label">fit score for your ICP</div>
-              <div className="ddv-stat-note">{grade.label}</div>
+              <div className="ddv-stat-note">
+                {grade.label}
+                {event.confidence && event.confidence !== 'high' && (
+                  <span style={{marginLeft:4,opacity:.7}}>
+                    · {event.factors_used || '?'}/{event.factors_total || 4} factors measured
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="ddv-stat-divider" aria-hidden="true" />
@@ -295,6 +319,28 @@ export default function ShowDeepDivePage({
                   <div className="ddv-stat-note">Available once attendee count confirmed</div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DATA GAPS: score transparency when confidence is not high ── */}
+      {profile && event.data_gaps && event.data_gaps.length > 0 && event.confidence !== 'high' && (
+        <div className="ddv-data-gaps">
+          <div className="ddv-data-gaps-inner">
+            <div className="ddv-section-eyebrow">Score transparency</div>
+            <p className="ddv-data-gaps-note">
+              Fit score based on <strong>{event.factors_used} of {event.factors_total}</strong> measurable
+              factors. Score updates automatically as more event data is published.
+            </p>
+            <div className="ddv-gaps-list">
+              {event.data_gaps.filter(g => g.factor !== 'historical_conversion').map(g => (
+                <div key={g.factor} className="ddv-gap-item">
+                  <span className="ddv-gap-icon">○</span>
+                  <span className="ddv-gap-label">{g.factor.replace(/_/g, ' ')}</span>
+                  <span className="ddv-gap-reason">{g.reason}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -413,14 +459,14 @@ export default function ShowDeepDivePage({
             <div className="ddv-section-eyebrow">Ready to convert this into revenue?</div>
             <h2 className="ddv-cta-title">Want us to set up the meetings?</h2>
             <p className="ddv-cta-sub">
-              We averaged <strong>30+ qualified meetings per client</strong> at {event.event_name}.
-              We research your targets, reach out pre-show, and fill your calendar before you land.
+              We research your targets, reach out pre-show, and fill your calendar with
+              qualified meetings before you land.show, and fill your calendar before you land.
             </p>
             <div className="ddv-cta-proof">
               {[
-                { num: '30+', label: 'meetings per client' },
-                { num: '92%', label: 'show-up rate'        },
-                { num: '48h', label: 'post-event follow-up' },
+                { num: '10+', label: 'meetings, Starter pack' },
+                { num: '20+', label: 'meetings, Growth pack'  },
+                { num: '50+', label: 'meetings, Flagship event' },
               ].map(p => (
                 <div key={p.label} className="ddv-proof-pill">
                   <strong>{p.num}</strong>
