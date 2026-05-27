@@ -20,16 +20,23 @@ import '../ranking.css'
 
 // ── Fit grade from real event data ────────────────────────────────
 function getFitGrade(event) {
-  const score  = typeof event.relevance_score === 'number' ? event.relevance_score : 0
-  const bonus  = event.fit_verdict === 'GO' ? 18 : event.fit_verdict === 'CONSIDER' ? 8 : 0
-  const total  = Math.min(score * 0.82 + bonus, 100)
-  if (total >= 88) return { grade: 'A+', cls: 'grade-aplus', label: 'Exceptional fit'  }
-  if (total >= 75) return { grade: 'A',  cls: 'grade-a',     label: 'Strong fit'       }
-  if (total >= 62) return { grade: 'B+', cls: 'grade-bplus', label: 'Good fit'         }
-  if (total >= 48) return { grade: 'B',  cls: 'grade-b',     label: 'Reasonable fit'   }
-  return               { grade: 'C',  cls: 'grade-c',     label: 'Marginal fit'     }
+  if (event.fit_grade) {
+    const gradeMap = {
+      'A+': { grade: 'A+', cls: 'grade-aplus', label: event.fit_label || 'Exceptional fit' },
+      'A':  { grade: 'A',  cls: 'grade-a',     label: event.fit_label || 'Strong fit'      },
+      'B+': { grade: 'B+', cls: 'grade-bplus', label: event.fit_label || 'Good fit'        },
+      'B':  { grade: 'B',  cls: 'grade-b',     label: event.fit_label || 'Reasonable fit'  },
+      'C':  { grade: 'C',  cls: 'grade-c',     label: event.fit_label || 'Marginal fit'    },
+    }
+    return gradeMap[event.fit_grade] || gradeMap['C']
+  }
+  const total = Math.min(event.relevance_score || 0, 100)
+  if (total >= 80) return { grade: 'A+', cls: 'grade-aplus', label: 'Exceptional fit' }
+  if (total >= 65) return { grade: 'A',  cls: 'grade-a',     label: 'Strong fit'      }
+  if (total >= 50) return { grade: 'B+', cls: 'grade-bplus', label: 'Good fit'        }
+  if (total >= 35) return { grade: 'B',  cls: 'grade-b',     label: 'Reasonable fit'  }
+  return                  { grade: 'C',  cls: 'grade-c',     label: 'Marginal fit'    }
 }
-
 // ── ICP count: derived from real API fields ───────────────────────
 // est_attendees × (relevance_score / 100) × 0.35
 // Logic: ~35% of total attendees at a B2B show are decision-makers;
@@ -38,11 +45,18 @@ function getFitGrade(event) {
 function calcICPCount(event) {
   const att   = parseInt(event.est_attendees) || 0
   const score = typeof event.relevance_score === 'number' ? event.relevance_score : 50
-  if (att === 0) return null          // truly unknown — don't show a fake number
-  const raw = att * (score / 100) * 0.35
-  return Math.max(1, Math.round(raw / 10) * 10)  // round to nearest 10
+  if (att === 0) return null
+  return Math.max(10, Math.round((att * (score / 100) * 0.35) / 10) * 10)
 }
 
+function getICPCount(event) {
+  if (event.icp_count && event.icp_count.estimate) return event.icp_count
+  const est = calcICPCount(event)
+  if (!est) return null
+  const low  = Math.max(10, Math.round(est * 0.70 / 10) * 10)
+  const high = Math.round(est * 1.30 / 10) * 10
+  return { estimate: est, low, high, display: `~${est.toLocaleString()}`, range_display: `${low.toLocaleString()} – ${high.toLocaleString()}`, methodology: 'Based on est. attendees × 35% DM ratio × ICP density.' }
+}
 // ── Pipeline estimate: formula-driven ────────────────────────────
 // ICP count × deal midpoint × 0.15 (15% contact rate × 40% qual × 25% close proxy)
 const DEAL_MID = { medium: 30000, high: 75000, enterprise: 250000, strategic: 750000 }
@@ -89,6 +103,7 @@ export default function ShowRankingPage({
   dealSizeCategory = 'medium',
   profileId        = '',
   reportSent       = false,
+  universeStats    = null,   // from SearchResponse.universe_stats (API-calculated)
   onEmailUnlock,
   onEmailReport,
   onShowClick,     // fn(event, rank) → opens Screen 3
@@ -113,16 +128,19 @@ export default function ShowRankingPage({
   // Apply date filter to all events
   const dateFiltered = applyDateFilter(events, dateWindow)
 
-  // Top 6 from date-filtered list
+  // Top 6 shown in ranked list
+  // Rows 1–3 free, rows 4–6 email-gated (one unlock = see all 20 in full table)
   const top6      = dateFiltered.slice(0, 6)
-  const remaining = dateFiltered.slice(6)
+  const remaining = dateFiltered.slice(6)    // shows 7–20 in full EventTable
 
-  // Universe stats — purely from real API data
-  const totalICPsAcrossShows = top6.reduce((sum, e) => {
+  // Universe stats — prefer API-provided universe_stats when available
+  // Passed as prop from App.jsx (SearchResponse.universe_stats)
+  const _apiStats = universeStats || {}
+  const totalICPsAcrossShows = _apiStats.total_icps_across_shows || top6.reduce((sum, e) => {
     const c = calcICPCount(e); return c ? sum + c : sum
   }, 0)
-  const totalConsidering = dateFiltered.length
-  const strongCount      = dateFiltered.filter(e => {
+  const totalConsidering = _apiStats.shows_worth_considering || dateFiltered.length
+  const strongCount      = _apiStats.strongly_recommended || dateFiltered.filter(e => {
     const g = getFitGrade(e); return g.grade === 'A+' || g.grade === 'A'
   }).length
 
@@ -217,30 +235,36 @@ export default function ShowRankingPage({
       {/* ── 2. UNIVERSE STATS ────────────────────────────────── */}
       <div className="rk-stats" ref={statsRef} aria-label="Universe statistics">
         <div className="rk-stats-inner">
-          {totalICPsAcrossShows > 0 ? (
             <div className="rk-stat-card">
-              <div className="rk-stat-num rk-stat-accent">
-                ~<Counter target={totalICPsAcrossShows} triggered={statsVisible} />
-              </div>
-              <div className="rk-stat-label">total ICPs across all relevant shows</div>
-              <div className="rk-stat-method">
-                <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">methodology →</a>
-              </div>
+              {totalICPsAcrossShows > 0 ? (
+                <>
+                  <div className="rk-stat-num rk-stat-accent">
+                    ~<Counter target={totalICPsAcrossShows} triggered={statsVisible} />
+                  </div>
+                  <div className="rk-stat-label">total ICPs across all relevant shows</div>
+                  <div className="rk-stat-method">
+                    estimated decision-makers · <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">methodology →</a>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rk-stat-num rk-stat-accent" style={{fontSize:22}}>—</div>
+                  <div className="rk-stat-label">ICP count pending</div>
+                  <div className="rk-stat-method">Attendee figures not yet published for these shows</div>
+                </>
+              )}
             </div>
-          ) : (
-            <div className="rk-stat-card">
-              <div className="rk-stat-num rk-stat-accent">—</div>
-              <div className="rk-stat-label">ICP count pending attendee data</div>
-              <div className="rk-stat-method">Attendee figures not yet published for these events</div>
-            </div>
-          )}
           <div className="rk-stat-divider" aria-hidden="true" />
           <div className="rk-stat-card">
             <div className="rk-stat-num">
               <Counter target={totalConsidering} triggered={statsVisible} />
             </div>
             <div className="rk-stat-label">shows worth considering</div>
-            <div className="rk-stat-method">from our 11,000+ index in this window</div>
+            <div className="rk-stat-method">
+                {(_apiStats.total_indexed || 0) > 0
+                  ? `from our ${(_apiStats.total_indexed).toLocaleString()}+ indexed shows`
+                  : 'from our full show index'}
+              </div>
           </div>
           <div className="rk-stat-divider" aria-hidden="true" />
           <div className="rk-stat-card">
@@ -289,9 +313,16 @@ export default function ShowRankingPage({
                         : event.event_name
                       }
                     </div>
-                    <span className={`rk-grade ${grade.cls}`} title={grade.label} aria-label={`Fit grade: ${grade.grade}`}>
-                      {grade.grade}
-                    </span>
+                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                      <span className={`rk-grade ${grade.cls}`} title={grade.label} aria-label={`Fit grade: ${grade.grade}`}>
+                        {grade.grade}
+                      </span>
+                      {event.confidence && event.confidence !== 'high' && (
+                        <span className="rk-confidence-badge" title={`Score confidence: ${event.confidence}. Based on ${event.factors_used || '?'} of ${event.factors_total || 4} factors.`}>
+                          {event.confidence === 'low' ? '⚠ limited data' : 'partial data'}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="rk-row-meta">
@@ -309,16 +340,25 @@ export default function ShowRankingPage({
                             {event.date}
                           </span>
                         )}
-                        {icpCount !== null ? (
-                          <span className="rk-meta-item rk-icp-count" title="Estimated relevant decision-makers attending your profile">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                            ~{icpCount.toLocaleString()} ICPs
-                          </span>
-                        ) : (
-                          <span className="rk-meta-item" style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                            Attendee data pending
-                          </span>
-                        )}
+                        {(() => {
+                          const icpData = getICPCount(event)
+                          if (!icpData) return (
+                            <span className="rk-meta-item" style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                              Attendee data pending
+                            </span>
+                          )
+                          return (
+                            <span className="rk-meta-item rk-icp-count"
+                              title={`${icpData.methodology || 'Estimated decision-makers attending'}\nRange: ${icpData.range_display || ''}`}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                              {icpData.display} ICPs
+                              {icpData.range_display && (
+                                <span className="rk-icp-range"> ({icpData.range_display})</span>
+                              )}
+                            </span>
+                          )
+                        })()}
                       </>
                     )}
                     {gated && (
@@ -420,13 +460,91 @@ export default function ShowRankingPage({
         </div>
       </div>
 
-      {/* ── 5. SERVICES CTA ─────────────────────────────────── */}
+      {/* ── 5. PRICING TIERS ────────────────────────────────── */}
+      <div className="rk-pricing" aria-label="Pricing tiers">
+        <div className="rk-pricing-inner">
+          <div className="rk-section-eyebrow">Outcome-based pricing</div>
+          <h3 className="rk-pricing-title">
+            What's a meeting with your ICP worth?
+          </h3>
+          <p className="rk-pricing-sub">
+            Shift the frame: not "what does this cost?" but "what does one qualified meeting generate in pipeline?"
+          </p>
+          <div className="rk-tier-grid">
+            <div className="rk-tier rk-tier--free">
+              <div className="rk-tier-tag">Free forever</div>
+              <div className="rk-tier-name">Discover</div>
+              <div className="rk-tier-price">$0</div>
+              <ul className="rk-tier-list">
+                <li>Top 6 ranked shows</li>
+                <li>ICP count + fit grade</li>
+                <li>Location + dates</li>
+                <li>AI rationale</li>
+                <li>PDF report</li>
+              </ul>
+              <button className="rk-tier-btn rk-tier-btn--ghost" onClick={onBackHome}>
+                You're here
+              </button>
+            </div>
+            <div className="rk-tier rk-tier--starter">
+              <div className="rk-tier-tag">Most popular</div>
+              <div className="rk-tier-name">Starter pack</div>
+              <div className="rk-tier-price">From $3,000</div>
+              <div className="rk-tier-outcome">10 qualified meetings</div>
+              <ul className="rk-tier-list">
+                <li>Everything in Discover</li>
+                <li>Shows ranked 7–23</li>
+                <li>Pre-show ICP outreach</li>
+                <li>10 confirmed meetings</li>
+                <li>Post-event follow-up</li>
+              </ul>
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--accent">
+                Get started →
+              </a>
+            </div>
+            <div className="rk-tier rk-tier--growth">
+              <div className="rk-tier-tag">Best value</div>
+              <div className="rk-tier-name">Growth pack</div>
+              <div className="rk-tier-price">From $5,000</div>
+              <div className="rk-tier-outcome">20 qualified meetings</div>
+              <ul className="rk-tier-list">
+                <li>Everything in Starter</li>
+                <li>Full event calendar plan</li>
+                <li>Multi-show strategy</li>
+                <li>20 confirmed meetings</li>
+                <li>Named ICP account list</li>
+              </ul>
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--accent">
+                Get started →
+              </a>
+            </div>
+            <div className="rk-tier rk-tier--flagship">
+              <div className="rk-tier-tag">For flagship events</div>
+              <div className="rk-tier-name">Full takeover</div>
+              <div className="rk-tier-price">Custom</div>
+              <div className="rk-tier-outcome">50+ meetings per event</div>
+              <ul className="rk-tier-list">
+                <li>Full-event meeting programme</li>
+                <li>Dedicated researcher</li>
+                <li>Outreach copy + sequences</li>
+                <li>On-site coordination</li>
+                <li>Outcomes guarantee</li>
+              </ul>
+              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--outline">
+                Contact us →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 6. SERVICES CTA ─────────────────────────────────── */}
       <div className="rk-services-cta">
         <div className="rk-services-inner">
           <div className="rk-services-copy">
             <div className="rk-section-eyebrow">Take it further</div>
             <h3 className="rk-services-title">Want us to actually set up the meetings?</h3>
-            <p className="rk-services-sub">We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out. Our clients average 50+ meetings per event.</p>
+            <p className="rk-services-sub">We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out.</p>
           </div>
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-services-btn">See how it works →</a>
         </div>
