@@ -34,7 +34,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from loguru import logger
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,12 +55,32 @@ _MAX_LOG = 20
 # Auth  (reuses existing seed_admin_token from Settings)
 # ─────────────────────────────────────────────────────────────────
 
-def _check_admin(x_admin_key: str = Header(default="")) -> None:
+def _check_admin(request: Request) -> None:
+    """
+    Reads X-Admin-Key from request headers.
+    Tries multiple casings because Render/nginx may normalise header names.
+    Token is settings.seed_admin_token from .env / Render env vars.
+    """
     token = settings.seed_admin_token or ""
     if not token:
-        raise HTTPException(503, "seed_admin_token not configured — set it in .env / Render env vars")
-    if x_admin_key != token:
-        raise HTTPException(401, "Invalid or missing X-Admin-Key header")
+        raise HTTPException(503,
+            detail="seed_admin_token not set. Add SEED_ADMIN_TOKEN=yourvalue in Render → Environment Variables.")
+
+    # Try all common header name variants (proxies normalise differently)
+    incoming = (
+        request.headers.get("x-admin-key")
+        or request.headers.get("X-Admin-Key")
+        or request.headers.get("x_admin_key")
+        or request.headers.get("X_Admin_Key")
+        or ""
+    ).strip()
+
+    if not incoming:
+        raise HTTPException(401,
+            detail="Missing X-Admin-Key header. Add header: X-Admin-Key: <your seed_admin_token>")
+    if incoming != token.strip():
+        raise HTTPException(401,
+            detail="Invalid X-Admin-Key. Check seed_admin_token value in Render env vars.")
 
 
 # ─────────────────────────────────────────────────────────────────
