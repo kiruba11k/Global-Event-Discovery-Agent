@@ -22,7 +22,8 @@ from config import get_settings
 from db.database import init_db, DATABASE_URL
 from api.routes_events import router as events_router
 from api.routes_email  import router as email_router
-
+from api.routes_admin import router as admin_router
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 settings = get_settings()
 
 
