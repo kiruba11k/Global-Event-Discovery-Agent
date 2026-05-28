@@ -19,6 +19,48 @@ import EventTable from './EventTable'
 import MeetingPotentialCard from './MeetingPotentialCard'
 import '../ranking.css'
 
+// ── URL validation (mirrors backend _verify_link logic) ────────────
+const _RK_BLOCKED = new Set([
+  'singaporeexpo.com.sg','excel.london','expoforum-center.ru','fierapordenone.it',
+  'twtc.org.tw','thecharlottecountyfair.com','fair.ee','biec.in','necc.co.in',
+  'cticc.co.za','sunteccity.com.sg','bitec.com','thelalit.com','marriott.com',
+  'hilton.com','hyatt.com','sheratonhotels.com','ihg.com','accor.com',
+  'facebook.com','m.facebook.com','fb.com','twitter.com','x.com',
+  'linkedin.com','instagram.com','youtube.com','meetup.com','wikipedia.org',
+  'jiexpo.com','bigsight.jp','messe-berlin.de','gouda.nl','uzexpocentre.uz',
+  'visitumea.se','stazione-leopolda.com','messe-muenchen.de','messefrankfurt.com',
+])
+const _RK_GENERIC = new Set([
+  'events','event','conferences','conference','news','blog','about',
+  'contact','en','home','index','default','ap','apj','emea','us',
+  'global','worldwide',
+])
+function _verifyLinkRK(url) {
+  if (!url || typeof url !== 'string') return false
+  const u = url.trim()
+  if (!u.startsWith('http://') && !u.startsWith('https://')) return false
+  if (u.includes('google.com/search')) return false
+  try {
+    const parsed = new URL(u)
+    const host   = parsed.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '')
+    if (_RK_BLOCKED.has(host)) return false
+    for (const bd of _RK_BLOCKED) { if (host.endsWith('.' + bd)) return false }
+    const parts = parsed.pathname.replace(/^\/|\/$/g, '').split('/').filter(Boolean)
+    if (!parts.length) return false
+    if (/20\d{2}/.test(parts.join('/'))) return true    // year in path = edition-specific
+    if (parts.length === 1 && (_RK_GENERIC.has(parts[0].toLowerCase()) || parts[0].length <= 6)) return false
+    if (parts.length >= 2 &&
+        parts.slice(1).every(p => _RK_GENERIC.has(p.toLowerCase()) || p.length <= 4)) return false
+  } catch (_) { return false }
+  return true
+}
+function resolveEventLink(event) {
+  for (const url of [event.event_link, event.source_url, event.registration_url, event.website]) {
+    if (_verifyLinkRK(url)) return url
+  }
+  return ''
+}
+
 // ── Fit grade from real event data ────────────────────────────────
 function getFitGrade(event) {
   if (event.fit_grade) {
@@ -383,12 +425,28 @@ export default function ShowRankingPage({
 
                 {!gated && (
                   <div className="rk-row-right">
+                    {/* Register / event link — primary action */}
+                    {(() => {
+                      const link = resolveEventLink(event)
+                      return link ? (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rk-register-link"
+                          onClick={e => e.stopPropagation()}
+                          aria-label={`Register for ${event.event_name}`}
+                        >
+                          Register →
+                        </a>
+                      ) : null
+                    })()}
                     <button
                       className="rk-detail-link"
                       onClick={e => { e.stopPropagation(); onShowClick && onShowClick(event, idx + 1) }}
                       aria-label={`Open breakdown for ${event.event_name}`}
                     >
-                      Full breakdown →
+                      Full details →
                     </button>
                   </div>
                 )}
