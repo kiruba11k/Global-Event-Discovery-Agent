@@ -245,11 +245,18 @@ def _is_homepage_url(url: str) -> bool:
             if len(seg) <= 10:      # short single segment with no year
                 return True
 
-        # Two segments where second is generic
-        if len(path_parts) == 2:
-            second = path_parts[1].lower()
-            if second in {"register", "attend", "overview", "home", "index",
-                          "info", "events", "en", "default"}:
+        # Two segments: treat as homepage if the last segment is a known generic section
+        # and there is no year anywhere in the full path
+        if len(path_parts) >= 2 and not re.search(r"20\d{2}", full_path):
+            last = path_parts[-1].lower()
+            _GENERIC_SECTIONS = {
+                "register", "attend", "overview", "home", "index", "info",
+                "events", "event", "en", "default", "conferences", "conference",
+                "us", "ap", "apj", "emea", "global", "worldwide",
+            }
+            # All remaining segments after the first are generic
+            if all(p.lower() in _GENERIC_SECTIONS or len(p) <= 4
+                   for p in path_parts[1:]):
                 return True
 
     except Exception:
@@ -257,38 +264,91 @@ def _is_homepage_url(url: str) -> bool:
     return False
 
 
+def _is_google_url(url: str) -> bool:
+    """True for any Google search/URL that is not a real event page."""
+    if not url:
+        return False
+    lo = url.lower()
+    return (
+        lo.startswith("https://www.google.com/search") or
+        lo.startswith("http://www.google.com/search") or
+        "google.com/search?" in lo
+    )
+
+
+def _verify_link(url: str) -> bool:
+    """
+    Master URL validator — returns True only for a link we're confident
+    is a real, event-specific page worth showing to the user.
+
+    Rejects:
+      • Empty strings
+      • Google search fallback URLs
+      • Venue / social / aggregator domains
+      • Root-domain homepages (no path)
+      • Known generic section paths (/events, /en, etc.)
+    """
+    if not url or not isinstance(url, str):
+        return False
+    url = url.strip()
+    if not url.startswith(("http://", "https://")):
+        return False
+    if _is_google_url(url):
+        return False
+    if _is_venue_url(url):
+        return False
+    if _is_homepage_url(url):
+        return False
+    return True
+
+
 def _best_link(event: EventORM, enrichments: dict) -> str:
     """
-    Returns the best verified event URL, or "" if nothing reliable found.
+    Returns the best verified event-specific URL, or "" if none found.
 
-    Priority (all must pass venue + homepage guards):
-      1. source_url from a known event platform (EventsEye, Ticketmaster,
-         Eventbrite, PredictHQ…) — always event-specific by construction
-      2. SerpAPI-enriched link — live search, year-specific scoring
-      3. DB registration_url / website — only if it looks edition-specific
+    Priority order (most trustworthy → least):
+      1. source_url from a known event platform
+         (EventsEye /fairs/f-*, Ticketmaster /event/*, Eventbrite /e/*, …)
+         These are always event-specific by construction — scraped from
+         the platform's event detail page, not a listing or homepage.
 
-    NEVER returns a Google search URL or an organiser homepage/section URL.
-    Empty string → frontend shows "Link not available".
+      2. SerpAPI-enriched link (year-specific scoring from live web search)
+
+      3. DB registration_url — verified against _verify_link()
+
+      4. DB website — verified against _verify_link()
+
+      5. DB source_url (non-platform) — last resort, still verified
+
+    Returns "" (empty string) when nothing passes verification.
+    The frontend renders "Link not available" for empty strings — never
+    shows a Google search URL or a misleading homepage link.
     """
-    # 1. source_url from a known event platform (most reliable — always event-specific)
-    src = (event.source_url or "").strip()
-    if src and _is_platform_event_url(src):
-        return src
+    # 1. Platform source_url — always event-specific by construction
+    src_url = (event.source_url or "").strip()
+    if src_url and _is_platform_event_url(src_url):
+        return src_url
 
-    # 2. SerpAPI enriched link (live verified, year-specific scoring)
-    serp_link = (enrichments.get("event_link") or enrichments.get("website") or "").strip()
-    if serp_link and not _is_venue_url(serp_link) and not _is_homepage_url(serp_link):
-        return serp_link
+    # 2. SerpAPI-enriched link (live, year-specific verification)
+    serp = (enrichments.get("event_link") or enrichments.get("website") or "").strip()
+    if _verify_link(serp):
+        return serp
 
-    # 3. DB registration_url / website — only if edition-specific
-    reg = (
-        (getattr(event, "website", "") or "").strip() or
-        (event.registration_url or "").strip()
-    )
-    if reg and not _is_venue_url(reg) and not _is_homepage_url(reg):
+    # 3. DB registration_url
+    reg = (event.registration_url or "").strip()
+    if _verify_link(reg):
         return reg
 
-    # Nothing reliable found
+    # 4. DB website
+    web = (getattr(event, "website", "") or "").strip()
+    if _verify_link(web):
+        return web
+
+    # 5. Non-platform source_url (e.g. Seed events, Wikipedia, TechCrunch)
+    if src_url and _verify_link(src_url):
+        return src_url
+
+    # Nothing passed verification
     return ""
 
 
