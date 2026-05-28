@@ -41,6 +41,7 @@ from models.icp_profile import CompanyContext, SearchRequest, SearchResponse
 from relevance.groq_ranker import rank_with_groq
 from relevance.scorer import score_candidates
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
+from relevance.meeting_calculator import calculate_meeting_potential
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
 from scripts.seed_eventseye_global import run_eventseye_seed
@@ -364,6 +365,19 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             ev_dict["fit_factor_scores"] = {}
             ev_dict["icp_count"]         = None
             ev_dict["competitor_count"]  = 0
+        # ── Meeting potential + ROI calculator ─────────────────────
+        diff_score  = getattr(profile, "differentiator_score",  5) or 5
+        client_rng  = getattr(profile, "client_count_range", "11-50") or "11-50"
+        meeting_pot = None
+        if event_orm:
+            meeting_pot = calculate_meeting_potential(
+                event_dict           = ev_dict,
+                profile              = profile,
+                fit_result           = fit if event_orm else {"fit_grade":"C","fit_score":0,"confidence":"low","data_gaps":[]},
+                differentiator_score = diff_score,
+                client_count_range   = client_rng,
+            )
+        ev_dict["meeting_potential"] = meeting_pot
         serialised_events.append(ev_dict)
 
     # Universe stats banner
