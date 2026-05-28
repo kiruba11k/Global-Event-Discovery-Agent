@@ -172,7 +172,9 @@ export default function ICPForm({
   const [showSugs, setShowSugs] = useState(false)
   const [mounted,  setMounted]  = useState(false)
 
-  const [companyName, setCompanyName] = useState(companyData?.company_name || '')
+  const [companyName,    setCompanyName]    = useState(companyData?.company_name || '')
+  const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1–10
+  const [clientRange,    setClientRange]    = useState('')     // client count range
   const [eventNeeds,  setEventNeeds]  = useState('')
   const [salesMotion, setSalesMotion] = useState('')
   const [deckFile,    setDeckFile]    = useState(null)
@@ -215,6 +217,7 @@ export default function ICPForm({
     if (!buyer.trim())     e.buyer = 'Tell us who you sell to'
     if (!geos.length)      e.geos  = 'Select at least one geography'
     if (!dealSize)         e.deal  = 'Select your typical deal value'
+    if (!clientRange)      e.client = 'Select your client count range'
     if (!email.trim())     e.email = 'Work email required'
     else if (!email.includes('@')) e.email = 'Enter a valid email address'
     setErrors(e)
@@ -234,7 +237,9 @@ export default function ICPForm({
       preferred_event_types: ['conference', 'trade show', 'summit', 'expo'],
       avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
       date_from, date_to,
-      buyer_description: buyer,
+      buyer_description:    buyer,
+      differentiator_score: diffScore,
+      client_count_range:   clientRange || "11-50",
     }
     onSubmit && onSubmit(profile, email)
   }
@@ -363,6 +368,68 @@ export default function ICPForm({
           ))}
         </div>
         {errors.deal && <p className="icp-error">{errors.deal}</p>}
+      </div>
+
+      {/* Field 5: Differentiator score */}
+      <div className="icp-field-group">
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+          How strong is your differentiator vs. competitors?
+          <span className="icp-required">*</span>
+        </label>
+        <p className="icp-hint">1 = "we look like everyone else" · 10 = "buyers immediately get why we're different"</p>
+        <div className="icp-diff-track">
+          {[1,2,3,4,5,6,7,8,9,10].map(n => (
+            <button
+              key={n}
+              type="button"
+              className={`icp-diff-btn ${diffScore === n ? 'selected' : ''} ${
+                n <= 4 ? 'icp-diff-low' : n <= 7 ? 'icp-diff-mid' : 'icp-diff-high'
+              }`}
+              onClick={() => setDiffScore(n)}
+              aria-pressed={diffScore === n}
+              aria-label={`Differentiator score ${n}`}
+            >{n}</button>
+          ))}
+        </div>
+        <div className="icp-diff-label">
+          {diffScore <= 4
+            ? <span className="icp-diff-text icp-diff-text--low">Hard to position — needs tighter ICP and sharper messaging</span>
+            : diffScore <= 7
+            ? <span className="icp-diff-text icp-diff-text--mid">Standard effort — clear but needs stronger angle</span>
+            : <span className="icp-diff-text icp-diff-text--high">Easy to position — high meeting confidence</span>
+          }
+        </div>
+      </div>
+
+      {/* Field 6: Client count range */}
+      <div className="icp-field-group">
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+          How many unique clients have you served?
+          <span className="icp-required">*</span>
+        </label>
+        <p className="icp-hint">Helps us calibrate proof and credibility for outreach</p>
+        <div className="icp-client-grid" role="radiogroup" aria-label="Client count range">
+          {[
+            { v:'0-10',   l:'0 – 10',     s:'Early stage — niche ICP focus needed' },
+            { v:'11-50',  l:'11 – 50',    s:'Early traction — usable credibility'  },
+            { v:'51-200', l:'51 – 200',   s:'Proven — solid proof base'            },
+            { v:'201-500',l:'201 – 500',  s:'Strong — enterprise-ready'            },
+            { v:'500+',   l:'500+',       s:'Established — maximum credibility'    },
+          ].map(opt => (
+            <button
+              key={opt.v}
+              role="radio"
+              aria-checked={clientRange === opt.v}
+              type="button"
+              className={`icp-client-option ${clientRange === opt.v ? 'selected' : ''}`}
+              onClick={() => setClientRange(opt.v)}
+            >
+              <span className="icp-client-count">{opt.l}</span>
+              <span className="icp-client-sub">{opt.s}</span>
+            </button>
+          ))}
+        </div>
+        {errors.client && <p className="icp-error">{errors.client}</p>}
       </div>
 
       {/* Field 4: Email */}
