@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import EventTable from './EventTable'
+import MeetingPotentialCard from './MeetingPotentialCard'
 import '../ranking.css'
 
 // ── Fit grade from real event data ────────────────────────────────
@@ -368,6 +369,15 @@ export default function ShowRankingPage({
 
                   {!gated && event.verdict_notes && (
                     <p className="rk-row-rationale">"{event.verdict_notes}"</p>
+                  )}
+                  {!gated && event.meeting_potential && (
+                    <div style={{marginTop:8}}>
+                      <MeetingPotentialCard
+                        data={event.meeting_potential}
+                        eventName={event.event_name || event.name || ''}
+                        compact={true}
+                      />
+                    </div>
                   )}
                 </div>
 
