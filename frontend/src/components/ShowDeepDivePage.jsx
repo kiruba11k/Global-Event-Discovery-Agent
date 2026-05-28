@@ -22,14 +22,24 @@ import '../show-deep-dive.css'
 
 // ── Fit grade ─────────────────────────────────────────────────────
 function getFitGrade(event) {
-  const score = typeof event?.relevance_score === 'number' ? event.relevance_score : 0
-  const bonus = event?.fit_verdict === 'GO' ? 18 : event?.fit_verdict === 'CONSIDER' ? 8 : 0
-  const total = Math.min(score * 0.82 + bonus, 100)
-  if (total >= 88) return { grade: 'A+', label: 'Exceptional fit', cls: 'ddv-grade-aplus' }
-  if (total >= 75) return { grade: 'A',  label: 'Strong fit',      cls: 'ddv-grade-a'     }
-  if (total >= 62) return { grade: 'B+', label: 'Good fit',        cls: 'ddv-grade-bplus' }
-  if (total >= 48) return { grade: 'B',  label: 'Reasonable fit',  cls: 'ddv-grade-b'     }
-  return               { grade: 'C',  label: 'Marginal fit',    cls: 'ddv-grade-c'     }
+  // Prefer backend-calculated grade (5-factor weighted formula) — same as ShowRankingPage
+  if (event?.fit_grade) {
+    const MAP = {
+      'A+': { grade: 'A+', label: event.fit_label || 'Exceptional fit', cls: 'grade-aplus' },
+      'A':  { grade: 'A',  label: event.fit_label || 'Strong fit',      cls: 'grade-a'     },
+      'B+': { grade: 'B+', label: event.fit_label || 'Good fit',        cls: 'grade-bplus' },
+      'B':  { grade: 'B',  label: event.fit_label || 'Reasonable fit',  cls: 'grade-b'     },
+      'C':  { grade: 'C',  label: event.fit_label || 'Marginal fit',    cls: 'grade-c'     },
+    }
+    return MAP[event.fit_grade] || MAP['C']
+  }
+  // Fallback: derive from relevance_score (same thresholds as ShowRankingPage)
+  const total = Math.min(event?.relevance_score || 0, 100)
+  if (total >= 80) return { grade: 'A+', label: 'Exceptional fit', cls: 'grade-aplus' }
+  if (total >= 65) return { grade: 'A',  label: 'Strong fit',      cls: 'grade-a'     }
+  if (total >= 50) return { grade: 'B+', label: 'Good fit',        cls: 'grade-bplus' }
+  if (total >= 35) return { grade: 'B',  label: 'Reasonable fit',  cls: 'grade-b'     }
+  return                  { grade: 'C',  label: 'Marginal fit',    cls: 'grade-c'     }
 }
 
 // ── ICP count from real API data ──────────────────────────────────
@@ -85,6 +95,7 @@ function Counter({ target, prefix = '', suffix = '', triggered }) {
 // ═══════════════════════════════════════════════════════════════════
 
 // ── URL validation (mirrors backend logic) ───────────────────────
+// All blocked / venue / social domains
 const _DDV_BLOCKED = new Set([
   'singaporeexpo.com.sg','excel.london','expoforum-center.ru','fierapordenone.it',
   'twtc.org.tw','thecharlottecountyfair.com','fair.ee','biec.in','necc.co.in',
@@ -93,29 +104,60 @@ const _DDV_BLOCKED = new Set([
   'facebook.com','m.facebook.com','fb.com','twitter.com','x.com',
   'linkedin.com','instagram.com','youtube.com','meetup.com','wikipedia.org',
   'jiexpo.com','bigsight.jp','messe-berlin.de','gouda.nl','uzexpocentre.uz',
-  'visitumea.se','stazione-leopolda.com',
+  'visitumea.se','stazione-leopolda.com','messe-muenchen.de','messefrankfurt.com',
 ])
-function _ddvBadUrl(url) {
-  if (!url) return true
-  if (url.startsWith('https://www.google.com/search')) return true
+
+function _verifyLink(url) {
+  if (!url || typeof url !== 'string') return false
+  const u = url.trim()
+  if (!u.startsWith('http://') && !u.startsWith('https://')) return false
+  if (u.includes('google.com/search')) return false
   try {
-    const u    = new URL(url)
-    const host = u.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '')
-    if (_DDV_BLOCKED.has(host)) return true
-    for (const bd of _DDV_BLOCKED) { if (host.endsWith('.' + bd)) return true }
-    const parts = u.pathname.replace(/^\/|\/$/g, '').split('/').filter(Boolean)
-    if (!parts.length) return true
-    if (/20\d{2}/.test(parts.join('/').toLowerCase())) return false
-    const G = new Set(['events','event','conferences','conference','register',
-      'registration','attend','expo','fair','news','blog','about','contact',
-      'en','home','index','default','ap','us'])
-    if (parts.length === 1 && (G.has(parts[0].toLowerCase()) || parts[0].length <= 10)) return true
-    if (parts.length === 2 &&
-        ['register','attend','overview','home','index','info','events','en','default']
-          .includes(parts[1].toLowerCase())) return true
-  } catch (_) {}
-  return false
+    const parsed = new URL(u)
+    const host   = parsed.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '')
+    // Block known venue/social domains
+    if (_DDV_BLOCKED.has(host)) return false
+    for (const bd of _DDV_BLOCKED) { if (host.endsWith('.' + bd)) return false }
+    const parts = parsed.pathname.replace(/^\/|\/$/g, '').split('/').filter(Boolean)
+    // No path = root-domain homepage
+    if (!parts.length) return false
+    const full = parts.join('/').toLowerCase()
+    // Year in path = edition-specific = always valid
+    if (/20\d{2}/.test(full)) return true
+    // Known generic section names
+    const GENERIC = new Set([
+      'events','event','conferences','conference','news','blog','about',
+      'contact','en','home','index','default','ap','apj','emea','us',
+      'global','worldwide',
+    ])
+    if (parts.length === 1 && (GENERIC.has(parts[0].toLowerCase()) || parts[0].length <= 6)) return false
+    // Multi-segment path: if every segment after the first is generic → homepage-level
+    if (parts.length >= 2) {
+      const trailGeneric = parts.slice(1).every(
+        p => GENERIC.has(p.toLowerCase()) || p.length <= 4
+      )
+      if (trailGeneric) return false
+    }
+  } catch (_) { return false }
+  return true
 }
+
+// Resolve best event link from all available URL fields
+function resolveEventLink(event) {
+  const candidates = [
+    event.event_link,
+    event.source_url,
+    event.registration_url,
+    event.website,
+  ]
+  for (const url of candidates) {
+    if (_verifyLink(url)) return url
+  }
+  return ''
+}
+
+// Keep _ddvBadUrl as alias for any remaining uses
+function _ddvBadUrl(url) { return !_verifyLink(url) }
 
 export default function ShowDeepDivePage({
   event            = null,
@@ -229,13 +271,16 @@ export default function ShowDeepDivePage({
                   {event.date}
                 </span>
               )}
-              {!_ddvBadUrl(event.event_link) && (
-                <a href={event.event_link} target="_blank" rel="noopener noreferrer"
-                  className="ddv-meta-item ddv-meta-link">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                  Official site
-                </a>
-              )}
+              {(() => {
+                const resolvedLink = resolveEventLink(event)
+                return resolvedLink ? (
+                  <a href={resolvedLink} target="_blank" rel="noopener noreferrer"
+                    className="ddv-meta-item ddv-meta-link">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Official site
+                  </a>
+                ) : null
+              })()}
             </div>
             {event.what_its_about && (
               <p className="ddv-show-about">{event.what_its_about}</p>
@@ -244,7 +289,7 @@ export default function ShowDeepDivePage({
 
           {profile && (
             <div className="ddv-header-grade">
-              <div className={`ddv-grade-badge ${grade.cls}`} aria-label={`Fit grade ${grade.grade}: ${grade.label}`}>
+              <div className={`ddv-grade-badge grade-badge-lg ${grade.cls}`} aria-label={`Fit grade ${grade.grade}: ${grade.label}`}>
                 {grade.grade}
               </div>
               <div className="ddv-grade-label">{grade.label}</div>
