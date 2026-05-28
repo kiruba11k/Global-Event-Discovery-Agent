@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import ICPForm from './ICPForm'
+import MeetingPotentialCard from './MeetingPotentialCard'
 import '../show-deep-dive.css'
 
 // ── Fit grade ─────────────────────────────────────────────────────
@@ -320,6 +321,23 @@ export default function ShowDeepDivePage({
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MEETING POTENTIAL ──────────────────────────────────── */}
+      {profile && event.meeting_potential && (
+        <div className="ddv-meeting-wrap">
+          <div className="ddv-companies-inner">
+            <div className="ddv-section-eyebrow">Meeting forecast</div>
+            <h2 className="ddv-section-title">
+              How many qualified meetings could you get?
+            </h2>
+            <MeetingPotentialCard
+              data={event.meeting_potential}
+              eventName={event.event_name || event.name || ''}
+              compact={false}
+            />
           </div>
         </div>
       )}
