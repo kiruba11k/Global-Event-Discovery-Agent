@@ -202,9 +202,11 @@ async def build_queries(
             tm.append(TicketmasterQuery(keyword=kw, country_code=cc, start_dt=start_dt, end_dt=end_dt))
             if len(tm) >= max_ticketmaster: break
 
-    # ── Step 5: Build Eventbrite queries ───────────────────────────────
+    # ── Step 5: Build Eventbrite queries ────────────────────────────
+    # Eventbrite: lat/lon + keyword search. Use industry keywords (broader)
+    # since EB has strong geo-based discovery.
     eb: list[EventbriteQuery] = []
-    for kw in keywords[:3]:
+    for kw in ind_keywords[:3]:
         for _, geo in resolved[:3]:
             eb.append(EventbriteQuery(
                 keyword=kw,
