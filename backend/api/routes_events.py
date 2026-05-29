@@ -303,10 +303,21 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     if settings.serpapi_key:
         try:
             from enrichment.serp_enricher import enrich_events_batch
+            # Build groq_client for Groq-validated enrichment (anti-hallucination)
+            _groq_client_for_enrich = None
+            try:
+                from groq import AsyncGroq as _AsyncGroq
+                import os
+                _groq_key = getattr(settings, "groq_api_key", "") or os.environ.get("GROQ_API_KEY", "")
+                if _groq_key:
+                    _groq_client_for_enrich = _AsyncGroq(api_key=_groq_key)
+            except Exception:
+                pass
             enrichments = await enrich_events_batch(
-                events      = top_events,
-                serpapi_key = settings.serpapi_key,
-                max_enrich  = min(len(top_events), 10),
+                    events      = top_events,
+                    serpapi_key = settings.serpapi_key,
+                    groq_client = _groq_client_for_enrich,
+                    max_enrich  = min(len(top_events), 10),
             )
             if enrichments:
                 logger.info(
