@@ -113,23 +113,36 @@ async def build_queries(
     end   = date_to   or "2028-12-31"
     year  = start[:4]
 
-    # ── Step 1: Groq LLM keyword extraction ───────────────────────────
-    # Understands ANY company description — not limited to hardcoded keywords.
+    # ── Step 1: Groq LLM keyword extraction ─────────────────────────
+    # Returns structured SearchKeywordsResponse with three keyword sets +
+    # ICP attributes (seniority, company_size, function).
     try:
-        from relevance.groq_tagger import extract_search_keywords
-        keywords = await extract_search_keywords(
+        from relevance.groq_tagger import extract_search_keywords, _make_fallback_response
+        kw_response = await extract_search_keywords(
             company_desc = company_desc,
             industries   = industries,
             personas     = personas,
             event_types  = event_types,
         )
-        logger.info(f"Groq keywords ({len(keywords)}): {keywords}")
     except Exception as exc:
         logger.warning(f"Groq keyword extraction failed: {exc} — using fallback")
-        keywords = _fallback_keywords(industries)
+        from relevance.groq_tagger import _make_fallback_response
+        kw_response = _make_fallback_response(industries, personas, company_desc)
 
-    if not keywords:
-        keywords = _fallback_keywords(industries)
+    # Three specialised keyword sets (not one flat list)
+    ind_keywords  = kw_response.industry_keywords  or _fallback_keywords(industries)
+    per_keywords  = kw_response.persona_keywords   or []
+    api_keywords  = kw_response.api_keywords       or ind_keywords[:2]
+    all_keywords  = kw_response.keywords           # deduplicated union
+
+    icp_attrs     = kw_response.icp_attributes if hasattr(kw_response, "icp_attributes") else None
+    seniority     = icp_attrs.seniority    if icp_attrs else "unknown"
+    company_size  = icp_attrs.company_size if icp_attrs else "any"
+
+    logger.info(
+        f"Keywords: industry={ind_keywords} persona={per_keywords} api={api_keywords} | "
+        f"seniority={seniority} company_size={company_size}"
+    )
 
     # ── Step 2: Resolve geo data ───────────────────────────────────────
     is_global = any(
@@ -146,31 +159,48 @@ async def build_queries(
         for g in ["Singapore", "UK", "USA"]:
             resolved.append((g, GEO_DATA[g]))
 
-    # ── Step 3: Build SerpAPI queries ──────────────────────────────────
+    # ── Step 3: Build SerpAPI queries ────────────────────────────────
+    # SerpAPI: use industry keywords (broad) + persona keywords (niche)
+    # Include year for edition-specific results.
     serp: list[SerpAPIQuery] = []
-    for kw in keywords[:4]:
+    # Industry keywords first (broadest coverage)
+    for kw in ind_keywords[:3]:
         for _, geo in resolved[:3]:
             for loc in geo["serp"][:1]:
                 serp.append(SerpAPIQuery(q=f"{kw} {year}", location=loc, year=year))
-                if len(serp) >= max_serpapi:
-                    break
-            if len(serp) >= max_serpapi:
-                break
-        if len(serp) >= max_serpapi:
-            break
+                if len(serp) >= max_serpapi: break
+            if len(serp) >= max_serpapi: break
+        if len(serp) >= max_serpapi: break
+    # Persona keywords (role-specific events industry search misses)
+    for kw in per_keywords[:2]:
+        if len(serp) >= max_serpapi: break
+        for _, geo in resolved[:2]:
+            for loc in geo["serp"][:1]:
+                serp.append(SerpAPIQuery(q=f"{kw} {year}", location=loc, year=year))
+                if len(serp) >= max_serpapi: break
+            if len(serp) >= max_serpapi: break
 
-    # ── Step 4: Build Ticketmaster queries ─────────────────────────────
+    # ── Step 4: Build Ticketmaster queries ──────────────────────────
+    # Ticketmaster: use api_keywords (short, native) not the full long phrases.
+    # TM search is keyword-exact — "Conference" works better than
+    # "fintech financial technology conference".
+    # Also try persona keywords for niche executive events on TM.
     tm_countries = list({geo["tm"] for _, geo in resolved if geo.get("tm")}) or ["US", "GB", "SG"]
     start_dt = f"{start}T00:00:00Z"
     end_dt   = f"{end}T23:59:59Z"
     tm: list[TicketmasterQuery] = []
-    for kw in keywords[:4]:
+    # Short api_keywords first, then industry keywords
+    for kw in (api_keywords + ind_keywords)[:5]:
         for cc in tm_countries[:3]:
             tm.append(TicketmasterQuery(keyword=kw, country_code=cc, start_dt=start_dt, end_dt=end_dt))
-            if len(tm) >= max_ticketmaster:
-                break
-        if len(tm) >= max_ticketmaster:
-            break
+            if len(tm) >= max_ticketmaster: break
+        if len(tm) >= max_ticketmaster: break
+    # Add persona keywords for any remaining quota
+    for kw in per_keywords[:2]:
+        if len(tm) >= max_ticketmaster: break
+        for cc in tm_countries[:2]:
+            tm.append(TicketmasterQuery(keyword=kw, country_code=cc, start_dt=start_dt, end_dt=end_dt))
+            if len(tm) >= max_ticketmaster: break
 
     # ── Step 5: Build Eventbrite queries ───────────────────────────────
     eb: list[EventbriteQuery] = []
@@ -187,24 +217,27 @@ async def build_queries(
         if len(eb) >= max_eventbrite:
             break
 
-    # ── Step 6: Build PredictHQ queries ────────────────────────────────
+    # ── Step 6: Build PredictHQ queries ─────────────────────────────
+    # PredictHQ: their label-based search works best with short category terms.
+    # "conference" outperforms "fintech conference" because PHQ filters by
+    # category=conferences + phq_labels separately.
+    # Use api_keywords (short) + persona keywords (role-specific niche events).
     phq_countries = list({geo["phq"] for _, geo in resolved if geo.get("phq")}) or ["US", "GB"]
     phq: list[PredictHQQuery] = []
-    for kw in keywords[:3]:
+    for kw in (api_keywords + per_keywords)[:4]:
         for cc in phq_countries[:2]:
             phq.append(PredictHQQuery(q=kw, country_code=cc, start_gte=start, end_lte=end))
-            if len(phq) >= max_predicthq:
-                break
-        if len(phq) >= max_predicthq:
-            break
+            if len(phq) >= max_predicthq: break
+        if len(phq) >= max_predicthq: break
 
     bundle = QueryBundle(
         serpapi=serp, ticketmaster=tm, eventbrite=eb, predicthq=phq,
-        year=year, keywords_used=keywords,
+        year=year, keywords_used=all_keywords,
     )
     logger.info(
-        f"QueryBundle: serp={len(serp)} tm={len(tm)} eb={len(eb)} phq={len(phq)} "
-        f"keywords={keywords[:3]}"
+        f"QueryBundle: serp={len(serp)} tm={len(tm)} eb={len(eb)} phq={len(phq)} | "
+        f"ind={ind_keywords[:2]} persona={per_keywords[:1]} api={api_keywords[:1]} | "
+        f"seniority={seniority} size={company_size}"
     )
     return bundle
 
@@ -273,27 +306,35 @@ def build_queries_sync(
         for g in ["Singapore", "UK", "USA"]:
             resolved.append((g, GEO_DATA[g]))
 
+    # Sync wrapper uses fallback response — no Groq available here
+    from relevance.groq_tagger import _make_fallback_response
+    kw_resp      = _make_fallback_response(industries, personas, company_desc)
+    ind_keywords = kw_resp.industry_keywords or keywords
+    per_keywords = kw_resp.persona_keywords  or []
+    api_keywords = kw_resp.api_keywords      or ind_keywords[:2]
+    all_kws      = kw_resp.keywords
+
     serp = [
         SerpAPIQuery(q=f"{kw} {year}", location=geo["serp"][0], year=year)
-        for kw in keywords[:4]
+        for kw in ind_keywords[:3]
         for _, geo in resolved[:2]
     ][:8]
 
     tm_cc = list({geo["tm"] for _, geo in resolved if geo.get("tm")}) or ["US", "GB"]
     start_dt = f"{start}T00:00:00Z"; end_dt = f"{end}T23:59:59Z"
     tm = [TicketmasterQuery(keyword=kw, country_code=cc, start_dt=start_dt, end_dt=end_dt)
-          for kw in keywords[:4] for cc in tm_cc[:3]][:12]
+          for kw in (api_keywords + ind_keywords)[:4] for cc in tm_cc[:3]][:12]
 
     eb = [EventbriteQuery(keyword=kw, lat=geo["lat"], lon=geo["lon"],
                           radius=geo.get("eb_radius","100km"), date_from=start)
-          for kw in keywords[:3] for _, geo in resolved[:3]][:9]
+          for kw in ind_keywords[:3] for _, geo in resolved[:3]][:9]
 
     phq_cc = list({geo["phq"] for _, geo in resolved if geo.get("phq")}) or ["US"]
     phq = [PredictHQQuery(q=kw, country_code=cc, start_gte=start, end_lte=end)
-           for kw in keywords[:3] for cc in phq_cc[:2]][:6]
+           for kw in (api_keywords + per_keywords)[:3] for cc in phq_cc[:2]][:6]
 
     return QueryBundle(serpapi=serp, ticketmaster=tm, eventbrite=eb,
-                       predicthq=phq, year=year, keywords_used=keywords)
+                       predicthq=phq, year=year, keywords_used=all_kws)
 
 
 # ── Taxonomy expansion for crud.py DB queries ─────────────────────────
