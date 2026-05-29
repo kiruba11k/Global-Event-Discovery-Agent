@@ -375,6 +375,158 @@ def _best_event_link(organic: list, event_name: str, source_url: str, year: str 
 
 # ── Single-event enricher ──────────────────────────────────────────
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Groq AI validator for SerpAPI results
+# ─────────────────────────────────────────────────────────────────────────────
+# Called AFTER google_ai_mode returns — Groq validates / extracts real values
+# from the raw text. Strict anti-hallucination: Groq must only return values
+# EXPLICITLY present in the source text, never inferred or made up.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_GROQ_EXTRACTION_SYSTEM = """You are a strict data extractor. You will be given:
+1. EVENT_NAME — the event you are enriching
+2. SOURCE_TEXT — raw text from a Google AI Mode search about that event
+
+YOUR ONLY JOB: extract specific factual values EXPLICITLY stated in SOURCE_TEXT.
+
+ABSOLUTE RULES — violating any rule makes your entire response invalid:
+1. ONLY extract values you can directly quote from SOURCE_TEXT.
+2. If a value is NOT in SOURCE_TEXT, return null for that field. Never guess or infer.
+3. For attendees: extract the NUMBER only if SOURCE_TEXT contains a phrase like
+   "X attendees", "X participants", "X visitors", "attracts X", "draws X people",
+   "expected X", "X registered". Do NOT extract venue capacity as attendees.
+4. For registration_url: only return a URL if SOURCE_TEXT explicitly names it as
+   the event's registration/official page. Never return a Google URL, venue URL,
+   or social media URL.
+5. For price: only return if SOURCE_TEXT says "from $X", "registration fee X",
+   "ticket price X", "costs X", "X to attend", "X per delegate". Never guess free.
+6. For description: copy a VERBATIM sentence from SOURCE_TEXT that describes WHAT
+   the event IS about. Do not paraphrase. Do not generate new sentences.
+7. If SOURCE_TEXT is not about EVENT_NAME (different event), return all nulls.
+
+Return ONLY this JSON (no text before or after, no markdown, no code blocks):
+{
+  "est_attendees": <integer or null>,
+  "registration_url": "<verified event URL string or null>",
+  "price_description": "<verbatim price string from text or null>",
+  "description": "<verbatim sentence from text or null>",
+  "confidence": "<high|medium|low — how certain are you this text is about the named event>",
+  "evidence": "<quote the exact phrase from SOURCE_TEXT that supports each non-null field>"
+}"""
+
+
+async def _groq_validate_enrichment(
+    event_name:  str,
+    year:        str,
+    source_text: str,
+    organic:     list,
+    groq_client: object,
+) -> dict:
+    """
+    Use Groq to validate and extract real values from SerpAPI google_ai_mode output.
+
+    Strict anti-hallucination approach:
+    - Groq only returns values explicitly present in source_text
+    - All fields null if not found
+    - Confidence rating lets caller decide how much to trust the output
+    - Evidence field forces Groq to cite the source phrase
+
+    Returns {} if Groq is unavailable or validation fails.
+    """
+    if not groq_client or not source_text or len(source_text) < 20:
+        return {}
+
+    # Truncate to 3000 chars — enough context without wasting tokens
+    text_sample = source_text[:3000]
+
+    # Include top organic snippets for additional grounding
+    organic_snippets = "\n".join(
+        f"[{i+1}] {item.get('title','')} — {item.get('snippet','')[:200]}"
+        for i, item in enumerate((organic or [])[:5])
+    )
+    if organic_snippets:
+        text_sample = f"{text_sample}\n\nORGANIC RESULTS:\n{organic_snippets}"
+
+    user_prompt = (
+        f"EVENT_NAME: {event_name} {year}\n\n"
+        f"SOURCE_TEXT:\n{text_sample}"
+    )
+
+    try:
+        import json
+        from groq import AsyncGroq as _AsyncGroq
+        import os
+
+        client = groq_client if hasattr(groq_client, 'chat') else _AsyncGroq(
+            api_key=os.environ.get('GROQ_API_KEY', '')
+        )
+
+        completion = await client.chat.completions.create(
+            model       = "llama-3.3-70b-versatile",
+            temperature = 0.0,    # deterministic — no creativity
+            max_tokens  = 512,
+            messages    = [
+                {"role": "system", "content": _GROQ_EXTRACTION_SYSTEM},
+                {"role": "user",   "content": user_prompt},
+            ],
+        )
+
+        raw = (completion.choices[0].message.content or "").strip()
+        # Strip any markdown fences Groq might add despite instructions
+        raw = raw.replace("```json", "").replace("```", "").strip()
+
+        parsed = json.loads(raw)
+
+        # Validate: reject if confidence is low and we have no evidence
+        confidence = str(parsed.get("confidence", "low")).lower()
+        evidence   = str(parsed.get("evidence", "")).strip()
+
+        if confidence == "low" and not evidence:
+            logger.debug(f"Groq: low confidence, no evidence for '{event_name[:40]}' — discarding")
+            return {}
+
+        # Clean each field: null strings → None
+        result = {}
+
+        att = parsed.get("est_attendees")
+        if att and isinstance(att, (int, float)) and int(att) > 0:
+            result["est_attendees"] = int(att)
+
+        reg = parsed.get("registration_url") or ""
+        if reg and isinstance(reg, str) and reg.startswith("http"):
+            # Extra guard: reject Google, social, venue URLs
+            from enrichment.serp_enricher import _is_venue_url, _is_homepage_url
+            if not _is_venue_url(reg) and not _is_homepage_url(reg) and "google.com" not in reg:
+                result["registration_url"] = reg
+                result["website"]          = reg
+
+        price = parsed.get("price_description") or ""
+        if price and isinstance(price, str) and len(price) > 2 and price.lower() != "null":
+            result["price_description"] = price[:200]
+
+        desc = parsed.get("description") or ""
+        if desc and isinstance(desc, str) and len(desc) > 40 and desc.lower() != "null":
+            result["description"]          = desc[:600]
+            result["description_enriched"] = True
+
+        result["groq_confidence"] = confidence
+        result["groq_evidence"]   = evidence[:300] if evidence else ""
+
+        logger.debug(
+            f"Groq validated '{event_name[:40]}': "
+            f"att={result.get('est_attendees')} "
+            f"url={bool(result.get('registration_url'))} "
+            f"price={bool(result.get('price_description'))} "
+            f"conf={confidence}"
+        )
+        return result
+
+    except Exception as exc:
+        logger.debug(f"Groq validation error for '{event_name[:40]}': {exc}")
+        return {}
+
+
 async def enrich_event(
     event_name:    str,
     year:          str,
@@ -387,6 +539,7 @@ async def enrich_event(
     need_price:       bool = True,
     need_description: bool = False,
     need_link:        bool = True,
+    groq_client:      object = None,   # pass AsyncGroq client for validation
 ) -> dict:
     """
     Enrich one event using SerpAPI google_ai_mode.
@@ -471,8 +624,44 @@ async def enrich_event(
 
         result: dict = {}
 
+        # ── Groq validation: extract real values from AI Mode text ──
+        # Runs ONLY when groq_client is provided.
+        # Strict anti-hallucination: Groq must cite exact source phrases.
+        # Groq-extracted values take PRIORITY over regex extraction below.
+        groq_result: dict = {}
+        if groq_client and full_text:
+            groq_result = await _groq_validate_enrichment(
+                event_name  = clean_name,
+                year        = year,
+                source_text = full_text,
+                organic     = organic,
+                groq_client = groq_client,
+            )
+            # If Groq found real values, use them immediately
+            if groq_result.get("est_attendees"):
+                result["est_attendees"]      = groq_result["est_attendees"]
+                result["enriched_attendees"] = True
+                logger.info(f"Groq att    '{clean_name[:45]}': {groq_result['est_attendees']:,}")
+            if groq_result.get("registration_url"):
+                result["event_link"] = groq_result["registration_url"]
+                result["website"]    = groq_result["registration_url"]
+                logger.info(f"Groq link   '{clean_name[:45]}': {groq_result['registration_url'][:60]}")
+            if groq_result.get("price_description"):
+                result["price_description"] = groq_result["price_description"]
+                result["enriched_price"]    = True
+                logger.info(f"Groq price  '{clean_name[:45]}': {groq_result['price_description']}")
+            if groq_result.get("description") and need_description:
+                result["description"]          = groq_result["description"]
+                result["description_enriched"] = True
+            # Record Groq confidence
+            result["groq_confidence"] = groq_result.get("groq_confidence", "")
+            result["groq_evidence"]   = groq_result.get("groq_evidence", "")
+
+        # ── Regex fallback for fields Groq didn't find ─────────────
+        # Only runs for fields not already populated by Groq validation.
+
         # Event link
-        if need_link:
+        if need_link and not result.get("event_link"):
             link = _best_event_link(organic, clean_name, source_url, year=year)
             if link:
                 result["event_link"] = link
@@ -481,16 +670,16 @@ async def enrich_event(
                 result["event_link"] = source_url
                 result["website"]    = source_url
 
-        # Attendees
-        if need_attendees:
+        # Attendees (regex fallback — only if Groq didn't find it)
+        if need_attendees and not result.get("est_attendees"):
             att = _extract_attendees(full_text)
             if att:
                 result["est_attendees"]      = att
                 result["enriched_attendees"] = True
                 logger.info(f"SerpAPI att    '{clean_name[:45]}': {att:,}")
 
-        # Price
-        if need_price:
+        # Price (regex fallback — only if Groq didn't find it)
+        if need_price and not result.get("price_description"):
             info = _extract_price(full_text)
             if info:
                 price, desc = info
@@ -499,8 +688,8 @@ async def enrich_event(
                 result["enriched_price"]    = True
                 logger.info(f"SerpAPI price  '{clean_name[:45]}': {desc}")
 
-        # Description from AI blocks
-        if need_description and ai_text and len(ai_text) > 40:
+        # Description from AI blocks (only if Groq didn't find it)
+        if need_description and not result.get("description") and ai_text and len(ai_text) > 40:
             for block in blocks:
                 if isinstance(block, dict):
                     txt = (block.get("snippet") or block.get("text") or block.get("body") or "").strip()
@@ -539,6 +728,7 @@ async def enrich_event(
 async def enrich_events_batch(
     events:      list,
     serpapi_key: str,
+    groq_client: object = None,   # AsyncGroq client for post-validation
     max_enrich:  int = 10,
 ) -> dict[str, dict]:
     """
@@ -615,6 +805,7 @@ async def enrich_events_batch(
             need_price       = need_prc,
             need_description = need_desc,
             need_link        = need_link,
+            groq_client      = groq_client,
         )
         if data:
             enriched_map[event.id] = data
