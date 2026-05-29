@@ -97,8 +97,11 @@ async def fetch_realtime_candidates(
     active  = [k for k, v in api_ok.items() if v]
     missing = [k for k, v in api_ok.items() if not v]
 
+    diff_s = getattr(profile, "differentiator_score", None)
+    client_r = getattr(profile, "client_count_range", None)
     logger.info(
         f"Pipeline start | company={profile.company_name!r} | "
+        f"diff={diff_s} clients={client_r} | "
         f"active={active} | missing_keys={missing} | "
         f"keywords={query_bundle.keywords_used[:3]} | "
         f"serp={len(query_bundle.serpapi)} "
@@ -212,20 +215,65 @@ async def fetch_realtime_candidates(
     result        = await db.execute(stmt.limit(500))
     db_candidates = list(result.scalars().all())
 
-    # Widen if too few results (drop industry filter, keep geo)
+    # ── Tiered widening (3 tiers, not a blunt drop) ──────────────────
     if len(db_candidates) < 10:
-        stmt_wide = select(EventORM).where(
+        logger.info(f"Tier-1 too few ({len(db_candidates)}) — tier-2: drop persona filter")
+        # Tier 2: industry + geo only (drop persona)
+        stmt2 = select(EventORM).where(
+            EventORM.start_date >= date_from,
+            EventORM.start_date <= date_to,
+        )
+        if ind_filters:
+            stmt2 = stmt2.where(or_(*ind_filters))
+        if geo_filters:
+            stmt2 = stmt2.where(or_(*geo_filters))
+        r2 = await db.execute(stmt2.limit(500))
+        db_candidates = list(r2.scalars().all())
+        logger.info(f"Tier-2: {len(db_candidates)} candidates")
+
+    if len(db_candidates) < 5:
+        logger.info(f"Tier-2 too few ({len(db_candidates)}) — tier-3: geo + date only")
+        # Tier 3: geo + date, no industry filter
+        stmt3 = select(EventORM).where(
             EventORM.start_date >= date_from,
             EventORM.start_date <= date_to,
         )
         if geo_filters:
-            stmt_wide = stmt_wide.where(or_(*geo_filters))
-        result_wide   = await db.execute(stmt_wide.limit(500))
-        db_candidates = list(result_wide.scalars().all())
-        logger.info(f"Widened DB query (no industry filter): {len(db_candidates)} candidates")
+            stmt3 = stmt3.where(or_(*geo_filters))
+        r3 = await db.execute(stmt3.limit(500))
+        db_candidates = list(r3.scalars().all())
+        logger.info(f"Tier-3: {len(db_candidates)} candidates (geo+date only)")
+
+    if len(db_candidates) < 3:
+        # Tier 4: date window only (no geo, no industry)
+        logger.warning("Tier-3 too few — returning all future events in date window")
+        r4 = await db.execute(
+            select(EventORM).where(
+                EventORM.start_date >= date_from,
+                EventORM.start_date <= date_to,
+            ).limit(300)
+        )
+        db_candidates = list(r4.scalars().all())
+
+    # ── Progressive pre-enrichment ────────────────────────────────
+    # Enrich events with empty descriptions BEFORE scoring so the scorer
+    # has real data. Cap at 15 to stay within SerpAPI rate limits.
+    # This fixes: "empty description → low score → not enriched → stays low"
+    if settings.serpapi_key:
+        try:
+            from enrichment.serp_enricher import enrich_events_batch
+            empty_desc = [
+                e for e in db_candidates
+                if not (e.description or "").strip() or len((e.description or "").strip()) < 60
+            ][:15]
+            if empty_desc:
+                logger.info(f"Pre-enriching {len(empty_desc)} thin-description events before scoring")
+                await enrich_events_batch(empty_desc, settings.serpapi_key)
+        except Exception as exc:
+            logger.debug(f"Pre-enrichment skipped: {exc}")
 
     logger.info(
-        f"Pipeline complete: {len(db_candidates)} candidates for scoring "
-        f"({len(new_events)} new from APIs + existing DB)"
+        f"Pipeline complete: {len(db_candidates)} candidates for scoring | "
+        f"new_from_apis={len(new_events)}"
     )
     return db_candidates
