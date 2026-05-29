@@ -77,32 +77,73 @@ _TAXONOMY_STR: str = "\n".join(f"  - {t}" for t in INDUSTRY_TAXONOMY)
 
 # ── Pydantic schemas ────────────────────────────────────────────────
 
-class SearchKeywordsResponse(BaseModel):
-    """Schema for extract_search_keywords response."""
-    keywords: list[str]
-    reasoning: str  # required: LLM must justify each keyword
+class ICPAttributes(BaseModel):
+    """
+    Structured attributes extracted from the ICP buyer description.
+    Used for seniority-aware scoring and per-API query specialisation.
+    No hallucinations: all fields must be inferrable from the input text.
+    """
+    industry:     str         # primary industry (from taxonomy)
+    persona:      str         # job title / role (e.g. "CFO", "VP Engineering")
+    seniority:    str         # c-suite | vp | director | manager | practitioner | unknown
+    company_size: str         # enterprise | mid-market | smb | startup | any
+    function:     str         # finance | technology | operations | sales | hr | marketing | other
 
-    @field_validator("keywords")
+    @field_validator("seniority")
+    @classmethod
+    def validate_seniority(cls, v):
+        allowed = {"c-suite","vp","director","manager","practitioner","unknown"}
+        return v.lower() if v.lower() in allowed else "unknown"
+
+    @field_validator("company_size")
+    @classmethod
+    def validate_company_size(cls, v):
+        allowed = {"enterprise","mid-market","smb","startup","any"}
+        return v.lower() if v.lower() in allowed else "any"
+
+
+class SearchKeywordsResponse(BaseModel):
+    """
+    Enriched keyword extraction response.
+
+    Three keyword sets for different query purposes:
+      industry_keywords  → broad event discovery (SerpAPI + EventsEye DB)
+      persona_keywords   → role-specific events missed by industry search
+      api_keywords       → short, API-native terms for TM / PredictHQ
+
+    icp_attributes captures structured profile signals for scoring.
+    reasoning must quote specific input words justifying each keyword.
+    """
+    industry_keywords: list[str]    # 3–5 broad industry event terms
+    persona_keywords:  list[str]    # 2–4 persona/seniority-specific terms
+    api_keywords:      list[str]    # 2–4 short terms native to TM/PHQ APIs
+    icp_attributes:    ICPAttributes
+    reasoning:         str
+
+    @field_validator("industry_keywords", "persona_keywords", "api_keywords")
     @classmethod
     def validate_keywords(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("keywords list must not be empty")
-        if len(v) > 10:
-            raise ValueError(f"Too many keywords: {len(v)} > 10")
         validated = []
         for kw in v:
             kw = kw.strip()
-            if len(kw) < 5:
-                continue  # too short to be useful
-            if len(kw) > 80:
-                raise ValueError(f"Keyword too long: {kw!r}")
-            # Reject keywords that look like hallucinated company names or URLs
-            if any(bad in kw.lower() for bad in ["http", "www.", "ltd", "inc.", "corp."]):
+            if len(kw) < 4 or len(kw) > 80:
+                continue
+            if any(bad in kw.lower() for bad in ["http", "www.", "ltd", "inc.", "corp.", ".com"]):
                 continue
             validated.append(kw)
-        if not validated:
-            raise ValueError("No valid keywords after filtering")
-        return validated[:8]
+        return validated[:6]
+
+    # Backward compat: callers that only want a flat keyword list
+    @property
+    def keywords(self) -> list[str]:
+        """Deduplicated union of all keyword sets."""
+        seen: set[str] = set()
+        result = []
+        for kw in self.industry_keywords + self.persona_keywords + self.api_keywords:
+            if kw.lower() not in seen:
+                seen.add(kw.lower())
+                result.append(kw)
+        return result[:10]
 
 
 class EventTagItem(BaseModel):
@@ -185,22 +226,37 @@ async def _call_groq(
 # Replaces _extract_desc_keywords() in icp_query_builder.py
 # ══════════════════════════════════════════════════════════════════════
 
-_KEYWORD_SYSTEM = """You are a B2B event research analyst. Your job is to generate event search terms.
+_KEYWORD_SYSTEM = """You are a B2B event research analyst. Your job is to generate event search terms and extract structured buyer profile attributes.
 
 STRICT RULES — violating ANY rule makes your response invalid:
-  1. ONLY derive search terms from information explicitly present in the user's text.
-  2. NEVER invent industries, products, or technologies not mentioned.
-  3. Each search term must be a real event type that exists (e.g. "AI conference", "logistics expo").
-  4. Maximum 8 search terms.
-  5. Each search term must be 5–80 characters.
-  6. Do NOT include company names, personal names, URLs, or product names.
-  7. The "reasoning" field must quote the specific words from the user input that justify each keyword.
+  1. ONLY derive output from information EXPLICITLY present in the user input.
+  2. NEVER invent industries, products, technologies, or attributes not mentioned.
+  3. Each keyword must be a real event type (e.g. "AI conference", "logistics expo").
+  4. Do NOT include company names, personal names, URLs, or product names in keywords.
+  5. The "reasoning" field must quote the EXACT phrases from the input that justify each decision.
+  6. seniority must be one of: c-suite | vp | director | manager | practitioner | unknown
+  7. company_size must be one of: enterprise | mid-market | smb | startup | any
+  8. function must be one of: finance | technology | operations | sales | hr | marketing | other
 
-Return ONLY this JSON (no text before or after):
+Return ONLY this JSON (no text before or after, no markdown):
 {
-  "keywords": ["keyword 1", "keyword 2", ...],
-  "reasoning": "keyword 1 is justified by the phrase '...' in the input. keyword 2 is justified by..."
-}"""
+  "industry_keywords": ["broad industry event term 1", "broad term 2", "broad term 3"],
+  "persona_keywords": ["CTO technology summit", "VP Engineering conference"],
+  "api_keywords": ["Conference", "Technology Expo"],
+  "icp_attributes": {
+    "industry": "Technology",
+    "persona": "CTO",
+    "seniority": "c-suite",
+    "company_size": "enterprise",
+    "function": "technology"
+  },
+  "reasoning": "industry_keywords: derived from '...'. persona_keywords: derived from '...'"
+}
+
+KEYWORD RULES:
+  industry_keywords: 3–5 terms, broad enough to find many events — include the industry + event type
+  persona_keywords: 2–4 terms, combine the job role with event type — find role-specific events missed by industry search
+  api_keywords: 2–4 short native terms for Ticketmaster/PredictHQ (these APIs prefer single-word or 2-word queries)"""
 
 
 async def extract_search_keywords(
@@ -208,7 +264,7 @@ async def extract_search_keywords(
     industries:    list[str],
     personas:      list[str],
     event_types:   list[str],
-) -> list[str]:
+) -> "SearchKeywordsResponse":
     """
     Use Groq LLM to extract targeted event search keywords from ICP form inputs.
 
@@ -249,22 +305,24 @@ async def extract_search_keywords(
 
     if not client:
         logger.debug("extract_search_keywords: Groq not available → using fallback")
-        return _fallback_keywords(industries, company_desc)
+        return _make_fallback_response(industries, personas, company_desc)
 
     raw = await _call_groq(client, _KEYWORD_SYSTEM, user_prompt, label="keyword_extractor")
     if not raw:
-        return _fallback_keywords(industries, company_desc)
+        return _make_fallback_response(industries, personas, company_desc)
 
     try:
         parsed = SearchKeywordsResponse.model_validate_json(raw)
         logger.info(
-            f"Groq keyword extraction: {len(parsed.keywords)} keywords | "
-            f"reasoning excerpt: {parsed.reasoning[:80]}..."
+            f"Groq keyword extraction: industry={parsed.industry_keywords} "
+            f"persona={parsed.persona_keywords} api={parsed.api_keywords} | "
+            f"seniority={parsed.icp_attributes.seniority} "
+            f"company_size={parsed.icp_attributes.company_size}"
         )
-        return parsed.keywords
+        return parsed
     except (ValidationError, ValueError, Exception) as exc:
         logger.warning(f"extract_search_keywords validation failed: {exc} — using fallback")
-        return _fallback_keywords(industries, company_desc)
+        return _make_fallback_response(industries, personas, company_desc)
 
 
 def _fallback_keywords(industries: list[str], desc: str = "") -> list[str]:
@@ -304,6 +362,68 @@ def _fallback_keywords(industries: list[str], desc: str = "") -> list[str]:
             if kw in d:
                 kws.insert(0, term)
     return list(dict.fromkeys(kws))[:6] or ["technology conference", "business summit"]
+
+
+def _make_fallback_response(
+    industries: list[str],
+    personas:   list[str],
+    desc:       str = "",
+) -> "SearchKeywordsResponse":
+    """
+    Build a complete SearchKeywordsResponse without Groq.
+    Deterministic and safe — no hallucinations possible.
+    """
+    ind_kws  = _fallback_keywords(industries, desc)
+    # Persona keywords: combine first persona with industry
+    per_kws  = []
+    for p in (personas or [])[:2]:
+        p_clean = p.strip().split("/")[0].strip()  # "CIO / CTO" → "CIO"
+        if ind_kws:
+            per_kws.append(f"{p_clean} {ind_kws[0]}")
+        per_kws.append(f"{p_clean} conference")
+    per_kws = list(dict.fromkeys(per_kws))[:3]
+
+    api_kws  = [k.split()[0].title() for k in ind_kws[:2]]  # "fintech conference" → "Fintech"
+
+    # Infer seniority from persona text
+    seniority = "unknown"
+    persona_str = " ".join(personas or []).lower()
+    if any(t in persona_str for t in ["ceo","cfo","cio","cto","coo","cxo","chief","president"]):
+        seniority = "c-suite"
+    elif any(t in persona_str for t in ["vp","vice president","vice-president"]):
+        seniority = "vp"
+    elif "director" in persona_str:
+        seniority = "director"
+    elif "manager" in persona_str:
+        seniority = "manager"
+
+    # Infer function
+    function = "other"
+    if any(t in persona_str for t in ["cio","cto","engineer","developer","technical","it ","tech"]):
+        function = "technology"
+    elif any(t in persona_str for t in ["cfo","finance","financial","treasury"]):
+        function = "finance"
+    elif any(t in persona_str for t in ["coo","operations","supply","logistics","procurement"]):
+        function = "operations"
+    elif any(t in persona_str for t in ["cmo","marketing","growth","demand"]):
+        function = "marketing"
+    elif any(t in persona_str for t in ["chro","hr","people","talent","recruiting"]):
+        function = "hr"
+
+    attrs = ICPAttributes(
+        industry     = industries[0] if industries else "Business Events",
+        persona      = personas[0].split("/")[0].strip() if personas else "Business Leader",
+        seniority    = seniority,
+        company_size = "any",
+        function     = function,
+    )
+    return SearchKeywordsResponse(
+        industry_keywords = ind_kws,
+        persona_keywords  = per_kws or [f"{attrs.persona} conference"],
+        api_keywords      = api_kws or ["Conference"],
+        icp_attributes    = attrs,
+        reasoning         = "fallback: derived from industries and personas fields",
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -537,10 +657,10 @@ def extract_search_keywords_sync(
             # We're inside an async context — can't run another event loop
             # Return fallback immediately
             logger.debug("extract_search_keywords_sync: event loop running, using fallback")
-            return _fallback_keywords(industries, company_desc)
+            return _make_fallback_response(industries, personas, company_desc)
         return loop.run_until_complete(
             extract_search_keywords(company_desc, industries, personas, event_types)
         )
     except Exception as exc:
         logger.warning(f"extract_search_keywords_sync: {exc} — using fallback")
-        return _fallback_keywords(industries, company_desc)
+        return _make_fallback_response(industries, personas, company_desc)
