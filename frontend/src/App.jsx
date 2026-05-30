@@ -1,5 +1,5 @@
 /*
-  App.jsx  — three-screen app with simple state router
+  App.jsx   three-screen app with simple state router
 
   screen === 'home'     → homepage + hero form
   screen === 'ranking'  → ShowRankingPage (full page, scroll to top)
@@ -57,10 +57,10 @@ const LOGOS = [
   'Money20/20','Web Summit','AWS re:Invent','HIMSS','Salesforce World Tour',
 ]
 const PAIN_QUOTES = [
-  { text: "I won't know who's actually attending until I'm there.",      role: 'Enterprise AE, SaaS' },
-  { text: 'My follow-up competes with 200 other emails.',                role: 'VP Sales, B2B software' },
-  { text: "70% of conversations are vendors selling to me, not buyers.", role: 'Head of BD, Series B startup' },
-  { text: "I'll meet maybe 5 decision-makers in 3 days.",                role: 'Founder, enterprise SaaS' },
+  { text: "We spent ₹15L on a booth and walked away with 4 qualified conversations.", role: 'VP Sales, B2B SaaS, India' },
+  { text: "I had no idea who was coming until I was already there.",                  role: 'Enterprise AE, Series B startup' },
+  { text: "The follow-up email goes out, then silence. The show ROI is a guess.",     role: 'Head of BD, enterprise software' },
+  { text: "We picked the show because a competitor was there. That was the strategy.",role: 'Founder, SaaS, ₹50L ACV deals' },
 ]
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -140,20 +140,20 @@ export default function App() {
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
-        toast.error('No matching events found — try a wider geography or different buyer description.')
+        toast.error('No matching events found  try a wider geography or different buyer description.')
         setLoading(false)
         return
       }
 
       const go = display.filter(e => e.fit_verdict === 'GO').length
-      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 3500 })
+      toast.success(`Found ${display.length} events  ${go} strong matches`, { duration: 3500 })
 
       if (email) _autoSendReport(events, profile, email)
 
       // Navigate to ranking page
       goTo('ranking', '/')
     } catch (err) {
-      toast.error(err.message || 'Search failed — please try again')
+      toast.error(err.message || 'Search failed  please try again')
     } finally {
       setLoading(false)
     }
@@ -189,7 +189,7 @@ export default function App() {
       toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
     } catch (err) {
       const msg = err.message || ''
-      if (msg.includes('RESEND') || msg.includes('503')) toast.error('RESEND_API_KEY not set — add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
+      if (msg.includes('RESEND') || msg.includes('503')) toast.error('RESEND_API_KEY not set  add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
       else toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
     }
   }
@@ -283,19 +283,28 @@ export default function App() {
         <div className="hp-hero-solo-inner">
           <div className="hero-badge hp-hero-eyebrow">
             <Sparkles size={11} aria-hidden="true" />
-            <span>11,000+ B2B trade shows · ranked for your ICP</span>
+            <span>The only platform that tells you which shows to attend, how many meetings to expect, what it will cost  before you spend a rupee</span>
           </div>
           <h1 className="hp-hero-solo-h1">
-            Your personal sales director.<br />
-            At every trade show.
+            The agent earns trust.<br />
+            The agency earns revenue.
           </h1>
           <p className="hp-hero-solo-sub">
-            We tell your reps exactly who to meet, which events are worth the flight,
-            and how to walk away with pipeline — not business cards.
+            Rank every B2B trade show for your exact ICP. See how many decision-makers
+            attend, how many meetings to expect, and what it will cost  before you fly out.
+            Then let us guarantee those meetings actually happen.
           </p>
+          <div className="hp-validator-badge" aria-label="Two-agent validator">
+            <div className="hp-validator-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+              <strong>Two-agent validation</strong>  every event detail is checked by a second AI before it reaches you.
+              Most tools hallucinate event data confidently. We built a guard against that.
+            </div>
+          </div>
           <p className="hp-hero-bridge">
-            Start with the question every CMO gets wrong:
-            <strong> which shows are actually worth your time?</strong>
+            Answer 6 questions. Get your ranked list in 90 seconds.
           </p>
           <div className="hp-form-zone" id="icp-form">
             {stats?.resend_enabled === false && (
@@ -311,7 +320,7 @@ export default function App() {
               heroMode={true}
             />
           </div>
-          <p className="hp-microcopy">Free · 90 seconds · no sales call</p>
+          <p className="hp-microcopy">Free · Top 6 always free · No credit card · No sales call</p>
           <a className="hp-escape-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
             Already know your show? Get show-specific intel →
           </a>
@@ -325,16 +334,16 @@ export default function App() {
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/></svg>
             </div>
-            <div className="hp-path-tag">Attending — hunting meetings</div>
+            <div className="hp-path-tag">Attending  hunting meetings</div>
             <h3 className="hp-path-title">Sales, BD, founders. Find your ICPs before you fly out.</h3>
-            <p className="hp-path-desc">Walk in knowing exactly who to find — meetings already on the calendar.</p>
+            <p className="hp-path-desc">Walk in knowing exactly who to find  meetings already on the calendar.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Find my shows →</button>
           </div>
           <div className="hp-path-card hp-path-exhibiting">
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
             </div>
-            <div className="hp-path-tag">Exhibiting — need booth traffic</div>
+            <div className="hp-path-tag">Exhibiting  need booth traffic</div>
             <h3 className="hp-path-title">Get 5× the qualified meetings around your booth.</h3>
             <p className="hp-path-desc">Stop waiting for walk-ups. Pre-book your target buyers before the floor opens.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Boost my booth →</button>
@@ -396,7 +405,7 @@ export default function App() {
                 style={{ transitionDelay: `${i * 80}ms` }}>
                 <div className="hp-pain-quote-mark" aria-hidden="true">"</div>
                 <p className="hp-pain-quote">{q.text}</p>
-                <div className="hp-pain-role">— {q.role}</div>
+                <div className="hp-pain-role"> {q.role}</div>
               </div>
             ))}
           </div>
@@ -410,7 +419,7 @@ export default function App() {
           <h2 className="hp-footer-cta-h2">Rank your shows in 2 minutes.</h2>
           <p className="hp-footer-cta-sub">Tell us your ICP. We'll tell you which events are worth flying to.</p>
           <div className="hp-footer-cta-btns">
-            <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows — it's free</button>
+            <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows  it's free</button>
             <a className="hp-cta-outline" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Book a demo</a>
           </div>
         </div>
