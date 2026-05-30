@@ -14,8 +14,6 @@ ICP density            40         Always (industry + persona from DB)
 Deal-size fit          25         Only when est_attendees > 0
 Geographic match       15         Only when city/country populated in DB
 Competitive intensity  10         Only when sponsors field populated
-Historical conversion  10         Only when real CRM outcome data exists
-                                  (always 0 in MVP — explicitly excluded)
 ─────────────────────────────────────────────────────────────────
 
 NORMALISATION:
@@ -309,14 +307,6 @@ def _factor_competitive_intensity(
     return raw, 10, True, notes
 
 
-def _factor_historical(_event, _profile) -> tuple:
-    """
-    Historical conversion — max weight 10.
-    MVP: always skipped — no real CRM outcome data yet.
-    v2: replace with actual meeting-per-show outcomes from client history.
-    """
-    return 0, 10, False, "skipped: no historical outcome data in MVP"
-
 
 # ─────────────────────────────────────────────────────────────────
 # Public: calculate_fit_score
@@ -350,7 +340,6 @@ def calculate_fit_score(
         ("deal_size_fit",        *_factor_deal_size(event, profile)),
         ("geo_match",            *_factor_geo_match(event, profile)),
         ("competitive_intensity",*_factor_competitive_intensity(event, profile)),
-        ("historical_conversion",*_factor_historical(event, profile)),
     ]
 
     raw_total   = 0.0
@@ -360,7 +349,7 @@ def calculate_fit_score(
     data_gaps     = []
     factors_used  = 0
     # historical is always skipped — don't count it in total measurable
-    factors_total = sum(1 for name, *rest in factors if name != "historical_conversion")
+    factors_total = len(factors)  # all 4 factors
 
     for name, raw, max_w, available, notes in factors:
         factor_notes[name] = notes
@@ -368,7 +357,7 @@ def calculate_fit_score(
             raw_total    += raw
             avail_weight += max_w
             factor_scores[name] = round(raw, 2)
-            factors_used += 1 if name != "historical_conversion" else 0
+            factors_used += 1
         else:
             factor_scores[name] = None   # explicitly null = not scored
             data_gaps.append({"factor": name, "reason": notes})
@@ -388,7 +377,7 @@ def calculate_fit_score(
             grade = g; label = l; break
 
     # Confidence level based on available weight vs maximum possible
-    # Maximum available (excl. historical) = 40+25+15+10 = 90
+    # Maximum available weight = 40+25+15+10 = 90
     MAX_AVAILABLE_WEIGHT = 90
     coverage = avail_weight / MAX_AVAILABLE_WEIGHT
     if   coverage >= 0.70: confidence = "high"
