@@ -154,16 +154,83 @@ async def fetch_realtime_candidates(
             logger.debug(f"  — {src}: key not configured")
 
     # ── Step 4: Deduplicate across all sources ─────────────────────
-    # All connectors now return list[dict] via platform_normaliser
-    new_events: list[dict] = []
-    seen: set[str] = set()
+    # ── Fuzzy cross-source deduplication (Tier-2 improvement 3.7) ────
+    # The same event appears across all 4 sources with different names:
+    #   EventsEye: "MONEY20/20 USA 2026"
+    #   Ticketmaster: "Money 20/20 Conference"
+    #   PredictHQ:  "Money20/20"
+    # SHA1(name+date+city) alone misses these. We add a fuzzy name+date check.
+    #
+    # Algorithm: after hash dedup, compare each new event against existing
+    # events with same city + start date ±2 days. If name similarity > 0.72,
+    # treat as duplicate and keep the richer record (more non-empty fields).
+    #
+    # Uses basic token overlap (no external deps) — works without rapidfuzz.
+
+    def _name_similarity(a: str, b: str) -> float:
+        """Token-overlap similarity: |intersection| / |union| of word sets."""
+        # Normalise: lowercase, strip punctuation, split to tokens ≥ 3 chars
+        import re as _re
+        _clean = lambda s: set(
+            w for w in _re.split(r"[\s\-&/,\']+", s.lower())
+            if len(w) >= 3 and not w.isdigit()
+        )
+        ta, tb = _clean(a), _clean(b)
+        if not ta or not tb:
+            return 0.0
+        return len(ta & tb) / len(ta | tb)
+
+    def _richer(a: dict, b: dict) -> dict:
+        """Return the dict with more non-empty field values."""
+        score = lambda d: sum(1 for v in d.values() if v and v != 0 and v is not False)
+        return a if score(a) >= score(b) else b
+
+    def _date_close(a: dict, b: dict) -> bool:
+        """True if start_dates are within 2 days of each other."""
+        from datetime import datetime
+        try:
+            da = datetime.strptime(a.get("start_date", "")[:10], "%Y-%m-%d")
+            db = datetime.strptime(b.get("start_date", "")[:10], "%Y-%m-%d")
+            return abs((da - db).days) <= 2
+        except Exception:
+            return False
+
+    # Stage 1: hash-based dedup (existing)
+    all_raw: list[dict] = []
+    seen_hashes: set[str] = set()
     for evs in [serp_evs, tm_evs, eb_evs, phq_evs]:
         for ev in evs:
-            # Support both dict and legacy EventCreate pydantic model
             dh = ev.get("dedup_hash") if isinstance(ev, dict) else getattr(ev, "dedup_hash", "")
-            if dh and dh not in seen:
-                seen.add(dh)
-                new_events.append(ev)
+            if dh and dh not in seen_hashes:
+                seen_hashes.add(dh)
+                all_raw.append(ev if isinstance(ev, dict) else (ev.dict() if hasattr(ev,"dict") else vars(ev)))
+
+    # Stage 2: fuzzy dedup — group by city+year, check name similarity
+    new_events: list[dict] = []
+    for candidate in all_raw:
+        cname = (candidate.get("name") or "").strip()
+        ccity = (candidate.get("city") or "").lower().strip()
+        is_dup = False
+        for i, existing in enumerate(new_events):
+            ename = (existing.get("name") or "").strip()
+            ecity = (existing.get("city") or "").lower().strip()
+            if ccity and ecity and ccity != ecity:
+                continue   # different city — not a duplicate
+            if not _date_close(candidate, existing):
+                continue   # different dates — not a duplicate
+            sim = _name_similarity(cname, ename)
+            if sim >= 0.72:
+                # Same event from different sources — keep the richer record
+                new_events[i] = _richer(candidate, existing)
+                is_dup = True
+                break
+        if not is_dup:
+            new_events.append(candidate)
+
+    logger.info(
+        f"Dedup: {len(all_raw)} raw → {len(new_events)} unique "
+        f"({len(all_raw)-len(new_events)} fuzzy dupes removed)"
+    )
 
     logger.info(
         f"Real-time: {len(new_events)} unique events "
