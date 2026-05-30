@@ -272,24 +272,43 @@ def calculate_meeting_potential(
             "display":      "Insufficient data",
             "conversion_pct": round(conversion * 100, 1),
             "reasoning":    "No attendee data — cannot estimate meetings. " + conv_reason,
+            "confidence_note": "Attendee figures not yet published for this event.",
         }
         confidence = "low"
     else:
+        # Conservative anchor: use 70% of mid as the floor we'll commit to.
+        # High = 1.40× for upside. Never promise the midpoint as a guarantee.
         mid  = max(1, round(reachable_val * conversion))
-        low  = max(0, round(reachable_val * conversion * 0.70))
-        high = round(reachable_val * conversion * 1.40)
+        low  = max(1, round(reachable_val * conversion * 0.60))   # conservative floor
+        high = round(reachable_val * conversion * 1.50)            # optimistic ceiling
+        conv_pct = round(conversion * 100, 1)
+
+        # Confidence note explains the range to the user honestly
+        if diff_tier == "strong" and proof_tier_key in ("strong",):
+            quality_note = "Strong positioning and proven track record — upper range achievable with good prep."
+        elif diff_tier == "weak" or proof_tier_key in ("limited",):
+            quality_note = "Wider range reflects early-stage positioning — outreach quality determines where in range you land."
+        else:
+            quality_note = "Range reflects prep quality. Top end achievable with pre-show outreach starting 4+ weeks out."
+
         meeting_estimate = {
             "low":          low,
             "mid":          mid,
             "high":         high,
-            "display":      f"{low}–{high} meetings" if low != high else f"{mid} meetings",
-            "conversion_pct": round(conversion * 100, 1),
+            "display":      f"{low}–{high} meetings",   # always show range, never single number
+            "midpoint":     mid,
+            "conversion_pct": conv_pct,
             "reasoning":    conv_reason,
+            "confidence_note": quality_note,
+            "range_label":  f"Conservative: {low} · Expected: {mid} · Optimistic: {high}",
         }
 
     # ── 3. Pricing ────────────────────────────────────────────────
+    # Use conservative floor (low) for pricing recommendation — anchor conservatively.
+    # Better to under-promise and over-deliver than the reverse.
+    conservative_meetings = meeting_estimate.get("low") or meeting_estimate.get("mid") or 0
     mid_meetings = meeting_estimate.get("mid") or 0
-    pricing = _get_pricing(mid_meetings, confidence)
+    pricing = _get_pricing(conservative_meetings, confidence)
 
     # ── 4. ROI / break-even ───────────────────────────────────────
     deal_cat     = (getattr(profile, "avg_deal_size_category", None) or "medium").lower()
@@ -314,11 +333,12 @@ def calculate_meeting_potential(
             "break_even_deals":  break_even_deals,
             "break_even_pct":    break_even_pct,
             "roi_one_deal_pct":  roi_one_deal_pct,
+            "meeting_range":    meeting_estimate.get("display", f"~{mid_meetings}"),
             "summary": (
-                f"Package: ₹{pkg_l}L | Meetings: {mid_meetings} | "
-                f"Cost/meeting: ₹{cost_per_meeting}L | "
+                f"Package: ₹{pkg_l}L | Est. {meeting_estimate.get('display', str(mid_meetings))} | "
+                f"Cost/meeting (mid): ₹{cost_per_meeting}L | "
                 f"Break-even: {break_even_deals} deal{'s' if break_even_deals>1 else ''} "
-                f"({break_even_pct}% conversion needed)"
+                f"({break_even_pct}% close rate)"
             ),
         }
     elif avg_deal_inr > 0 and mid_meetings > 0:
