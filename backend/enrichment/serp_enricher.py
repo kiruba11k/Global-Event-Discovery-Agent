@@ -725,6 +725,109 @@ async def enrich_event(
 
 # ── Batch enricher ─────────────────────────────────────────────────
 
+
+async def enrich_sponsors(
+    event_name:  str,
+    year:        str,
+    serpapi_key: str,
+    groq_client: object = None,
+) -> str:
+    """
+    Tier-2 improvement 3.9: Secondary SerpAPI search specifically for
+    exhibitor/sponsor lists for events where sponsors field is empty.
+
+    Query strategy: "{event_name} {year} exhibitors OR sponsors OR 'exhibitor list'"
+    Groq extracts only company names explicitly listed as exhibitors/sponsors.
+
+    Returns: comma-separated sponsor string, or "" if nothing found.
+    Anti-hallucination: Groq must quote exact company names from the source text.
+    """
+    if not serpapi_key or not _SERPAPI_OK:
+        return ""
+
+    clean_name = _clean_event_name(event_name)
+    cache_key  = f"sponsors|{clean_name}|{year}"
+    if cache_key in _cache:
+        return _cache[cache_key].get("sponsors", "")
+
+    query = f'{clean_name} {year} exhibitors sponsors "exhibitor list" "sponsor list"'
+
+    try:
+        client = _serpapi.Client(api_key=serpapi_key)
+        raw = await asyncio.to_thread(
+            client.search,
+            {"engine": "google_ai_mode", "q": query},
+        )
+    except Exception as exc:
+        logger.debug(f"SerpAPI sponsor search error \'{clean_name[:40]}\': {exc}")
+        return ""
+
+    blocks  = raw.get("text_blocks", []) or []
+    organic = raw.get("organic_results", []) or []
+    ai_text = _flatten_blocks(blocks)
+    org_text = _organic_text(organic)
+    full_text = f"{ai_text} {org_text}".strip()
+
+    if len(full_text) < 20:
+        return ""
+
+    # Groq extraction: only real company names from source text
+    if not groq_client:
+        _cache[cache_key] = {"sponsors": ""}
+        return ""
+
+    SPONSOR_SYSTEM = """You are extracting company names from event exhibitor/sponsor text.
+
+RULES:
+1. Return ONLY company names that are EXPLICITLY listed as exhibitors, sponsors,
+   or participants in SOURCE_TEXT.
+2. Do NOT include: event organizers, speakers, topics, venue names.
+3. Do NOT invent or guess company names.
+4. If no company names are explicitly listed, return an empty list.
+5. Return ONLY JSON: {"companies": ["Company A", "Company B", ...]}
+   Maximum 20 companies. Empty array if none found."""
+
+    try:
+        import json
+        from groq import AsyncGroq as _AG
+        import os
+        _gc = groq_client if hasattr(groq_client, "chat") else _AG(
+            api_key=os.environ.get("GROQ_API_KEY", "")
+        )
+        completion = await _gc.chat.completions.create(
+            model       = "llama-3.3-70b-versatile",
+            temperature = 0.0,
+            max_tokens  = 300,
+            messages    = [
+                {"role": "system", "content": SPONSOR_SYSTEM},
+                {"role": "user", "content":
+                 f"EVENT: {event_name} {year}\n\nSOURCE_TEXT:\n{full_text[:2000]}"},
+            ],
+        )
+        raw_json = (completion.choices[0].message.content or "").strip()
+        raw_json = raw_json.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw_json)
+        companies = parsed.get("companies", [])
+        if not isinstance(companies, list):
+            companies = []
+        # Validate: reject single-character entries, URLs, numbers
+        valid = [
+            c.strip() for c in companies
+            if isinstance(c, str) and len(c.strip()) > 2
+            and not c.strip().startswith("http")
+            and not c.strip().isdigit()
+        ][:20]
+        result_str = ", ".join(valid) if valid else ""
+        _cache[cache_key] = {"sponsors": result_str}
+        if result_str:
+            logger.info(f"Sponsor enrichment \'{clean_name[:40]}\': {len(valid)} companies")
+        return result_str
+    except Exception as exc:
+        logger.debug(f"Groq sponsor extraction error \'{clean_name[:40]}\': {exc}")
+        _cache[cache_key] = {"sponsors": ""}
+        return ""
+
+
 async def enrich_events_batch(
     events:      list,
     serpapi_key: str,
@@ -809,6 +912,28 @@ async def enrich_events_batch(
         )
         if data:
             enriched_map[event.id] = data
+
+        # ── Sponsor enrichment (3.9): secondary search when sponsors empty ──
+        # Only runs if event has no sponsor data AND groq_client available.
+        # Counts against the same SerpAPI quota — skip if already at limit.
+        if (groq_client and serpapi_key and
+                not (event.sponsors or "").strip() and
+                len(enriched_map) <= max_enrich):
+            try:
+                sponsors_str = await enrich_sponsors(
+                    event_name  = event.name,
+                    year        = year,
+                    serpapi_key = serpapi_key,
+                    groq_client = groq_client,
+                )
+                if sponsors_str and event.id in enriched_map:
+                    enriched_map[event.id]["sponsors"] = sponsors_str
+                elif sponsors_str:
+                    enriched_map[event.id] = {"sponsors": sponsors_str}
+            except Exception as exc:
+                logger.debug(f"Sponsor enrichment error: {exc}")
+            await asyncio.sleep(0.3)
+
         # Small delay between calls to be polite to the API
         await asyncio.sleep(0.3)
 
