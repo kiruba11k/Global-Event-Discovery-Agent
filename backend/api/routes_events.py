@@ -41,6 +41,10 @@ from models.icp_profile import CompanyContext, SearchRequest, SearchResponse
 from relevance.groq_ranker import rank_with_groq
 from relevance.scorer import score_candidates
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
+from relevance.profile_store import (
+    get_recall_boosts, record_search_results,
+    profile_core_hash, profile_window_hash,
+)
 from relevance.meeting_calculator import calculate_meeting_potential
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
@@ -284,6 +288,22 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             logger.warning(f"Semantic search: {exc}")
 
     # ── Step 6: Rule-based scoring ───────────────────────────────────
+    # ── Profile recall: pre-boost known high-converting events ─────────
+    # Checks profile_feedback table for events that performed well for this
+    # ICP (or similar ICPs). Boost multiplier applied to cosine_scores dict
+    # so high-recall events get a head-start in scoring.
+    # Handles expiry: past events ignored, stale windows get smaller boost.
+    recall_boosts: dict[str, float] = {}
+    try:
+        recall_boosts = await get_recall_boosts(db, profile)
+        if recall_boosts:
+            # Merge recall boosts into cosine_scores (additive boost)
+            for eid, mult in recall_boosts.items():
+                existing = cosine_scores.get(eid, 0.0)
+                cosine_scores[eid] = min(existing * mult + (mult - 1.0) * 0.3, 1.0)
+    except Exception as _e:
+        logger.debug(f"Recall boost error: {_e}")
+
     scored     = score_candidates(candidates, profile, cosine_scores)
     top        = scored[:settings.top_k_for_llm]
     top_events = [e for e, _, _, _ in top]
@@ -407,6 +427,18 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     # Attach universe_stats as extra field (SearchResponse is a BaseModel)
     resp_dict = resp.model_dump()
     resp_dict["universe_stats"] = universe
+    resp_dict["profile_hash"]   = profile_core_hash(profile)
+
+    # ── Record search results for future recall (async, non-blocking) ─
+    # Stores top events so future similar searches benefit from this data.
+    try:
+        import asyncio as _asyncio
+        _asyncio.ensure_future(
+            record_search_results(db, profile, serialised_events[:20])
+        )
+    except Exception as _e:
+        logger.debug(f"Record search results error: {_e}")
+
     return resp_dict
 
 
