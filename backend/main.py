@@ -21,6 +21,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"Database URL : {str(settings.database_url)[:60]}...")
     logger.info("=" * 60)
     await init_db()
+    # Init profile_feedback table (separate from events schema)
+    try:
+        from relevance.profile_store import init_profile_feedback_table
+        from db.database import engine as _engine
+        await init_profile_feedback_table(_engine)
+    except Exception as _e:
+        logger.warning(f"ProfileStore init skipped: {_e}")
     yield
     logger.info("Event Intelligence Agent — shutting down")
 
