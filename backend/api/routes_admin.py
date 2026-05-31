@@ -34,7 +34,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from loguru import logger
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,12 +55,32 @@ _MAX_LOG = 20
 # Auth  (reuses existing seed_admin_token from Settings)
 # ─────────────────────────────────────────────────────────────────
 
-def _check_admin(x_admin_key: str = Header(default="")) -> None:
+def _check_admin(request: Request) -> None:
+    """
+    Reads X-Admin-Key from request headers.
+    Tries multiple casings because Render/nginx may normalise header names.
+    Token is settings.seed_admin_token from .env / Render env vars.
+    """
     token = settings.seed_admin_token or ""
     if not token:
-        raise HTTPException(503, "seed_admin_token not configured — set it in .env / Render env vars")
-    if x_admin_key != token:
-        raise HTTPException(401, "Invalid or missing X-Admin-Key header")
+        raise HTTPException(503,
+            detail="seed_admin_token not set. Add SEED_ADMIN_TOKEN=yourvalue in Render → Environment Variables.")
+
+    # Try all common header name variants (proxies normalise differently)
+    incoming = (
+        request.headers.get("x-admin-key")
+        or request.headers.get("X-Admin-Key")
+        or request.headers.get("x_admin_key")
+        or request.headers.get("X_Admin_Key")
+        or ""
+    ).strip()
+
+    if not incoming:
+        raise HTTPException(401,
+            detail="Missing X-Admin-Key header. Add header: X-Admin-Key: <your seed_admin_token>")
+    if incoming != token.strip():
+        raise HTTPException(401,
+            detail="Invalid X-Admin-Key. Check seed_admin_token value in Render env vars.")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -698,6 +718,55 @@ async def ingest_predicthq(
 @router.get("/ingest/status", summary="Last ingestion runs summary")
 async def ingest_status(_auth: None = Depends(_check_admin)):
     return {"runs": _run_log, "total_runs": len(_run_log)}
+
+
+@router.get("/profile-store/stats", summary="Profile feedback store statistics")
+async def profile_store_stats(
+    db: AsyncSession = Depends(get_db),
+    _auth: None      = Depends(_check_admin),
+):
+    """Total rows, unique profiles, top events by recall frequency."""
+    try:
+        from relevance.profile_store import ProfileFeedback
+        total_r  = await db.execute(select(func.count()).select_from(ProfileFeedback))
+        total    = total_r.scalar() or 0
+        unique_p = await db.execute(
+            select(func.count(ProfileFeedback.profile_hash.distinct()))
+        )
+        unique_profiles = unique_p.scalar() or 0
+        # Top 10 events by how many distinct profiles have seen them
+        top_r = await db.execute(
+            select(ProfileFeedback.event_name, func.count().label("n"))
+            .group_by(ProfileFeedback.event_id, ProfileFeedback.event_name)
+            .order_by(func.count().desc())
+            .limit(10)
+        )
+        top_events = [{"name": r.event_name, "count": r.n} for r in top_r]
+        return {
+            "total_feedback_rows": total,
+            "unique_profiles":     unique_profiles,
+            "top_events":          top_events,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@router.post("/profile-store/cleanup", summary="Delete expired profile feedback rows")
+async def profile_store_cleanup(
+    keep_days: int    = Form(default=365, description="Keep rows newer than this many days"),
+    db: AsyncSession  = Depends(get_db),
+    _auth: None       = Depends(_check_admin),
+):
+    """
+    Deletes feedback rows where:
+    - search_date is older than keep_days ago AND
+    - event_start_date has already passed.
+
+    Keeps: recent rows + future events regardless of age.
+    """
+    from relevance.profile_store import cleanup_expired_feedback
+    deleted = await cleanup_expired_feedback(db, keep_days=keep_days)
+    return {"deleted_rows": deleted, "keep_days": keep_days}
 
 
 @router.get("/db/count", summary="Event counts in DB")
