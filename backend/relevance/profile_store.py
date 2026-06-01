@@ -231,9 +231,11 @@ async def record_search_results(
         # Bulk upsert via INSERT … ON CONFLICT UPDATE
         from sqlalchemy.dialects.postgresql import insert as pg_insert
         from sqlalchemy.dialects.sqlite     import insert as sqlite_insert
-        from db.database import get_db_dialect  # returns "postgresql" or "sqlite"
+        from config import get_settings as _gs
 
-        dialect = get_db_dialect()
+        # Detect dialect from DATABASE_URL — no separate helper needed
+        _db_url = str(_gs().database_url).lower()
+        dialect = "postgresql" if "postgresql" in _db_url or "asyncpg" in _db_url else "sqlite"
         _insert = pg_insert if dialect == "postgresql" else sqlite_insert
 
         rows = []
