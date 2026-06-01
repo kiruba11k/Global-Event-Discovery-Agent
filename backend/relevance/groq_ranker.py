@@ -705,7 +705,7 @@ async def rank_with_groq(
                 VALIDATION_SYS,
                 (f"SOURCE DATA:\n{json.dumps(events_dicts, indent=2)}\n\n"
                  f"VERDICTS:\n{json.dumps(primary_list, indent=2)}"),
-                timeout=max(10, settings.groq_timeout_seconds // 2),
+                timeout=settings.groq_timeout_seconds,   # full timeout — validator does substantial cross-checking
                 label="validator",
             )
             if val_raw:
