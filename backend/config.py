@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     groq_temperature: float = 0.1
     groq_max_tokens: int = 4096
-    groq_timeout_seconds: int = 25
+    groq_timeout_seconds: int = 45   # validator needs full time; was 25 which caused timeouts
 
     # ── Embedding model ───────────────────────────
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"
 
-        # ── Fit scorer tuning (configurable via .env / Render env vars) ──
+    # ── Fit scorer tuning (configurable via .env / Render env vars) ──
     # Fraction of B2B show attendees who are decision-makers (not vendors/booth staff)
     dm_ratio:             float = 0.35
     # ±% confidence interval around ICP estimate (shown as range in UI)
