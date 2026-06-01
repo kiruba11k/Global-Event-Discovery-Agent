@@ -1,8 +1,8 @@
 /*
-  ICPForm.jsx  —  Combined ICP form (v4 — hero-embedded spec)
+  ICPForm.jsx   -   Combined ICP form (v4  -  hero-embedded spec)
 
   New prop:
-    heroMode  bool  — removes the card wrapper + header so fields render
+    heroMode  bool   -  removes the card wrapper + header so fields render
                       flush inside the hero section. The CTA button text
                       becomes "See your meeting forecast →" and the submit
                       label changes to match the hero copy.
@@ -62,7 +62,7 @@ const DEAL_BRACKETS = [
   },
   {
     value: 'medium',
-    label: '$10K – $50K',
+    label: '$10K  -  $50K',
     sublabel: 'Mid-market · SMB SaaS',
     color: '#0F6E56',
     bg: 'rgba(29,158,117,0.06)',
@@ -71,7 +71,7 @@ const DEAL_BRACKETS = [
   },
   {
     value: 'high',
-    label: '$50K – $100K',
+    label: '$50K  -  $100K',
     sublabel: 'Sweet spot for trade-show ROI',
     color: '#1D9E75',
     bg: 'rgba(29,158,117,0.09)',
@@ -81,7 +81,7 @@ const DEAL_BRACKETS = [
   },
   {
     value: 'enterprise',
-    label: '$100K – $500K',
+    label: '$100K  -  $500K',
     sublabel: 'Enterprise · multi-stakeholder',
     color: '#0369a1',
     bg: 'rgba(3,105,161,0.06)',
@@ -173,7 +173,7 @@ export default function ICPForm({
   const [mounted,  setMounted]  = useState(false)
 
   const [companyName,    setCompanyName]    = useState(companyData?.company_name || '')
-  const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1–10
+  const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
   const [clientRange,    setClientRange]    = useState('')     // client count range
   const [eventNeeds,  setEventNeeds]  = useState('')
   const [salesMotion, setSalesMotion] = useState('')
@@ -347,7 +347,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           Typical deal value<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint">Per deal — used to calculate meeting package pricing</p>
+        <p className="icp-hint">Per deal  -  used to calculate meeting package pricing</p>
         <div className={heroMode ? 'icp-deal-grid icp-deal-grid--hero' : 'icp-deal-grid'} role="radiogroup">
           {DEAL_BRACKETS.map(b => (
             <button
@@ -393,10 +393,10 @@ export default function ICPForm({
         </div>
         <div className="icp-diff-label">
           {diffScore <= 4
-            ? <span className="icp-diff-text icp-diff-text--low">Hard to position — needs tighter ICP and sharper messaging</span>
+            ? <span className="icp-diff-text icp-diff-text--low">Hard to position  -  needs tighter ICP and sharper messaging</span>
             : diffScore <= 7
-            ? <span className="icp-diff-text icp-diff-text--mid">Standard effort — clear but needs stronger angle</span>
-            : <span className="icp-diff-text icp-diff-text--high">Easy to position — high meeting confidence</span>
+            ? <span className="icp-diff-text icp-diff-text--mid">Standard effort  -  clear but needs stronger angle</span>
+            : <span className="icp-diff-text icp-diff-text--high">Easy to position  -  high meeting confidence</span>
           }
         </div>
       </div>
@@ -410,11 +410,11 @@ export default function ICPForm({
         <p className="icp-hint">Helps us calibrate proof and credibility for outreach</p>
         <div className="icp-client-grid" role="radiogroup" aria-label="Client count range">
           {[
-            { v:'0-10',   l:'0 – 10',     s:'Early stage — niche ICP focus needed' },
-            { v:'11-50',  l:'11 – 50',    s:'Early traction — usable credibility'  },
-            { v:'51-200', l:'51 – 200',   s:'Proven — solid proof base'            },
-            { v:'201-500',l:'201 – 500',  s:'Strong — enterprise-ready'            },
-            { v:'500+',   l:'500+',       s:'Established — maximum credibility'    },
+            { v:'0-10',   l:'0  -  10',     s:'Early stage  -  niche ICP focus needed' },
+            { v:'11-50',  l:'11  -  50',    s:'Early traction  -  usable credibility'  },
+            { v:'51-200', l:'51  -  200',   s:'Proven  -  solid proof base'            },
+            { v:'201-500',l:'201  -  500',  s:'Strong  -  enterprise-ready'            },
+            { v:'500+',   l:'500+',       s:'Established  -  maximum credibility'    },
           ].map(opt => (
             <button
               key={opt.v}
@@ -482,7 +482,7 @@ export default function ICPForm({
         ? <><span className="icp-spinner" aria-hidden="true" />Ranking your shows…</>
         : heroMode
           ? <>See your meeting forecast →</>
-          : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Rank my shows — it's free</>
+          : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Rank my shows  -  it's free</>
       }
     </button>
   )
@@ -494,7 +494,7 @@ export default function ICPForm({
         <div className="icp-upgrade-icon" aria-hidden="true">✦</div>
         <div>
           <div className="icp-upgrade-title">Want a deeper analysis?</div>
-          <div className="icp-upgrade-sub">Upload your company deck and tell us about your specific event needs — we'll personalise this further.</div>
+          <div className="icp-upgrade-sub">Upload your company deck and tell us about your specific event needs  -  we'll personalise this further.</div>
         </div>
         <button className="icp-upgrade-toggle" onClick={() => setUpgradeOpen(o => !o)} type="button">
           {upgradeOpen ? 'Close' : 'Get started →'}
