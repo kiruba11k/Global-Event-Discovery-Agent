@@ -54,9 +54,10 @@ router   = APIRouter()
 settings = get_settings()
 
 _last_results: dict  = {}
-RESULT_LIMIT          = 7
-GO_RESULT_COUNT       = 4
+RESULT_LIMIT          = 6
+GO_RESULT_COUNT       = 3
 CONSIDER_RESULT_COUNT = 3
+
 
 _seed_10times_status: dict           = {"running": False, "last_result": None, "last_error": None}
 _seed_conferencealerts_status: dict  = {"running": False, "last_result": None, "last_error": None}
@@ -86,12 +87,31 @@ def _within_dates(event, date_from, date_to) -> bool:
 
 
 def _apply_result_mix(ranked: Iterable) -> list:
+    """
+    Always return exactly RESULT_LIMIT (6) events.
+    Priority: GO events first, then CONSIDER, then best SKIP (by relevance_score).
+    """
     all_ranked      = list(ranked)
     go_events       = [r for r in all_ranked if r.fit_verdict == "GO"]
     consider_events = [r for r in all_ranked if r.fit_verdict == "CONSIDER"]
-    selected_go     = go_events[:GO_RESULT_COUNT]
-    remaining       = RESULT_LIMIT - len(selected_go)
-    return selected_go + consider_events[:remaining]
+    skip_events     = [r for r in all_ranked if r.fit_verdict == "SKIP"]
+
+    selected_go  = go_events[:GO_RESULT_COUNT]
+    remaining    = RESULT_LIMIT - len(selected_go)
+    selected_con = consider_events[:remaining]
+    remaining    = RESULT_LIMIT - len(selected_go) - len(selected_con)
+
+    # Fill remaining slots with best-scored SKIP events so we always return 6
+    selected_skip = skip_events[:remaining] if remaining > 0 else []
+
+    result = selected_go + selected_con + selected_skip
+    # Final safety: if still short, append any remaining events
+    if len(result) < RESULT_LIMIT:
+        used_ids = {r.id for r in result}
+        extras   = [r for r in all_ranked if r.id not in used_ids]
+        result  += extras[:RESULT_LIMIT - len(result)]
+    return result[:RESULT_LIMIT]
+
 
 
 # ── CSV helpers ────────────────────────────────────────────────────
@@ -318,49 +338,95 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
     )
 
-    # ── Step 7: SerpAPI enrichment ────────────────────────────────────
+    # Build shared Groq async client (reused for both enrichment and ranking)
+    _groq_client_async = None
+    try:
+        from groq import AsyncGroq as _AsyncGroq
+        import os as _os
+        _groq_key = getattr(settings, "groq_api_key", "") or _os.environ.get("GROQ_API_KEY", "")
+        if _groq_key:
+            _groq_client_async = _AsyncGroq(api_key=_groq_key)
+    except Exception:
+        pass
+
+    # ── Step 7: Groq LLM ranking + cross-validation (no enrichment yet) ─
+    # Run ranking first on raw DB data to select the 6 final events,
+    # then enrich only those 6 — avoids wasting SerpAPI quota on events
+    # that won't be shown.
+    ranked = await rank_with_groq(
+        events=top_events, profile=profile,
+        pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
+        company_ctx=company_ctx, enrichments={},
+        deal_size_category=deal_size,
+    )
+    ranked.sort(key=lambda r: -r.relevance_score)
+
+    # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
+    ranked = _apply_result_mix(ranked)
+    _last_results[profile_id] = ranked
+
+    # ── Step 9: SerpAPI enrichment — only for the 6 final events ──────
+    # Cost optimisation: skip events already enriched in DB (serpapi_enriched=True
+    # with valid attendees/date). Enrich at most 6 events = 6 SerpAPI calls.
+    final_event_ids = {r.id for r in ranked}
+    final_top_events = [e for e in top_events if e.id in final_event_ids]
+
     enrichments: dict = {}
-    if settings.serpapi_key:
+    if settings.serpapi_key and final_top_events:
         try:
             from enrichment.serp_enricher import enrich_events_batch
-            # Build groq_client for Groq-validated enrichment (anti-hallucination)
-            _groq_client_for_enrich = None
-            try:
-                from groq import AsyncGroq as _AsyncGroq
-                import os
-                _groq_key = getattr(settings, "groq_api_key", "") or os.environ.get("GROQ_API_KEY", "")
-                if _groq_key:
-                    _groq_client_for_enrich = _AsyncGroq(api_key=_groq_key)
-            except Exception:
-                pass
+            from db.crud import update_event_enrichment
             enrichments = await enrich_events_batch(
-                    events      = top_events,
-                    serpapi_key = settings.serpapi_key,
-                    groq_client = _groq_client_for_enrich,
-                    max_enrich  = min(len(top_events), 10),
+                events      = final_top_events,
+                serpapi_key = settings.serpapi_key,
+                groq_client = _groq_client_async,
+                max_enrich  = len(final_top_events),  # exactly the 6 shown events
             )
             if enrichments:
                 logger.info(
                     f"Enriched {len(enrichments)} events — "
                     f"att={sum(1 for d in enrichments.values() if d.get('est_attendees'))} "
+                    f"date={sum(1 for d in enrichments.values() if d.get('start_date'))} "
                     f"price={sum(1 for d in enrichments.values() if d.get('price_description'))} "
                     f"link={sum(1 for d in enrichments.values() if d.get('event_link'))}"
                 )
+                # Persist enriched data back to DB (dates, attendees, registration URL)
+                import asyncio as _aio
+                async def _persist_enrichments():
+                    for eid, edata in enrichments.items():
+                        db_updates: dict = {}
+                        if edata.get("est_attendees"):
+                            db_updates["est_attendees"] = edata["est_attendees"]
+                        if edata.get("start_date"):
+                            db_updates["start_date"] = edata["start_date"]
+                        if edata.get("end_date"):
+                            db_updates["end_date"] = edata["end_date"]
+                        if edata.get("registration_url") or edata.get("website"):
+                            url = edata.get("registration_url") or edata.get("website", "")
+                            db_updates["registration_url"] = url
+                            db_updates["website"]          = url
+                        if edata.get("price_description"):
+                            db_updates["price_description"] = edata["price_description"]
+                        if edata.get("audience_personas"):
+                            db_updates["audience_personas"] = edata["audience_personas"]
+                        if db_updates:
+                            await update_event_enrichment(db, eid, db_updates)
+                _aio.ensure_future(_persist_enrichments())
         except Exception as exc:
             logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
 
-    # ── Step 8: Groq LLM ranking + cross-validation ──────────────────
-    ranked = await rank_with_groq(
-        events=top_events, profile=profile,
-        pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
-        company_ctx=company_ctx, enrichments=enrichments,
-        deal_size_category=deal_size,
-    )
-    ranked.sort(key=lambda r: -r.relevance_score)
+    # Re-rank the final 6 with enrichment data now available
+    if enrichments:
+        ranked = await rank_with_groq(
+            events=final_top_events, profile=profile,
+            pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
+            company_ctx=company_ctx, enrichments=enrichments,
+            deal_size_category=deal_size,
+        )
+        ranked.sort(key=lambda r: -r.relevance_score)
+        ranked = ranked[:RESULT_LIMIT]
+        _last_results[profile_id] = ranked
 
-    # ── Step 9: Enforce 4 GO + 3 CONSIDER (kept for backward compat) ─
-    ranked = _apply_result_mix(ranked)
-    _last_results[profile_id] = ranked
 
     # ── Step 10: Calculate 5-factor fit scores + ICP counts ──────────
     # Attach fit_grade (A+/A/B+/B/C), icp_count, and universe_stats
