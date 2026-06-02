@@ -104,20 +104,182 @@ function parseBuyerText(text) {
   const t = text.toLowerCase()
   const industries = [], personas = []
   const industryMap = [
-    [['fintech','finance','banking','payment','insurance'],           'Fintech'],
-    [['cloud','saas','aws','azure','paas'],                          'Cloud Computing'],
-    [['ai','artificial intelligence','machine learning','data science'],'AI / Machine Learning'],
-    [['cyber','security','infosec','zero trust'],                    'Cybersecurity'],
-    [['manufactur','industrial','factory','automation','cnc'],       'Manufacturing'],
-    [['logistic','supply chain','freight','warehouse','procurement'], 'Logistics / Supply Chain'],
-    [['health','medical','medtech','pharma','hospital','biotech'],   'Healthcare / Medtech'],
-    [['retail','ecommerce','commerce','fmcg'],                       'Retail / Ecommerce'],
-    [['energy','renewable','solar','wind','oil','gas'],              'Energy / Cleantech'],
-    [['hr','talent','workforce','people ops','recruitment'],         'HR Tech'],
-    [['marketing','martech','adtech','demand gen'],                  'Marketing / Adtech'],
-    [['real estate','proptech','property','construction'],           'Real Estate / PropTech'],
-    [['telecom','5g','network','connectivity'],                      'Telecommunications'],
-    [['tech','software','digital','it '],                            'Technology'],
+    // Finance / Fintech — all stems including "financ", "financier", "fiscal"
+    [['fintech','finance','financ','financial','fiscal','banking','bank','payment','pay','insurance',
+      'insur','insurtech','wealth','invest','capital market','regtech','blockchain','crypto',
+      'lending','neobank','open banking','treasury','accounting','audit','fund','hedge fund',
+      'private equity','asset management','wealthtech'],          'Fintech'],
+    // Cloud / SaaS
+    [['cloud','saas','aws','azure','gcp','paas','iaas','data center','hosting','virtualiz',
+      'cloud platform','cloud service','managed service','hybrid cloud'],
+                                                                  'Cloud Computing'],
+    // AI / ML / Data
+    [['ai','artificial intelligence','machine learning','data science','deep learning',
+      'generative ai','llm','nlp','computer vision','predictive','analytics','big data',
+      'data engineer','data platform','business intelligence','data analytics','ml'],
+                                                                  'AI / Machine Learning'],
+    // Cybersecurity
+    [['cyber','security','infosec','zero trust','siem','endpoint','vulnerability',
+      'identity management','privileged access','data protection','gdpr','compliance',
+      'network security','soc analyst','penetration testing','threat'],
+                                                                  'Cybersecurity'],
+    // Manufacturing / Industrial
+    [['manufactur','industrial','factory','automation','cnc','robotics','machiner',
+      'welding','casting','forging','sheet metal','stamping','production','process plant',
+      'heavy industry','industry 4.0','smart manufactur','lean','six sigma',
+      'plant manager','plant engineer','oem','tooling'],          'Manufacturing'],
+    // Logistics / Supply Chain
+    [['logistic','supply chain','freight','warehouse','procurement','sourcing','3pl',
+      'distribution','cargo','shipping','fleet','last mile','intralogistic','cold chain',
+      'transport','fulfillment','inventory management','demand planning'],
+                                                                  'Logistics / Supply Chain'],
+    // Healthcare / Medtech
+    [['health','medical','medtech','pharma','hospital','biotech','clinic','dental',
+      'optical','nursing','life science','diagnostic','telemedicine','digital health',
+      'ehealth','mhealth','health it','drug','laboratory','genomics','radiology',
+      'surgical','implant','in vitro','clinical trial'],          'Healthcare / Medtech'],
+    // Retail / Ecommerce
+    [['retail','ecommerce','e-commerce','commerce','fmcg','cpg','consumer goods',
+      'merchandise','omnichannel','pos','d2c','direct-to-consumer','marketplace',
+      'shopify','amazon seller','online retail','brand','fast fashion'],
+                                                                  'Retail / Ecommerce'],
+    // Energy / Cleantech
+    [['energy','renewable','solar','wind','oil','gas','petroleum','nuclear','power',
+      'electricity','utility','cleantech','green energy','battery','energy storage',
+      'grid','smart grid','sustainability','esg','carbon','net zero','decarboni',
+      'climate','environmental','clean energy','hydro','geothermal'],
+                                                                  'Energy / Cleantech'],
+    // HR Tech
+    [['hr','human resource','talent','workforce','people ops','recruitment','hiring',
+      'payroll','hris','employee experience','talent acquisition','future of work',
+      'learning development','upskill','reskill','succession','compensation',
+      'benefits','diversity','dei','onboarding'],                 'HR Tech'],
+    // Marketing / Adtech
+    [['marketing','martech','adtech','demand gen','advertising','brand','pr ',
+      'digital marketing','seo','content marketing','lead generation','programmatic',
+      'media buy','performance marketing','influencer','growth hacking','crm',
+      'marketing automation','account based marketing','abm'],    'Marketing / Adtech'],
+    // Real Estate / PropTech
+    [['real estate','proptech','property','construction','build','architect','civil',
+      'infrastructure','contractor','land','housing','commercial real estate',
+      'residential','smart building','facility management','fit out','bim'],
+                                                                  'Real Estate / PropTech'],
+    // Telecom
+    [['telecom','5g','network','connectivity','wireless','fibre','broadband','isp',
+      'mobile','carrier','mvno','iot','m2m','edge computing','wi-fi'],
+                                                                  'Telecommunications'],
+    // Technology (broader catch-all)
+    [['tech','software','digital','it ','information technology','platform','enterprise',
+      'digital transformation','b2b software','devops','api','microservice','open source',
+      'low code','no code','integration'],                        'Technology'],
+    // Food & Beverage
+    [['food','beverage','catering','restaurant','hotel','bakery','dairy','meat','seafood',
+      'organic','wine','spirits','beer','nutrition','food processing','food safety',
+      'food tech','food science','agri food'],                    'Food & Beverage'],
+    // Automotive
+    [['automotive','vehicle','car','truck','electric vehicle','ev','mobility','fleet',
+      'auto ','connected vehicle','autonomous','telematics','oem','tier 1',
+      'spare parts','dealership'],                                'Automotive'],
+    // Fashion / Apparel
+    [['fashion','textile','apparel','cloth','fabric','garment','leather','footwear',
+      'luxury','fast fashion','yarn','weaving'],                  'Fashion / Apparel'],
+    // Agriculture / AgriTech
+    [['agriculture','agri','farming','crop','livestock','aquaculture','fishery',
+      'agritech','smart farming','precision agriculture','food production','agro'],
+                                                                  'Agriculture / AgriTech'],
+    // Education / EdTech
+    [['education','edtech','training','learning','university','academic','e-learning',
+      'lms','school','upskill','reskill','corporate training','professional development'],
+                                                                  'Education / EdTech'],
+    // Mining / Resources
+    [['mining','mineral','quarry','ore','coal','metals','extraction','geology','drill'],
+                                                                  'Mining / Resources'],
+    // Government / Public Sector
+    [['government','public sector','smart city','civic','e-government','municipal',
+      'policy','public administration'],                          'Government / Public Sector'],
+    // Defence / Aerospace
+    [['defence','defense','aerospace','military','space','aviation','drone','uav',
+      'satellite','naval'],                                       'Defence / Aerospace'],
+    // Startup / VC
+    [['startup','venture capital','vc ','entrepreneur','innovation','scale-up','seed'],
+                                                                  'Startup / VC'],
+    // Legal Tech
+    [['legal','law','compliance','regulatory','governance','contract','litigation',
+      'legaltech','in-house counsel','gdpr'],                     'Legal Tech'],
+    // Travel / Hospitality
+    [['travel','tourism','airline','destination','mice','ota','hotel','resort'],
+                                                                  'Travel / Hospitality'],
+    // Data & Analytics (separate from AI)
+    [['data analytics','data management','data governance','data quality','master data',
+      'data warehouse','data lake','etl','reporting','visualization','tableau','power bi'],
+                                                                  'Data & Analytics'],
+    // Media / Publishing
+    [['media','publishing','broadcast','content','streaming','news','journalism',
+      'print media','podcast','video production'],                'Media / Publishing'],
+    // Sustainability / ESG
+    [['sustainab','esg','environmental social','corporate responsibility','csr',
+      'green building','circular economy','waste management','water'],
+                                                                  'Sustainability / ESG'],
+  ]
+  const personaMap = [
+    // C-Suite
+    [['cio','chief information officer','head of information','director of information technology',
+      'head of it','it director','group it'],                     'CIO'],
+    [['cto','chief technology officer','head of technology','tech lead',
+      'vp technology','director of technology'],                  'CTO'],
+    [['cdo','chief data officer','head of data','data director','vp data',
+      'chief digital officer','head of digital'],                 'CDO'],
+    [['ciso','chief information security','vp security','head of security',
+      'director of security','head of cybersecurity','security director'],
+                                                                  'CISO'],
+    [['cfo','chief financial officer','finance director','head of finance',
+      'vp finance','director of finance','group cfo','group finance'],
+                                                                  'CFO'],
+    [['coo','chief operating officer','head of operations','vp operations',
+      'director of operations','operations director','head of ops'],
+                                                                  'COO'],
+    [['ceo','chief executive','managing director','president','executive director',
+      'group ceo','md ','chief exec'],                            'CEO'],
+    [['cmo','chief marketing officer','head of marketing','marketing director',
+      'vp marketing','director of marketing','chief brand'],      'CMO'],
+    [['chro','chief human resources','chief people officer','head of hr',
+      'hr director','vp hr','vp people','people director'],       'CHRO'],
+    [['cpo','chief product officer','head of product','vp product',
+      'product director','director of product'],                  'VP Product'],
+    [['cro','chief revenue officer','chief commercial officer','head of revenue',
+      'vp revenue'],                                              'CRO'],
+    // VP / Director level
+    [['vp engineering','head of engineering','director of engineering',
+      'engineering director','svp engineering'],                  'VP Engineering'],
+    [['vp supply chain','head of supply chain','vp logistics','supply chain director',
+      'head of logistics','logistics director','supply chain manager'],
+                                                                  'VP Supply Chain'],
+    [['head of procurement','procurement director','vp procurement',
+      'chief procurement','cpo procurement','sourcing director','category director',
+      'category manager','procurement manager'],                  'Head of Procurement'],
+    [['vp sales','head of sales','sales director','director of sales',
+      'chief sales','revenue director','commercial director'],    'VP Sales'],
+    [['it manager','it director','information technology manager',
+      'systems manager','infrastructure manager','technology manager',
+      'head of infrastructure'],                                  'IT Manager'],
+    [['finance manager','financial controller','finance director',
+      'treasurer','treasury manager','accounting manager','controller'],
+                                                                  'Finance Manager'],
+    // Operational roles
+    [['plant manager','factory manager','production manager','site manager',
+      'operations manager','facility manager','manufacturing manager',
+      'operations director','head of production'],                'Operations Manager'],
+    [['founder','co-founder','owner','managing director','entrepreneur',
+      'managing partner','proprietor'],                           'Founder'],
+    // Functional
+    [['head of growth','growth manager','growth hacker','digital growth'],
+                                                                  'Head of Growth'],
+    [['supply chain manager','logistics manager','procurement manager',
+      'warehouse manager','distribution manager'],                'Supply Chain Manager'],
+    [['data scientist','head of analytics','analytics manager',
+      'business intelligence','bi manager'],                      'Data Scientist / Analytics'],
+    [['project manager','program manager','pmo','project director'],
+                                                                  'Project Manager'],
   ]
   const personaMap = [
     [['cio','chief information officer'],   'CIO'],
@@ -587,7 +749,7 @@ export default function ICPForm({
           </div>
           <div>
             <div className="icp-header-title">Find your events</div>
-            <div className="icp-header-sub">4 fields. 2 minutes. 7 ranked shows.</div>
+            <div className="icp-header-sub">4 fields. 2 minutes. 6 ranked shows.</div>
           </div>
         </div>
         {fields}
