@@ -248,22 +248,33 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
     """
     Given a list of profile industry names, return a deduplicated list of
     search terms (each used in ILIKE) that covers the EventsEye taxonomy.
-    Always includes the original terms as well.
+    Uses prefix-stem matching so "financial" activates "finance" synonyms.
     """
     terms: list[str] = []
     seen:  set[str]  = set()
 
     def _add(t: str):
         t = t.strip().lower()
-        if t and t not in seen:
+        if t and len(t) >= 2 and t not in seen:
             seen.add(t)
             terms.append(t)
 
     for ind in industries:
         _add(ind)  # always include the raw profile value
-        ind_lower = ind.lower()
+        ind_lower = ind.lower().strip()
+        # Generate sub-tokens from the profile value (handles multi-word like "supply chain")
+        ind_tokens = [w for w in ind_lower.replace("/", " ").replace("-", " ").split() if len(w) > 2]
+        for token in ind_tokens:
+            _add(token)
+        # Match taxonomy synonyms by exact key or prefix-stem overlap
         for key, synonyms in _INDUSTRY_SYNONYMS:
-            if key in ind_lower or ind_lower in key:
+            # Check if profile industry activates this synonym group
+            key_match = (
+                key in ind_lower or
+                ind_lower in key or
+                any(t in key or key.startswith(t[:min(len(t), 6)]) for t in ind_tokens if len(t) >= 4)
+            )
+            if key_match:
                 for syn in synonyms:
                     _add(syn)
 
