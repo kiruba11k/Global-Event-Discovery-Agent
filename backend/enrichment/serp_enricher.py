@@ -403,7 +403,11 @@ ABSOLUTE RULES — violating any rule makes your entire response invalid:
    "ticket price X", "costs X", "X to attend", "X per delegate". Never guess free.
 6. For description: copy a VERBATIM sentence from SOURCE_TEXT that describes WHAT
    the event IS about. Do not paraphrase. Do not generate new sentences.
-7. If SOURCE_TEXT is not about EVENT_NAME (different event), return all nulls.
+7. For dates: extract the EXACT start and end dates ONLY if SOURCE_TEXT explicitly
+   states the event dates (e.g. "January 15-17, 2026", "March 5, 2026").
+   Return in YYYY-MM-DD format. Return null if dates are not explicitly stated.
+   The year must be 2025 or later. Do NOT invent or guess dates.
+8. If SOURCE_TEXT is not about EVENT_NAME (different event), return all nulls.
 
 Return ONLY this JSON (no text before or after, no markdown, no code blocks):
 {
@@ -411,9 +415,12 @@ Return ONLY this JSON (no text before or after, no markdown, no code blocks):
   "registration_url": "<verified event URL string or null>",
   "price_description": "<verbatim price string from text or null>",
   "description": "<verbatim sentence from text or null>",
+  "start_date": "<YYYY-MM-DD or null>",
+  "end_date": "<YYYY-MM-DD or null>",
   "confidence": "<high|medium|low — how certain are you this text is about the named event>",
   "evidence": "<quote the exact phrase from SOURCE_TEXT that supports each non-null field>"
 }"""
+
 
 
 async def _groq_validate_enrichment(
@@ -509,6 +516,17 @@ async def _groq_validate_enrichment(
         if desc and isinstance(desc, str) and len(desc) > 40 and desc.lower() != "null":
             result["description"]          = desc[:600]
             result["description_enriched"] = True
+
+        # Date extraction — validate format YYYY-MM-DD and year >= 2025
+        for field in ("start_date", "end_date"):
+            raw_date = parsed.get(field) or ""
+            if raw_date and isinstance(raw_date, str) and raw_date.lower() != "null":
+                raw_date = raw_date.strip()
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", raw_date):
+                    year = int(raw_date[:4])
+                    if year >= 2025:
+                        result[field] = raw_date
+                        logger.debug(f"Groq {field} '{event_name[:40]}': {raw_date}")
 
         result["groq_confidence"] = confidence
         result["groq_evidence"]   = evidence[:300] if evidence else ""
@@ -624,7 +642,7 @@ async def enrich_event(
 
         result: dict = {}
 
-        # ── Groq validation: extract real values from AI Mode text ──
+                # ── Groq validation: extract real values from AI Mode text ──
         # Runs ONLY when groq_client is provided.
         # Strict anti-hallucination: Groq must cite exact source phrases.
         # Groq-extracted values take PRIORITY over regex extraction below.
@@ -643,8 +661,9 @@ async def enrich_event(
                 result["enriched_attendees"] = True
                 logger.info(f"Groq att    '{clean_name[:45]}': {groq_result['est_attendees']:,}")
             if groq_result.get("registration_url"):
-                result["event_link"] = groq_result["registration_url"]
-                result["website"]    = groq_result["registration_url"]
+                result["event_link"]         = groq_result["registration_url"]
+                result["website"]            = groq_result["registration_url"]
+                result["registration_url"]   = groq_result["registration_url"]
                 logger.info(f"Groq link   '{clean_name[:45]}': {groq_result['registration_url'][:60]}")
             if groq_result.get("price_description"):
                 result["price_description"] = groq_result["price_description"]
@@ -653,6 +672,13 @@ async def enrich_event(
             if groq_result.get("description") and need_description:
                 result["description"]          = groq_result["description"]
                 result["description_enriched"] = True
+            # Date fields — Groq-extracted verified dates
+            if groq_result.get("start_date"):
+                result["start_date"]         = groq_result["start_date"]
+                result["date_verified"]      = True
+                logger.info(f"Groq date   '{clean_name[:45]}': {groq_result['start_date']}")
+            if groq_result.get("end_date"):
+                result["end_date"]           = groq_result["end_date"]
             # Record Groq confidence
             result["groq_confidence"] = groq_result.get("groq_confidence", "")
             result["groq_evidence"]   = groq_result.get("groq_evidence", "")
@@ -862,16 +888,18 @@ async def enrich_events_batch(
         #   a) no URL at all
         #   b) it's a venue/blocked domain
         #   c) it's just the organiser's homepage or a shallow generic section
-        #      (e.g. marketingfestival.in/ or peoplematters.in/techhr/)
         need_link = (
             not current_url or
             not current_url.startswith("http") or
             _is_venue_url(current_url) or
             _is_homepage_url(current_url)
         )
+        # Always re-verify dates (web reality may differ from DB)
+        need_date = True
 
-        if any([need_att, need_prc, need_desc, need_link]):
+        if any([need_att, need_prc, need_desc, need_link, need_date]):
             to_enrich.append((event, need_att, need_prc, need_desc, need_link))
+
 
     to_enrich = to_enrich[:max_enrich]
     if not to_enrich:
