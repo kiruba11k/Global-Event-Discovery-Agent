@@ -281,22 +281,7 @@ function parseBuyerText(text) {
     [['project manager','program manager','pmo','project director'],
                                                                   'Project Manager'],
   ]
-  const personaMap = [
-    [['cio','chief information officer'],   'CIO'],
-    [['cto','chief technology officer'],    'CTO'],
-    [['cdo','chief data officer'],          'CDO'],
-    [['ciso','chief information security'], 'CISO'],
-    [['cfo','chief financial officer'],     'CFO'],
-    [['coo','chief operations officer'],    'COO'],
-    [['ceo','chief executive'],             'CEO'],
-    [['cmo','chief marketing'],             'CMO'],
-    [['chro','chief hr'],                   'CHRO'],
-    [['vp engineering'],                    'VP Engineering'],
-    [['vp supply chain','head of supply chain','vp logistics'], 'VP Supply Chain'],
-    [['head of procurement','procurement head'], 'Head of Procurement'],
-    [['plant manager','operations manager'], 'Operations Manager'],
-    [['founder','co-founder'],              'Founder'],
-  ]
+ 
   for (const [kw, ind] of industryMap)
     if (kw.some(k => t.includes(k)) && !industries.includes(ind)) industries.push(ind)
   for (const [kw, per] of personaMap)
