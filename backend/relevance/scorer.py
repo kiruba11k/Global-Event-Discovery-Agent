@@ -66,111 +66,270 @@ RULE_CONSIDER_THRESHOLD = 0.18
 # to look for inside an event's industry_tags string.
 # ══════════════════════════════════════════════════════════════════════
 _PROFILE_TO_EVENTSEYE: dict[str, list[str]] = {
-    # Manufacturing / Industrial
-    "manufacturing":        ["manufactur", "metal work", "mechanical", "industrial", "machiner",
-                             "machine tool", "welding", "casting", "forging", "cnc", "automation",
-                             "robotics", "production", "factory", "stamping", "sheet metal",
-                             "engineering", "material", "alloy", "steel", "aluminium"],
-    "industrial":           ["industrial", "manufactur", "metal", "mechanical", "machiner",
-                             "engineering", "factory"],
-    "engineering":          ["engineering", "manufactur", "metal", "mechanical", "machiner",
-                             "structural", "civil", "aerospace"],
-    # Technology / IT
-    "technology":           ["technolog", "it ", "information technology", "software",
-                             "digital", "compute", "network", "telecom", "electronic",
-                             "semiconductor", "iot", "smart", "multimedia", "cad", "cam"],
-    "information technology": ["information technology", "it ", "software", "digital",
-                                "compute", "network"],
-    "it":                   ["it ", "information technology", "software", "compute", "network",
-                             "digital"],
-    "software":             ["software", "digital", "compute", "it ", "saas", "cloud",
-                             "application"],
-    "ai":                   ["artificial intelligence", "ai", "machine learning", "deep learning",
-                             "data science", "analytics", "automation", "robotics"],
-    "ai / machine learning": ["artificial intelligence", "ai", "machine learning", "analytics",
-                               "data science", "deep learning"],
-    "cloud computing":      ["cloud", "saas", "paas", "iaas", "data center", "hosting",
-                             "virtualisation", "digital transformation"],
-    "cybersecurity":        ["cyber", "security", "infosec", "information security",
-                             "network security", "data protection"],
-    "digital":              ["digital", "technolog", "software", "compute", "internet",
-                             "iot", "smart"],
-    # Finance / Fintech
-    "fintech":              ["fintech", "financial technology", "digital banking", "payment",
-                             "insurtech", "regtech", "blockchain", "cryptocurrency"],
-    "finance":              ["finance", "banking", "financial", "investment", "capital market",
-                             "insurance", "treasury", "fintech", "accounting"],
-    "banking":              ["banking", "finance", "financial", "payment", "fintech"],
-    # Healthcare / Life Sciences
-    "healthcare":           ["healthcare", "health", "medical", "medtech", "pharma",
-                             "biotech", "hospital", "clinical", "dental", "optical",
-                             "nursing", "life science", "diagnostic", "telemedicine"],
-    "medtech":              ["medtech", "medical device", "medical equipment", "diagnostic",
-                             "imaging", "surgical"],
-    "pharma":               ["pharma", "pharmaceutical", "drug", "biotech", "life science",
-                             "clinical", "laboratory"],
-    # Logistics / Supply Chain
-    "logistics":            ["logistic", "supply chain", "transport", "freight", "shipping",
-                             "warehousing", "cargo", "courier", "last mile", "fleet",
-                             "handling", "intralogistic", "distribution", "port"],
-    "supply chain":         ["supply chain", "logistic", "procurement", "sourcing",
-                             "warehousing", "inventory", "distribution"],
-    "transportation":       ["transport", "logistic", "freight", "shipping", "automotive",
-                             "truck", "rail", "aviation", "maritime", "fleet"],
-    # Retail / E-commerce / Consumer
-    "retail":               ["retail", "ecommerce", "consumer", "fmcg", "fashion",
-                             "merchandise", "shopping", "omnichannel", "pos"],
-    "ecommerce":            ["ecommerce", "e-commerce", "online retail", "digital commerce",
-                             "marketplace", "d2c"],
-    "consumer goods":       ["consumer", "fmcg", "household", "appliance", "personal care",
-                             "food", "beverage", "retail"],
-    # Food & Beverage / Hospitality
-    "food & beverage":      ["food processing", "food", "beverage", "catering", "hospitality",
-                             "restaurant", "hotel", "bakery", "dairy", "meat", "seafood",
-                             "organic", "wine", "spirits"],
-    "food":                 ["food processing", "food", "beverage", "catering", "bakery",
-                             "dairy", "seafood", "agri"],
-    "hospitality":          ["hospitality", "catering", "hotel", "restaurant", "food service",
-                             "tourism", "travel"],
-    # Energy / Environment
-    "energy":               ["energy", "oil", "gas", "petroleum", "renewable", "solar",
-                             "wind", "nuclear", "power", "electricity", "utility"],
-    "cleantech":            ["cleantech", "renewable", "solar", "wind", "green energy",
-                             "sustainable", "environmental", "waste", "water treatment"],
-    "sustainability":       ["sustainab", "environmental", "cleantech", "green", "renewable",
-                             "circular economy", "esg", "carbon"],
-    # Real Estate / Construction
-    "construction":         ["construction", "build", "architect", "real estate", "civil",
-                             "infrastructure", "contractor", "property"],
-    "real estate":          ["real estate", "property", "construction", "land", "housing"],
-    # Mining / Resources
-    "mining":               ["mining", "mineral", "quarry", "ore", "coal", "metals",
-                             "extraction", "petroleum"],
-    # Media / Print / Marketing
-    "marketing":            ["marketing", "advertising", "media", "digital marketing",
-                             "martech", "brand", "pr", "communication", "promotion"],
-    "media":                ["media", "publishing", "broadcast", "print", "graphic",
-                             "content", "advertising"],
-    # HR / Education
-    "hr tech":              ["human resource", "hr", "talent", "recruitment", "workforce",
-                             "payroll", "people management", "future of work"],
-    "education":            ["education", "training", "learning", "university", "academic",
-                             "e-learning", "professional development"],
-    # Agriculture
-    "agriculture":          ["agriculture", "agri", "farming", "crop", "livestock",
-                             "aquaculture", "fishery", "agritech"],
-    # Travel / Tourism
-    "travel":               ["travel", "tourism", "hospitality", "airline", "hotel",
-                             "destination", "mice"],
-    # Automotive
-    "automotive":           ["automotive", "vehicle", "car", "truck", "electric vehicle",
-                             "ev", "mobility", "fleet"],
-    # Fashion / Textile
-    "fashion":              ["fashion", "textile", "clothing", "apparel", "fabric",
-                             "garment", "leather", "footwear"],
-    # Printing / Packaging
-    "printing":             ["printing", "packaging", "graphic", "inkjet", "label",
-                             "flexo", "offset"],
+    # ── Manufacturing / Industrial ────────────────────────────────
+    "manufacturing":            ["manufactur", "metal work", "mechanical", "industrial", "machiner",
+                                 "machine tool", "welding", "casting", "forging", "cnc", "automation",
+                                 "robotics", "production", "factory", "stamping", "sheet metal",
+                                 "engineering", "material", "alloy", "steel", "aluminium", "foundry",
+                                 "press", "die cast", "precision engineering", "process equipment"],
+    "industrial":               ["industrial", "manufactur", "metal", "mechanical", "machiner",
+                                 "engineering", "factory", "heavy industry", "process industry",
+                                 "industrial automation", "plant"],
+    "engineering":              ["engineering", "manufactur", "metal", "mechanical", "machiner",
+                                 "structural", "civil", "aerospace", "process engineering",
+                                 "chemical engineering", "electrical engineering"],
+    "industry 4.0":             ["industry 4.0", "industrial iot", "smart manufactur", "digital factory",
+                                 "automation", "robotics", "digital twin", "connected factory"],
+    # ── Technology / IT ──────────────────────────────────────────
+    "technology":               ["technolog", "it ", "information technology", "software",
+                                 "digital", "compute", "network", "telecom", "electronic",
+                                 "semiconductor", "iot", "smart", "multimedia", "cad", "cam",
+                                 "digital transformation", "enterprise tech", "tech"],
+    "information technology":   ["information technology", "it ", "software", "digital",
+                                 "compute", "network", "it service", "it solution"],
+    "it":                       ["it ", "information technology", "software", "compute", "network",
+                                 "digital", "it service", "it infrastructure"],
+    "software":                 ["software", "digital", "compute", "it ", "saas", "cloud",
+                                 "application", "enterprise software", "platform", "b2b software"],
+    "tech":                     ["technolog", "software", "digital", "compute", "iot", "smart",
+                                 "digital transformation", "enterprise tech"],
+    "digital transformation":   ["digital transformation", "digitisation", "digitalisation",
+                                 "technolog", "automation", "cloud", "platform"],
+    # ── AI / Data / Analytics ────────────────────────────────────
+    "ai":                       ["artificial intelligence", "ai", "machine learning", "deep learning",
+                                 "data science", "analytics", "automation", "robotics", "nlp",
+                                 "computer vision", "generative ai", "llm", "predictive"],
+    "ai / machine learning":    ["artificial intelligence", "ai", "machine learning", "analytics",
+                                 "data science", "deep learning", "generative ai", "llm"],
+    "machine learning":         ["machine learning", "deep learning", "artificial intelligence",
+                                 "data science", "analytics", "neural network", "predictive"],
+    "data science":             ["data science", "machine learning", "analytics", "big data",
+                                 "data engineering", "data platform", "business intelligence"],
+    "data & analytics":         ["data", "analytics", "business intelligence", "big data",
+                                 "data science", "data management", "reporting", "visualization"],
+    "cloud computing":          ["cloud", "saas", "paas", "iaas", "data center", "hosting",
+                                 "virtualisation", "cloud platform", "cloud infrastructure",
+                                 "digital transformation", "hybrid cloud"],
+    "cloud":                    ["cloud", "saas", "data center", "hosting", "cloud platform",
+                                 "cloud service", "managed service"],
+    "saas":                     ["saas", "software as a service", "cloud", "b2b software",
+                                 "platform", "subscription software"],
+    "iot":                      ["iot", "internet of things", "connected", "smart device",
+                                 "sensor", "industrial iot", "m2m"],
+    # ── Cybersecurity ────────────────────────────────────────────
+    "cybersecurity":            ["cyber", "security", "infosec", "information security",
+                                 "network security", "data protection", "zero trust",
+                                 "endpoint security", "siem", "soc", "vulnerability",
+                                 "compliance", "identity management", "privileged access"],
+    "information security":     ["information security", "infosec", "cybersecurity", "cyber",
+                                 "data protection", "privacy", "gdpr", "compliance"],
+    "security":                 ["security", "cyber", "information security", "network security",
+                                 "data protection", "infosec", "physical security"],
+    # ── Finance ──────────────────────────────────────────────────
+    "fintech":                  ["fintech", "financial technology", "digital banking", "payment",
+                                 "insurtech", "regtech", "blockchain", "cryptocurrency",
+                                 "open banking", "neobank", "lending tech", "digital finance",
+                                 "embedded finance", "wealthtech"],
+    "finance":                  ["finance", "banking", "financial", "investment", "capital market",
+                                 "insurance", "treasury", "fintech", "accounting", "wealth",
+                                 "asset management", "private equity", "fund", "trading"],
+    "financial":                ["finance", "financial", "banking", "investment", "capital market",
+                                 "insurance", "treasury", "fintech", "accounting"],
+    "financial services":       ["financial service", "finance", "banking", "investment",
+                                 "insurance", "wealth management", "capital market"],
+    "banking":                  ["banking", "finance", "financial", "payment", "fintech",
+                                 "digital banking", "retail banking", "commercial banking"],
+    "insurance":                ["insurance", "insurtech", "risk management", "reinsurance",
+                                 "underwriting", "actuarial", "claims management"],
+    "investment":               ["investment", "capital market", "private equity", "venture capital",
+                                 "asset management", "wealth management", "fund management"],
+    "payments":                 ["payment", "fintech", "digital payment", "transaction",
+                                 "remittance", "card payment", "wallet", "money transfer"],
+    "accounting":               ["accounting", "finance", "audit", "taxation",
+                                 "financial reporting", "bookkeeping", "cpa"],
+    "wealth management":        ["wealth management", "private banking", "asset management",
+                                 "investment advisory", "financial planning"],
+    "capital markets":          ["capital market", "investment banking", "trading", "equities",
+                                 "fixed income", "derivatives", "securities"],
+    # ── Healthcare / Life Sciences ────────────────────────────────
+    "healthcare":               ["healthcare", "health", "medical", "medtech", "pharma",
+                                 "biotech", "hospital", "clinical", "dental", "optical",
+                                 "nursing", "life science", "diagnostic", "telemedicine",
+                                 "digital health", "health it", "ehealth", "mhealth"],
+    "health":                   ["health", "healthcare", "medical", "hospital", "clinical",
+                                 "wellness", "public health", "preventive"],
+    "medtech":                  ["medtech", "medical device", "medical equipment", "diagnostic",
+                                 "imaging", "surgical", "medical technology", "in vitro"],
+    "medical devices":          ["medical device", "medtech", "diagnostic", "surgical",
+                                 "medical equipment", "imaging", "implant"],
+    "pharma":                   ["pharma", "pharmaceutical", "drug", "biotech", "life science",
+                                 "clinical", "laboratory", "clinical trial", "regulatory affairs"],
+    "pharmaceutical":           ["pharmaceutical", "pharma", "drug", "biotech", "life science",
+                                 "clinical trial", "drug discovery", "medicine"],
+    "biotech":                  ["biotech", "life science", "pharmaceutical", "genomics",
+                                 "bioinformatics", "drug discovery", "biology"],
+    "life sciences":            ["life science", "biotech", "pharma", "healthcare",
+                                 "clinical", "genomics", "laboratory"],
+    "digital health":           ["digital health", "health it", "ehealth", "mhealth",
+                                 "telemedicine", "telehealth", "health tech", "medtech"],
+    # ── Logistics / Supply Chain ──────────────────────────────────
+    "logistics":                ["logistic", "supply chain", "transport", "freight", "shipping",
+                                 "warehousing", "cargo", "courier", "last mile", "fleet",
+                                 "handling", "intralogistic", "distribution", "port", "3pl",
+                                 "cold chain", "express delivery", "parcel"],
+    "supply chain":             ["supply chain", "logistic", "procurement", "sourcing",
+                                 "warehousing", "inventory", "distribution", "vendor management",
+                                 "demand planning"],
+    "transportation":           ["transport", "logistic", "freight", "shipping",
+                                 "truck", "rail", "aviation", "maritime", "fleet management"],
+    "procurement":              ["procurement", "supply chain", "sourcing", "purchasing",
+                                 "vendor management", "category management", "strategic sourcing"],
+    "freight":                  ["freight", "logistics", "shipping", "cargo", "transport",
+                                 "forwarding", "air freight", "sea freight"],
+    # ── Retail / E-commerce / Consumer ───────────────────────────
+    "retail":                   ["retail", "ecommerce", "consumer", "fmcg", "fashion",
+                                 "merchandise", "shopping", "omnichannel", "pos",
+                                 "direct-to-consumer", "d2c", "brand", "cpg"],
+    "ecommerce":                ["ecommerce", "e-commerce", "online retail", "digital commerce",
+                                 "marketplace", "d2c", "online shopping"],
+    "consumer goods":           ["consumer", "fmcg", "household", "appliance", "personal care",
+                                 "food", "beverage", "retail", "cpg"],
+    "fmcg":                     ["fmcg", "consumer goods", "cpg", "household", "personal care",
+                                 "food", "beverage"],
+    # ── Food & Beverage / Hospitality ─────────────────────────────
+    "food & beverage":          ["food processing", "food", "beverage", "catering", "hospitality",
+                                 "restaurant", "hotel", "bakery", "dairy", "meat", "seafood",
+                                 "organic", "wine", "spirits", "food safety", "food tech"],
+    "food":                     ["food processing", "food", "beverage", "catering", "bakery",
+                                 "dairy", "seafood", "agri", "food retail", "food service"],
+    "hospitality":              ["hospitality", "catering", "hotel", "restaurant", "food service",
+                                 "tourism", "travel", "mice"],
+    "food tech":                ["food tech", "food processing", "food safety", "agritech",
+                                 "food science", "nutrition", "food innovation"],
+    # ── Energy / Environment ──────────────────────────────────────
+    "energy":                   ["energy", "oil", "gas", "petroleum", "renewable", "solar",
+                                 "wind", "nuclear", "power", "electricity", "utility",
+                                 "energy storage", "battery", "grid", "smart grid"],
+    "cleantech":                ["cleantech", "renewable", "solar", "wind", "green energy",
+                                 "sustainable", "environmental", "waste", "water treatment",
+                                 "clean energy", "green tech"],
+    "sustainability":           ["sustainab", "environmental", "cleantech", "green", "renewable",
+                                 "circular economy", "esg", "carbon", "net zero", "climate",
+                                 "decarbonisation", "green building"],
+    "sustainability / esg":     ["sustainab", "esg", "environmental", "governance", "carbon",
+                                 "climate", "net zero", "corporate responsibility"],
+    "renewable energy":         ["renewable", "solar", "wind", "green energy", "clean energy",
+                                 "hydro", "geothermal", "energy storage", "cleantech"],
+    "oil and gas":              ["oil", "gas", "petroleum", "upstream", "downstream", "midstream",
+                                 "refinery", "drilling", "exploration"],
+    # ── Real Estate / Construction ────────────────────────────────
+    "construction":             ["construction", "build", "architect", "real estate", "civil",
+                                 "infrastructure", "contractor", "property", "build material",
+                                 "housing", "fit out"],
+    "real estate":              ["real estate", "property", "construction", "land", "housing",
+                                 "commercial real estate", "proptech", "facility management"],
+    "real estate / proptech":   ["real estate", "proptech", "property", "construction",
+                                 "smart building", "facility management"],
+    "proptech":                 ["proptech", "real estate", "property technology", "smart building",
+                                 "building management", "facility management"],
+    # ── Mining / Resources ────────────────────────────────────────
+    "mining":                   ["mining", "mineral", "quarry", "ore", "coal", "metals",
+                                 "extraction", "petroleum", "resources", "geology"],
+    "mining / resources":       ["mining", "mineral", "quarry", "ore", "metals",
+                                 "extraction", "resources"],
+    # ── Media / Marketing ────────────────────────────────────────
+    "marketing":                ["marketing", "advertising", "media", "digital marketing",
+                                 "martech", "brand", "pr", "communication", "promotion",
+                                 "content marketing", "demand generation", "lead generation"],
+    "marketing / adtech":       ["marketing", "adtech", "advertising", "digital marketing",
+                                 "martech", "programmatic", "media buying"],
+    "media":                    ["media", "publishing", "broadcast", "print", "graphic",
+                                 "content", "advertising", "news", "streaming"],
+    "advertising":              ["advertising", "marketing", "adtech", "digital advertising",
+                                 "media buying", "programmatic", "brand"],
+    "martech":                  ["martech", "marketing technology", "crm", "marketing automation",
+                                 "analytics", "digital marketing"],
+    # ── HR / People ──────────────────────────────────────────────
+    "hr tech":                  ["human resource", "hr", "talent", "recruitment", "workforce",
+                                 "payroll", "people management", "future of work", "hris",
+                                 "employee experience", "talent acquisition", "hr tech"],
+    "hr":                       ["human resource", "hr ", "talent", "recruitment", "workforce",
+                                 "people management", "employee", "hris"],
+    "human resources":          ["human resource", "hr", "talent management", "recruitment",
+                                 "workforce", "people ops", "payroll"],
+    "talent management":        ["talent", "recruitment", "hr", "workforce", "learning",
+                                 "people development"],
+    # ── Education ────────────────────────────────────────────────
+    "education":                ["education", "training", "learning", "university", "academic",
+                                 "e-learning", "professional development", "edtech", "school",
+                                 "upskilling", "reskilling"],
+    "education / edtech":       ["education", "edtech", "e-learning", "lms", "online learning",
+                                 "academic", "training"],
+    "edtech":                   ["edtech", "education technology", "e-learning", "lms",
+                                 "online learning", "education"],
+    # ── Agriculture ──────────────────────────────────────────────
+    "agriculture":              ["agriculture", "agri", "farming", "crop", "livestock",
+                                 "aquaculture", "fishery", "agritech", "smart farming",
+                                 "precision agriculture"],
+    "agriculture / agritech":   ["agriculture", "agritech", "agri", "farming", "crop",
+                                 "precision agriculture", "smart farming"],
+    # ── Travel / Tourism ─────────────────────────────────────────
+    "travel":                   ["travel", "tourism", "hospitality", "airline", "hotel",
+                                 "destination", "mice", "business travel"],
+    "travel / hospitality":     ["travel", "tourism", "hospitality", "airline", "hotel",
+                                 "destination", "mice"],
+    # ── Automotive ───────────────────────────────────────────────
+    "automotive":               ["automotive", "vehicle", "car", "truck", "electric vehicle",
+                                 "ev", "mobility", "fleet", "auto", "connected vehicle",
+                                 "autonomous vehicle", "telematics"],
+    "electric vehicle":         ["electric vehicle", "ev", "battery", "charging",
+                                 "automotive", "clean transport", "mobility"],
+    # ── Fashion / Textile ────────────────────────────────────────
+    "fashion":                  ["fashion", "textile", "clothing", "apparel", "fabric",
+                                 "garment", "leather", "footwear", "luxury"],
+    "fashion / apparel":        ["fashion", "apparel", "textile", "clothing", "garment",
+                                 "footwear", "luxury"],
+    "textile":                  ["textile", "fabric", "garment", "apparel", "fashion",
+                                 "yarn", "weaving"],
+    # ── Printing / Packaging ─────────────────────────────────────
+    "printing":                 ["printing", "packaging", "graphic", "inkjet", "label",
+                                 "flexo", "offset", "digital print"],
+    "packaging":                ["packaging", "printing", "label", "flexible packaging",
+                                 "rigid packaging"],
+    # ── Telecom ──────────────────────────────────────────────────
+    "telecom":                  ["telecom", "5g", "network", "connectivity", "wireless",
+                                 "fibre", "broadband", "isp", "mobile", "carrier"],
+    "telecommunications":       ["telecom", "telecommunications", "5g", "network", "wireless",
+                                 "mobile", "connectivity"],
+    # ── Legal / Compliance ───────────────────────────────────────
+    "legal tech":               ["legal tech", "legal", "law", "compliance", "regulatory",
+                                 "governance", "contract management", "legaltech"],
+    "legal":                    ["legal", "law", "compliance", "regulatory", "governance",
+                                 "contract", "litigation"],
+    "compliance":               ["compliance", "regulatory", "governance", "audit",
+                                 "risk management", "legal", "gdpr"],
+    # ── Government / Public Sector ───────────────────────────────
+    "government":               ["government", "public sector", "smart city", "civic tech",
+                                 "e-government", "policy", "public administration"],
+    "government / public sector": ["government", "public sector", "municipal", "smart city",
+                                   "public service", "e-government"],
+    "smart city":               ["smart city", "urban", "government", "public sector",
+                                 "infrastructure", "mobility", "civic tech"],
+    # ── Defence / Aerospace ──────────────────────────────────────
+    "defence":                  ["defence", "defense", "aerospace", "military", "security",
+                                 "space", "aviation", "unmanned", "drone", "naval"],
+    "defence / aerospace":      ["defence", "defense", "aerospace", "military", "space",
+                                 "aviation", "drone"],
+    "aerospace":                ["aerospace", "aviation", "space", "defence", "aircraft",
+                                 "satellite", "uav", "drone"],
+    # ── Sports Technology ─────────────────────────────────────────
+    "sports technology":        ["sports technology", "sport", "esports", "fitness",
+                                 "wearable", "sports analytics", "stadium tech"],
+    # ── Business / Professional Services ─────────────────────────
+    "business services":        ["business service", "professional service", "consulting",
+                                 "outsourcing", "bpo", "shared service"],
+    "startup / vc":             ["startup", "venture capital", "vc", "entrepreneur",
+                                 "innovation", "scale-up", "seed funding"],
 }
 
 
@@ -262,9 +421,10 @@ def _word_in_text(word: str, text: str) -> bool:
 
 def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:
     """
-    Score industry match using a two-pass approach:
+    Score industry match using three-pass approach:
     Pass 1: Direct token match between profile industry names and event text
     Pass 2: Taxonomy bridge — map profile industry to EventsEye synonyms
+    Pass 3: Company description / buyer description stem match
     Returns (score 0..0.35, list of matched profile industry values).
     """
     if not profile.target_industries:
@@ -274,11 +434,18 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
     event_text   = _get_event_text(event)
     matched: list[str] = []
 
+    # Build a combined ICP text for pass-3 context matching
+    icp_context = " ".join(filter(None, [
+        (profile.company_description or ""),
+        (getattr(profile, "buyer_description", "") or ""),
+    ])).lower()
+
     for prof_ind in profile.target_industries:
         pi_lower = prof_ind.lower().strip()
         already  = False
 
-        # Pass 1: direct word match in event text
+        # Pass 1: direct word / stem match in event text
+        # Use all meaningful sub-tokens including partial stems
         pi_words = [w for w in re.split(r"[\s/,\-&]+", pi_lower) if len(w) > 2]
         if any(_word_in_text(w, event_text) for w in pi_words):
             matched.append(prof_ind)
@@ -287,20 +454,45 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
         if already:
             continue
 
-        # Pass 2: taxonomy bridge
+        # Pass 1b: prefix/stem match (e.g. "financial" matches "finance")
+        for w in pi_words:
+            stem = w[:min(len(w), 6)]  # 6-char prefix stem
+            if len(stem) >= 4 and stem in event_text:
+                matched.append(prof_ind)
+                already = True
+                break
+
+        if already:
+            continue
+
+        # Pass 2: taxonomy bridge — profile industry key → EventsEye synonyms
         for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
-            # Does this profile industry activate this taxonomy key?
-            key_words = key.split()
-            if not all(_word_in_text(kw, pi_lower) or kw in pi_lower for kw in key_words):
+            # key activation: the profile industry matches this taxonomy key
+            key_words = [kw for kw in key.split() if len(kw) > 2]
+            if not key_words:
                 continue
-            # Does the event's industry_tags contain any synonym?
+            key_match_score = sum(1 for kw in key_words if kw in pi_lower or pi_lower in kw)
+            if key_match_score == 0:
+                continue
+            # Does the event text contain any synonym from this key's list?
             for syn in synonyms:
-                if syn in industry_str:
+                if syn in industry_str or syn in event_text:
                     matched.append(prof_ind)
                     already = True
                     break
             if already:
                 break
+
+        if already:
+            continue
+
+        # Pass 3: ICP buyer description → event description context match
+        # If what the company sells relates to the event topic
+        if icp_context:
+            for w in pi_words:
+                if len(w) >= 4 and w in event_text:
+                    matched.append(prof_ind)
+                    break
 
     matched = list(dict.fromkeys(matched))  # preserve order, deduplicate
 
@@ -314,14 +506,52 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
     return round(score, 4), matched
 
 
-# ── Persona matching ───────────────────────────────────────────────
+# Expanded persona synonym map for matching event text
+_PERSONA_ALIASES: dict[str, list[str]] = {
+    "cio":               ["cio", "chief information officer", "it director", "head of it",
+                          "vp it", "director of it", "head of technology"],
+    "cto":               ["cto", "chief technology officer", "vp engineering", "head of engineering",
+                          "director of engineering", "vp technology", "head of tech"],
+    "cfo":               ["cfo", "chief financial officer", "finance director", "vp finance",
+                          "head of finance", "director of finance", "treasurer"],
+    "coo":               ["coo", "chief operating officer", "head of operations", "vp operations",
+                          "director of operations", "operations director"],
+    "ceo":               ["ceo", "chief executive", "managing director", "president",
+                          "executive director", "founder", "co-founder"],
+    "ciso":              ["ciso", "chief information security", "vp security",
+                          "head of security", "head of cybersecurity", "security director"],
+    "cmo":               ["cmo", "chief marketing officer", "vp marketing", "head of marketing",
+                          "marketing director", "director of marketing"],
+    "cdo":               ["cdo", "chief digital officer", "chief data officer",
+                          "vp data", "head of data", "digital director"],
+    "chro":              ["chro", "chief human resources", "chief people officer",
+                          "hr director", "vp hr", "head of hr"],
+    "vp engineering":    ["vp engineering", "cto", "head of engineering",
+                          "director of engineering", "engineering manager"],
+    "vp supply chain":   ["vp supply chain", "supply chain director", "head of supply chain",
+                          "vp logistics", "logistics director", "head of logistics",
+                          "procurement director"],
+    "head of procurement": ["head of procurement", "procurement director", "vp procurement",
+                            "chief procurement", "sourcing director", "category director"],
+    "operations manager": ["operations manager", "plant manager", "factory manager",
+                           "production manager", "site manager", "facility manager"],
+    "founder":           ["founder", "co-founder", "owner", "managing director",
+                          "entrepreneur"],
+    "vp sales":          ["vp sales", "chief revenue officer", "cro", "sales director",
+                          "head of sales", "director of sales"],
+    "vp product":        ["vp product", "chief product officer", "cpo", "product director",
+                          "head of product"],
+    "it manager":        ["it manager", "it director", "technology manager",
+                          "systems manager", "infrastructure manager"],
+    "finance manager":   ["finance manager", "financial controller", "finance director",
+                          "treasury manager", "accounting manager"],
+}
+
 
 def _score_persona(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:
     """
-    Match target personas against event audience_personas field.
-    When audience_personas is empty (all DB events), score is 0.
-    SerpAPI will fill this field before display — but scoring runs before enrichment.
-    We give a partial score if the event description or industry implies a persona.
+    Match target personas against event audience_personas and event text.
+    Uses expanded alias map so "CFO" also matches "finance director", etc.
     """
     if not profile.target_personas:
         return 0.0, []
@@ -331,14 +561,33 @@ def _score_persona(event: EventORM, profile: ICPProfile) -> Tuple[float, list[st
     matched: list[str] = []
 
     for persona in profile.target_personas:
-        p_lower = persona.lower()
-        # Direct match in persona field
-        if persona_text and _word_in_text(p_lower.split()[0], persona_text):
+        p_lower  = persona.lower().strip()
+        already  = False
+
+        # 1. Direct word match in audience_personas field
+        first_word = p_lower.split()[0]
+        if persona_text and len(first_word) >= 2 and first_word in persona_text:
             matched.append(persona)
             continue
-        # Partial match in full event text (catches "CTO" in description, etc.)
-        key_word = p_lower.split()[0]  # first word: "CIO" from "CIO / CTO"
-        if len(key_word) >= 3 and _word_in_text(key_word, event_text):
+
+        # 2. Check all aliases for this persona
+        aliases = _PERSONA_ALIASES.get(p_lower, [])
+        if not aliases:
+            # Generic: build aliases from persona token words
+            aliases = [w for w in re.split(r"[\s/,\-&]+", p_lower) if len(w) >= 2]
+
+        for alias in aliases:
+            if alias in persona_text or alias in event_text:
+                matched.append(persona)
+                already = True
+                break
+
+        if already:
+            continue
+
+        # 3. Partial token match in full event text
+        tokens = [w for w in re.split(r"[\s/,\-&]+", p_lower) if len(w) >= 3]
+        if any(_word_in_text(t, event_text) for t in tokens):
             matched.append(persona)
 
     matched = list(dict.fromkeys(matched))
