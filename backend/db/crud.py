@@ -29,51 +29,219 @@ from models.event import EventCreate, EventORM
 # Each entry: (lowercase profile term, list of ILIKE search patterns)
 # ══════════════════════════════════════════════════════════════════════
 _INDUSTRY_SYNONYMS: list[tuple[str, list[str]]] = [
-    ("manufactur",  ["manufactur", "metal work", "mechanical", "industrial machiner",
-                     "machine tool", "welding", "casting", "forging", "cnc",
-                     "production technolog", "stamping", "sheet metal"]),
-    ("engineering", ["engineering", "manufactur", "metal", "mechanical component",
-                     "structural", "civil engineering"]),
-    ("industrial",  ["industrial", "manufactur", "metal work", "mechanical"]),
-    ("technology",  ["technolog", "information technology", "software", "digital",
-                     "compute", "network", "telecom", "electronic", "semiconductor",
-                     "iot", "smart technolog", "multimedia", "cad", "cam"]),
-    ("information technology", ["information technology", "telecom", "compute", "network"]),
-    ("software",    ["software", "digital", "compute", "saas", "cloud"]),
-    ("ai",          ["artificial intelligence", "machine learning", "deep learning",
-                     "data science", "analytics"]),
-    ("cloud",       ["cloud", "saas", "data center", "hosting"]),
-    ("cybersecurity", ["cyber", "information security", "network security", "data protection"]),
-    ("fintech",     ["fintech", "financial technology", "digital banking", "payment"]),
-    ("finance",     ["finance", "banking", "financial", "investment", "insurance"]),
-    ("healthcare",  ["healthcare", "health", "medical", "medtech", "pharma",
-                     "biotech", "hospital", "clinical", "life science"]),
-    ("pharma",      ["pharma", "pharmaceutical", "biotech", "life science", "clinical"]),
-    ("logistics",   ["logistic", "supply chain", "transport", "freight", "shipping",
-                     "warehousing", "cargo", "handling", "distribution"]),
-    ("supply chain",["supply chain", "logistic", "procurement", "warehousing"]),
-    ("retail",      ["retail", "ecommerce", "consumer", "fmcg", "fashion", "merchandise"]),
-    ("food",        ["food processing", "food", "beverage", "catering", "hospitality",
-                     "bakery", "dairy", "seafood", "wine", "spirits"]),
-    ("hospitality", ["hospitality", "catering", "hotel", "restaurant", "food service"]),
-    ("energy",      ["energy", "oil", "gas", "petroleum", "renewable", "solar",
-                     "wind", "power", "electricity"]),
-    ("cleantech",   ["cleantech", "renewable", "solar", "wind", "green energy",
-                     "environmental", "waste", "water treatment"]),
-    ("construction",["construction", "build", "architect", "real estate", "civil",
-                     "infrastructure", "contractor"]),
-    ("mining",      ["mining", "mineral", "quarry", "ore", "coal", "metals", "extraction"]),
-    ("marketing",   ["marketing", "advertising", "media", "digital marketing",
-                     "martech", "brand", "pr"]),
-    ("fashion",     ["fashion", "textile", "cloth", "apparel", "fabric", "garment"]),
-    ("education",   ["education", "training", "learning", "university", "academic"]),
-    ("agriculture", ["agriculture", "agri", "farming", "crop", "livestock",
-                     "aquaculture", "fishery"]),
-    ("travel",      ["travel", "tourism", "hospitality", "airline", "destination"]),
-    ("automotive",  ["automotive", "vehicle", "car", "truck", "electric vehicle", "mobility"]),
-    ("printing",    ["printing", "packaging", "graphic", "inkjet", "label"]),
-    ("hr",          ["human resource", "hr ", "talent", "recruitment", "workforce"]),
-]
+  ("manufactur",        ["manufactur", "metal work", "mechanical", "industrial machiner",
+                           "machine tool", "welding", "casting", "forging", "cnc",
+                           "production technolog", "stamping", "sheet metal", "factory",
+                           "automation", "robotics", "alloy", "steel", "aluminium"]),
+    ("engineering",       ["engineering", "manufactur", "metal", "mechanical component",
+                           "structural", "civil engineering", "aerospace", "process engineering"]),
+    ("industrial",        ["industrial", "manufactur", "metal work", "mechanical", "factory",
+                           "production", "process industry", "heavy industry"]),
+    # Technology
+    ("technology",        ["technolog", "information technology", "software", "digital",
+                           "compute", "network", "telecom", "electronic", "semiconductor",
+                           "iot", "smart technolog", "multimedia", "cad", "cam", "tech"]),
+    ("information technology", ["information technology", "telecom", "compute", "network",
+                                "it service", "it solution", "digital transformation"]),
+    ("software",          ["software", "digital", "compute", "saas", "cloud", "application",
+                           "platform", "enterprise software", "b2b software"]),
+    ("it",                ["information technology", "it ", "it service", "software",
+                           "compute", "network", "digital"]),
+    ("tech",              ["technolog", "software", "digital", "compute", "iot", "smart"]),
+    # AI / Data
+    ("ai",                ["artificial intelligence", "machine learning", "deep learning",
+                           "data science", "analytics", "automation", "robotics", "nlp",
+                           "computer vision", "predictive", "generative ai"]),
+    ("artificial intelligence", ["artificial intelligence", "machine learning", "deep learning",
+                                 "data science", "analytics", "nlp", "computer vision"]),
+    ("machine learning",  ["machine learning", "deep learning", "artificial intelligence",
+                           "data science", "analytics", "predictive analytics"]),
+    ("data",              ["data science", "analytics", "data management", "big data",
+                           "data engineering", "business intelligence", "data platform"]),
+    ("analytics",         ["analytics", "data science", "business intelligence", "big data",
+                           "data analytics", "reporting"]),
+    ("cloud computing",   ["cloud", "saas", "paas", "iaas", "data center", "hosting",
+                           "cloud platform", "cloud infrastructure", "virtualisation"]),
+    ("cloud",             ["cloud", "saas", "data center", "hosting", "cloud platform"]),
+    ("saas",              ["saas", "software as a service", "cloud", "b2b software", "platform"]),
+    # Cybersecurity
+    ("cybersecurity",     ["cyber", "information security", "network security", "data protection",
+                           "cybersecurity", "infosec", "identity", "zero trust", "siem",
+                           "endpoint security", "vulnerability", "compliance"]),
+    ("security",          ["security", "cyber", "information security", "network security",
+                           "data protection", "infosec", "privacy"]),
+    ("infosec",           ["information security", "cybersecurity", "cyber", "network security"]),
+    # Finance
+    ("fintech",           ["fintech", "financial technology", "digital banking", "payment",
+                           "insurtech", "regtech", "blockchain", "cryptocurrency",
+                           "digital finance", "open banking", "neobank", "lending tech"]),
+    ("finance",           ["finance", "banking", "financial", "investment", "capital market",
+                           "insurance", "treasury", "fintech", "accounting", "wealth management",
+                           "asset management", "private equity", "hedge fund", "fund management"]),
+    ("financial",         ["finance", "financial", "banking", "investment", "capital market",
+                           "insurance", "treasury", "fintech", "accounting"]),
+    ("banking",           ["banking", "finance", "financial", "payment", "fintech",
+                           "digital banking", "retail banking", "commercial banking"]),
+    ("insurance",         ["insurance", "insurtech", "risk management", "reinsurance",
+                           "underwriting", "actuarial", "claims"]),
+    ("investment",        ["investment", "capital market", "private equity", "venture capital",
+                           "asset management", "wealth management", "fund"]),
+    ("accounting",        ["accounting", "finance", "audit", "taxation", "cpa",
+                           "financial reporting", "bookkeeping"]),
+    ("payments",          ["payment", "fintech", "digital payment", "transaction",
+                           "remittance", "card payment", "wallet"]),
+    # Healthcare / Life Sciences
+    ("healthcare",        ["healthcare", "health", "medical", "medtech", "pharma",
+                           "biotech", "hospital", "clinical", "life science", "dental",
+                           "optical", "nursing", "diagnostic", "telemedicine", "digital health"]),
+    ("health",            ["health", "healthcare", "medical", "hospital", "clinical",
+                           "wellness", "public health", "preventive health"]),
+    ("medtech",           ["medtech", "medical device", "medical equipment", "diagnostic",
+                           "imaging", "surgical", "medical technology"]),
+    ("pharma",            ["pharma", "pharmaceutical", "drug", "biotech", "life science",
+                           "clinical", "laboratory", "clinical trial", "regulatory"]),
+    ("biotech",           ["biotech", "life science", "pharmaceutical", "genomics",
+                           "bioinformatics", "drug discovery", "medical research"]),
+    ("medical",           ["medical", "healthcare", "medtech", "clinical", "hospital",
+                           "diagnostic", "medical device"]),
+    # Logistics / Supply Chain
+    ("logistics",         ["logistic", "supply chain", "transport", "freight", "shipping",
+                           "warehousing", "cargo", "courier", "last mile", "fleet",
+                           "handling", "intralogistic", "distribution", "port", "3pl"]),
+    ("supply chain",      ["supply chain", "logistic", "procurement", "sourcing",
+                           "warehousing", "inventory", "distribution", "vendor management"]),
+    ("transportation",    ["transport", "logistic", "freight", "shipping", "truck",
+                           "rail", "aviation", "maritime", "fleet management", "mobility"]),
+    ("procurement",       ["procurement", "supply chain", "sourcing", "purchasing",
+                           "vendor management", "category management", "strategic sourcing"]),
+    ("warehousing",       ["warehousing", "logistics", "distribution", "fulfillment",
+                           "warehouse management", "storage"]),
+    # Retail / E-commerce / Consumer
+    ("retail",            ["retail", "ecommerce", "consumer", "fmcg", "fashion",
+                           "merchandise", "shopping", "omnichannel", "pos",
+                           "direct-to-consumer", "d2c", "brand"]),
+    ("ecommerce",         ["ecommerce", "e-commerce", "online retail", "digital commerce",
+                           "marketplace", "d2c", "shopify", "amazon seller"]),
+    ("consumer goods",    ["consumer", "fmcg", "household", "appliance", "personal care",
+                           "food", "beverage", "retail", "cpg"]),
+    ("fmcg",              ["fmcg", "consumer goods", "cpg", "household", "personal care",
+                           "food", "beverage", "retail"]),
+    # Food & Beverage / Hospitality
+    ("food & beverage",   ["food processing", "food", "beverage", "catering", "hospitality",
+                           "restaurant", "hotel", "bakery", "dairy", "meat", "seafood",
+                           "organic", "wine", "spirits", "packaging", "food safety"]),
+    ("food",              ["food processing", "food", "beverage", "catering", "bakery",
+                           "dairy", "seafood", "agri", "fmcg", "food retail"]),
+    ("hospitality",       ["hospitality", "catering", "hotel", "restaurant", "food service",
+                           "tourism", "travel", "mice", "events industry"]),
+    ("restaurant",        ["restaurant", "catering", "food service", "hospitality",
+                           "food & beverage", "hotel"]),
+    ("beverage",          ["beverage", "food & beverage", "wine", "spirits", "beer",
+                           "soft drink", "drink industry"]),
+    # Energy / Environment
+    ("energy",            ["energy", "oil", "gas", "petroleum", "renewable", "solar",
+                           "wind", "nuclear", "power", "electricity", "utility",
+                           "energy storage", "battery", "grid"]),
+    ("cleantech",         ["cleantech", "renewable", "solar", "wind", "green energy",
+                           "sustainable", "environmental", "waste", "water treatment",
+                           "clean energy", "green tech", "sustainability"]),
+    ("sustainability",    ["sustainab", "environmental", "cleantech", "green", "renewable",
+                           "circular economy", "esg", "carbon", "net zero", "climate",
+                           "decarbonisation", "green building"]),
+    ("esg",               ["esg", "sustainability", "environmental", "governance",
+                           "corporate responsibility", "csr", "climate", "carbon"]),
+    ("renewable energy",  ["renewable", "solar", "wind", "green energy", "clean energy",
+                           "hydro", "geothermal", "energy storage"]),
+    ("oil and gas",       ["oil", "gas", "petroleum", "upstream", "downstream", "midstream",
+                           "refinery", "drilling", "exploration"]),
+    # Real Estate / Construction
+    ("construction",      ["construction", "build", "architect", "real estate", "civil",
+                           "infrastructure", "contractor", "property", "build material"]),
+    ("real estate",       ["real estate", "property", "construction", "land", "housing",
+                           "commercial real estate", "residential", "proptech"]),
+    ("proptech",          ["proptech", "real estate", "property technology", "smart building",
+                           "building management", "facility management"]),
+    # Mining / Resources
+    ("mining",            ["mining", "mineral", "quarry", "ore", "coal", "metals",
+                           "extraction", "petroleum", "resources", "geolog"]),
+    # Media / Print / Marketing
+    ("marketing",         ["marketing", "advertising", "media", "digital marketing",
+                           "martech", "brand", "pr", "communication", "promotion",
+                           "content marketing", "demand generation", "lead generation"]),
+    ("media",             ["media", "publishing", "broadcast", "print", "graphic",
+                           "content", "advertising", "news", "journalism"]),
+    ("advertising",       ["advertising", "marketing", "adtech", "digital advertising",
+                           "media buying", "programmatic", "brand"]),
+    ("martech",           ["martech", "marketing technology", "crm", "marketing automation",
+                           "analytics", "digital marketing", "demand generation"]),
+    # HR / People / Workforce
+    ("hr tech",           ["human resource", "hr", "talent", "recruitment", "workforce",
+                           "payroll", "people management", "future of work", "hris",
+                           "employee experience", "talent acquisition"]),
+    ("hr",                ["human resource", "hr ", "talent", "recruitment", "workforce",
+                           "people management", "employee", "hris"]),
+    ("human resources",   ["human resource", "hr", "talent management", "recruitment",
+                           "workforce", "people ops", "payroll"]),
+    ("talent management", ["talent", "recruitment", "hr", "workforce", "learning",
+                           "people development", "succession planning"]),
+    # Education
+    ("education",         ["education", "training", "learning", "university", "academic",
+                           "e-learning", "professional development", "edtech", "school",
+                           "corporate training", "upskilling", "reskilling"]),
+    ("edtech",            ["edtech", "education technology", "e-learning", "lms",
+                           "online learning", "education"]),
+    # Agriculture
+    ("agriculture",       ["agriculture", "agri", "farming", "crop", "livestock",
+                           "aquaculture", "fishery", "agritech", "smart farming",
+                           "precision agriculture", "food production"]),
+    ("agritech",          ["agritech", "agriculture technology", "smart farming",
+                           "precision agriculture", "agri", "farming tech"]),
+    # Travel / Tourism
+    ("travel",            ["travel", "tourism", "hospitality", "airline", "hotel",
+                           "destination", "mice", "business travel", "ota"]),
+    # Automotive
+    ("automotive",        ["automotive", "vehicle", "car", "truck", "electric vehicle",
+                           "ev", "mobility", "fleet", "auto", "connected vehicle",
+                           "autonomous vehicle", "telematics"]),
+    ("electric vehicle",  ["electric vehicle", "ev", "battery", "charging", "mobility",
+                           "automotive", "clean transport"]),
+    # Fashion / Textile
+    ("fashion",           ["fashion", "textile", "clothing", "apparel", "fabric",
+                           "garment", "leather", "footwear", "luxury", "fast fashion"]),
+    ("textile",           ["textile", "fabric", "garment", "apparel", "fashion",
+                           "yarn", "weaving", "knitting"]),
+    # Printing / Packaging
+    ("printing",          ["printing", "packaging", "graphic", "inkjet", "label",
+                           "flexo", "offset", "digital print", "wide format"]),
+    ("packaging",         ["packaging", "printing", "label", "flexible packaging",
+                           "rigid packaging", "sustainability packaging"]),
+    # Telecom
+    ("telecom",           ["telecom", "5g", "network", "connectivity", "wireless",
+                           "fibre", "broadband", "isp", "mobile", "carrier", "mvno"]),
+    ("telecommunications", ["telecom", "telecommunications", "5g", "network", "wireless",
+                            "mobile", "connectivity", "broadband"]),
+    # Legal Tech
+    ("legal",             ["legal tech", "legal", "law", "compliance", "regulatory",
+                           "governance", "contract management", "litigation"]),
+    ("legaltech",         ["legal tech", "legal", "law", "compliance", "contract"]),
+    # Government / Public Sector
+    ("government",        ["government", "public sector", "smart city", "civic tech",
+                           "e-government", "policy", "public administration"]),
+    ("public sector",     ["public sector", "government", "municipal", "smart city",
+                           "public service", "civic"]),
+    # Defence / Aerospace
+    ("defence",           ["defence", "defense", "aerospace", "military", "security",
+                           "space", "aviation", "unmanned", "drone"]),
+    ("aerospace",         ["aerospace", "aviation", "space", "defence", "aircraft",
+                           "satellite", "uav", "drone"]),
+    # Sports Technology
+    ("sports",            ["sports technology", "sport", "esports", "fitness",
+                           "wearable", "sports analytics", "stadium tech"]),
+    # Business / Professional Services
+    ("business services", ["business service", "professional service", "consulting",
+                           "management consulting", "outsourcing", "bpo", "shared service"]),
+    ("consulting",        ["consulting", "management consulting", "advisory", "professional service"]),
+  ]
 
 
 def _expand_industry_terms(industries: List[str]) -> List[str]:
@@ -335,6 +503,37 @@ async def count_events(db: AsyncSession) -> int:
     result = await db.execute(select(func.count(EventORM.id)))
     return result.scalar() or 0
 
+
+async def update_event_enrichment(
+    db:       AsyncSession,
+    event_id: str,
+    updates:  dict,
+) -> bool:
+    """
+    Update enrichment fields on an existing event row.
+    Only updates non-None values.  Marks serpapi_enriched=True.
+    """
+    from sqlalchemy import update as _update
+    allowed = {
+        "est_attendees", "registration_url", "website",
+        "start_date", "end_date", "price_description",
+        "audience_personas", "description",
+    }
+    payload: dict = {k: v for k, v in updates.items() if k in allowed and v is not None}
+    if not payload:
+        return False
+    payload["serpapi_enriched"] = True
+    payload["last_verified_at"] = datetime.utcnow()
+    try:
+        await db.execute(
+            _update(EventORM).where(EventORM.id == event_id).values(**payload)
+        )
+        await db.commit()
+        return True
+    except Exception as exc:
+        logger.error(f"update_event_enrichment [{event_id[:8]}]: {exc}")
+        await db.rollback()
+        return False
 
 async def count_by_source(db: AsyncSession) -> Dict[str, int]:
     result = await db.execute(
