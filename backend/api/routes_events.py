@@ -390,27 +390,31 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                     f"price={sum(1 for d in enrichments.values() if d.get('price_description'))} "
                     f"link={sum(1 for d in enrichments.values() if d.get('event_link'))}"
                 )
-                # Persist enriched data back to DB (dates, attendees, registration URL)
+                                # Persist enriched data back to DB using a fresh session
+                # (cannot reuse request db — it closes when the response is sent)
                 import asyncio as _aio
+                from db.database import AsyncSessionLocal as _SessionLocal
+                _snapshot = dict(enrichments)
                 async def _persist_enrichments():
-                    for eid, edata in enrichments.items():
-                        db_updates: dict = {}
-                        if edata.get("est_attendees"):
-                            db_updates["est_attendees"] = edata["est_attendees"]
-                        if edata.get("start_date"):
-                            db_updates["start_date"] = edata["start_date"]
-                        if edata.get("end_date"):
-                            db_updates["end_date"] = edata["end_date"]
-                        if edata.get("registration_url") or edata.get("website"):
-                            url = edata.get("registration_url") or edata.get("website", "")
-                            db_updates["registration_url"] = url
-                            db_updates["website"]          = url
-                        if edata.get("price_description"):
-                            db_updates["price_description"] = edata["price_description"]
-                        if edata.get("audience_personas"):
-                            db_updates["audience_personas"] = edata["audience_personas"]
-                        if db_updates:
-                            await update_event_enrichment(db, eid, db_updates)
+                    async with _SessionLocal() as _db:
+                        for eid, edata in _snapshot.items():
+                            db_updates: dict = {}
+                            if edata.get("est_attendees"):
+                                db_updates["est_attendees"] = edata["est_attendees"]
+                            if edata.get("start_date"):
+                                db_updates["start_date"] = edata["start_date"]
+                            if edata.get("end_date"):
+                                db_updates["end_date"] = edata["end_date"]
+                            if edata.get("registration_url") or edata.get("website"):
+                                url = edata.get("registration_url") or edata.get("website", "")
+                                db_updates["registration_url"] = url
+                                db_updates["website"]          = url
+                            if edata.get("price_description"):
+                                db_updates["price_description"] = edata["price_description"]
+                            if edata.get("audience_personas"):
+                                db_updates["audience_personas"] = edata["audience_personas"]
+                            if db_updates:
+                                await update_event_enrichment(_db, eid, db_updates)
                 _aio.ensure_future(_persist_enrichments())
         except Exception as exc:
             logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
@@ -499,11 +503,16 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     # Stores top events so future similar searches benefit from this data.
     try:
         import asyncio as _asyncio
-        _asyncio.ensure_future(
-            record_search_results(db, profile, serialised_events[:20])
-        )
+        from db.database import AsyncSessionLocal as _SL
+        _prof_snap = profile
+        _evts_snap = serialised_events[:20]
+        async def _record():
+            async with _SL() as _db2:
+                await record_search_results(_db2, _prof_snap, _evts_snap)
+        _asyncio.ensure_future(_record())
     except Exception as _e:
         logger.debug(f"Record search results error: {_e}")
+
 
     return resp_dict
 
