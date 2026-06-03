@@ -694,18 +694,31 @@ async def rank_with_groq(
                 logger.error(f"Ranker schema error: {ve}")
 
         # Agent 2 — validator
+        # Slim event data for validator: only fields needed to check hallucinations.
+        # Strips serpapi_text/serpapi_results to stay well under 12k TPM limit.
         if len(groq_results) >= 3:
+            slim_events = [
+                {
+                    "id":              ev["id"],
+                    "name":            ev["name"],
+                    "industry_focus":  ev["industry_focus"],
+                    "location":        ev["location"],
+                    "description":     (ev.get("description") or "")[:150],
+                    "pre_tier":        ev.get("pre_tier", ""),
+                }
+                for ev in events_dicts
+            ]
             primary_list = [
                 {"id": r.id, "fit_verdict": r.fit_verdict,
-                 "verdict_notes": r.verdict_notes, "key_numbers": r.key_numbers}
+                 "verdict_notes": r.verdict_notes[:300], "key_numbers": r.key_numbers}
                 for r in groq_results.values()
             ]
             val_raw = await _call_groq(
                 client,
                 VALIDATION_SYS,
-                (f"SOURCE DATA:\n{json.dumps(events_dicts, indent=2)}\n\n"
+                (f"SOURCE DATA:\n{json.dumps(slim_events, indent=2)}\n\n"
                  f"VERDICTS:\n{json.dumps(primary_list, indent=2)}"),
-                timeout=settings.groq_timeout_seconds,   # full timeout — validator does substantial cross-checking
+                timeout=settings.groq_timeout_seconds,
                 label="validator",
             )
             if val_raw:
