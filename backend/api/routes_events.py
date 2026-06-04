@@ -607,6 +607,94 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     return resp_dict
 
+# ══════════════════════════════════════════════════════════════════════
+# GET /api/geo-hint  —  live event counts per geo + neighbour suggestions
+# ══════════════════════════════════════════════════════════════════════
+
+@router.get("/geo-hint")
+async def geo_hint(
+    geos:       str = Query(""),
+    industries: str = Query(""),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    For each requested geography, return:
+    - count: how many future events exist in DB for that geo
+    - status: 'good' (>=10), 'sparse' (1-9), 'none' (0)
+    - suggestions: top neighbour geos with their live counts (when status != 'good')
+
+    Counts are live DB queries — not hardcoded.
+    """
+    from sqlalchemy import select as _sel, func as _func, or_ as _or
+    from models.event import EventORM as _ORM
+
+    geo_list = [g.strip() for g in geos.split(",") if g.strip()]
+    ind_list = [i.strip() for i in industries.split(",") if i.strip()]
+    if not geo_list:
+        return {"coverage": []}
+
+    today = date.today().isoformat()
+
+    async def _count_geo(geo: str) -> int:
+        """Live count of future events matching a geo string."""
+        geo_l = geo.strip().lower()
+        geo_parts = [geo_l]
+        if " - " in geo_l:
+            geo_parts.extend(p.strip() for p in geo_l.split(" - "))
+        filters = []
+        for part in geo_parts:
+            if len(part) > 1:
+                filters.append(_ORM.country.ilike(f"%{part}%"))
+                filters.append(_ORM.city.ilike(f"%{part}%"))
+                filters.append(_ORM.event_cities.ilike(f"%{part}%"))
+        if not filters:
+            return 0
+        stmt = _sel(_func.count(_ORM.id)).where(
+            _ORM.start_date >= today,
+            _or(*filters),
+        )
+        result = await db.execute(stmt)
+        return result.scalar() or 0
+
+    coverage = []
+    for geo in geo_list:
+        count = await _count_geo(geo)
+        status = "good" if count >= 10 else ("sparse" if count > 0 else "none")
+
+        suggestions = []
+        if status != "good":
+            geo_l = geo.strip().lower()
+            # Find neighbours from the static proximity map
+            neighbours: list[str] = []
+            for key, nbrs in _GEO_NEIGHBOURS.items():
+                if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
+                    neighbours = nbrs
+                    break
+            if not neighbours:
+                # Generic fallback: global hubs always have events
+                neighbours = ["singapore", "germany", "usa", "uk", "uae"]
+
+            for nbr in neighbours[:6]:
+                nbr_count = await _count_geo(nbr)
+                if nbr_count > 0:
+                    suggestions.append({"geo": nbr.title(), "count": nbr_count})
+            # Sort by count descending
+            suggestions.sort(key=lambda x: -x["count"])
+            suggestions = suggestions[:4]
+
+        coverage.append({
+            "geo":         geo,
+            "count":       count,
+            "status":      status,
+            "suggestions": suggestions,
+        })
+
+    return {"coverage": coverage}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# GET /api/stats  —  includes real-time API key status
+# ══════════════════════════════════════════════════════════════════════
 
 # ══════════════════════════════════════════════════════════════════════
 # GET /api/stats  —  includes real-time API key status
