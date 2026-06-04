@@ -115,7 +115,7 @@ function calcPipeline(event, dealSizeCategory) {
 
 // ── Date window filter ────────────────────────────────────────────
 function applyDateFilter(events, months) {
-  if (!months) return events
+  if (!months) return events   // 0 = all dates
   const cutoff = new Date()
   cutoff.setMonth(cutoff.getMonth() + months)
   const iso = cutoff.toISOString().slice(0, 10)
@@ -160,7 +160,7 @@ export default function ShowRankingPage({
   const [gateEmail,    setGateEmail]    = useState(userEmail)
   const [gateError,    setGateError]    = useState('')
   const [statsVisible, setStatsVisible] = useState(false)
-  const [dateWindow,   setDateWindow]   = useState(12)   // 3 | 6 | 12
+  const [dateWindow,   setDateWindow]   = useState(0)    // 0 = all | 3 | 6 | 12
 
   const statsRef = useRef(null)
 
@@ -286,6 +286,13 @@ export default function ShowRankingPage({
       <div className="rk-date-filter" aria-label="Filter by time window">
         <div className="rk-date-filter-inner">
           <span className="rk-date-label">Showing events in:</span>
+              <button
+            onClick={() => setDateWindow(0)}
+            className={`rk-date-pill ${dateWindow === 0 ? 'rk-date-pill--active' : ''}`}
+            aria-pressed={dateWindow === 0}
+          >
+            All dates
+          </button>
           {[3, 6, 12].map(m => (
             <button
               key={m}
