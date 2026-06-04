@@ -61,6 +61,13 @@ export const api = {
       method: 'POST',
       body:   JSON.stringify(payload),
     }),
+  // ── Geo hint — live event counts + neighbour suggestions ─
+  geoHint: (geos = [], industries = []) =>
+    request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}`),
+
+  // ── CSV export URL helper ─────────────────────────────
+  exportCsvUrl: (profileId) => `${BASE}/api/export/csv?profile_id=${profileId}`,
+}
 
   // ── CSV export URL helper ─────────────────────────────
   exportCsvUrl: (profileId) => `${BASE}/api/export/csv?profile_id=${profileId}`,
