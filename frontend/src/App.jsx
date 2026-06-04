@@ -83,7 +83,7 @@ export default function App() {
   const [regionFallback,   setRegionFallback]   = useState(null)
   const [loadingProfile,   setLoadingProfile]   = useState(null)
   const [allRelevantEvents,setAllRelevantEvents]= useState([])
-
+  const [suggestedGeos,    setSuggestedGeos]    = useState([])
 
   /* ── Deep dive ─────────────────────────────────────────────── */
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
@@ -136,6 +136,7 @@ export default function App() {
     setLoading(true)
     setReportSent(false)
     setRegionFallback(null)
+    setSuggestedGeos([])
 
     try {
       const res    = await api.search({ profile })
@@ -143,6 +144,8 @@ export default function App() {
       setProfileId(res.profile_id || '')
       setResults(events)
       setAllRelevantEvents(res.all_relevant_events || [])
+      setSuggestedGeos(res.suggested_geos || [])
+
 
       if (res.universe_stats) setUniverseStats(res.universe_stats)
       if (res.region_fallback_note) setRegionFallback(res.region_fallback_note)
@@ -167,7 +170,11 @@ export default function App() {
       setLoading(false)
     }
   }
-
+  const onSwapGeo = (newGeo) => {
+    if (!lastProfile) return
+    const updated = { ...lastProfile, target_geographies: [newGeo] }
+    onSearch(updated, userEmail)
+  }
   const onDeeperAnalysis = (data) => {
     if (!lastProfile) return
     onSearch({ ...lastProfile, company_name: data.company_name || lastProfile.company_name, company_description: data.event_needs || lastProfile.company_description }, userEmail)
@@ -222,6 +229,8 @@ export default function App() {
           reportSent={reportSent}
           universeStats={universeStats}
           regionFallbackNote={regionFallback}
+          suggestedGeos={suggestedGeos}
+          onSwapGeo={onSwapGeo}
           onEmailUnlock={(email) => {
             setUserEmail(email)
             if (!reportSent) _autoSendReport(results, lastProfile, email)
