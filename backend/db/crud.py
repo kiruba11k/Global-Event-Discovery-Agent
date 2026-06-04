@@ -582,7 +582,7 @@ async def create_company_profile(
     deck_text:     str = "",
     deck_filename: str = "",
 ) -> CompanyProfileORM:
-        profile = CompanyProfileORM(
+    profile = CompanyProfileORM(
         id           = str(uuid.uuid4()),
         company_name = data.company_name,
         founded_year = data.founded_year,
