@@ -149,9 +149,11 @@ export default function ShowRankingPage({
   universeStats    = null,   // from SearchResponse.universe_stats (API-calculated)
   onEmailUnlock,
   onEmailReport,
-  onShowClick,     // fn(event, rank) → opens Screen 3
-  onBackHome,      // fn() → back to homepage form
+  onShowClick,        // fn(event, rank) → opens Screen 3
+  onBackHome,         // fn() → back to homepage form
+  regionFallbackNote = null,
 }) {
+
   const [unlocked,     setUnlocked]     = useState(!!userEmail)
   const [gateEmail,    setGateEmail]    = useState(userEmail)
   const [gateError,    setGateError]    = useState('')
@@ -234,6 +236,25 @@ export default function ShowRankingPage({
           )}
         </div>
       </nav>
+      {/* ── Regional fallback notice ─────────────────────────── */}
+      {regionFallbackNote && (
+        <div style={{
+          background: 'linear-gradient(90deg,rgba(245,158,11,0.12),rgba(245,158,11,0.06))',
+          borderBottom: '1px solid rgba(245,158,11,0.25)',
+          padding: '10px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }} role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.5 }}>
+            {regionFallbackNote}
+          </span>
+        </div>
+      )}
+
 
       {/* ── 1. REPORT BANNER ─────────────────────────────────── */}
       <div className="rk-banner">
