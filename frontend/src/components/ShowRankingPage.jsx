@@ -153,6 +153,8 @@ export default function ShowRankingPage({
   onShowClick,        // fn(event, rank) → opens Screen 3
   onBackHome,         // fn() → back to homepage form
   regionFallbackNote = null,
+  suggestedGeos      = [],
+  onSwapGeo,
 })
  {
 
@@ -257,10 +259,70 @@ export default function ShowRankingPage({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          <span style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.5 }}>
-            {regionFallbackNote}
-          </span>
-        </div>
+          <p style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.6, margin: '0 0 8px' }}>
+              {regionFallbackNote}
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={onBackHome}
+                style={{
+                  display:        'inline-flex',
+                  alignItems:     'center',
+                  gap:            5,
+                  background:     'rgba(245,158,11,0.12)',
+                  border:         '1px solid rgba(245,158,11,0.3)',
+                  borderRadius:   6,
+                  padding:        '4px 12px',
+                  fontSize:       12,
+                  fontWeight:     600,
+                  color:          '#fbbf24',
+                  cursor:         'pointer',
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                Change location →
+              </button>
+              {suggestedGeos.length > 0 && (
+                <>
+                  <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>Try nearby:</span>
+                  {suggestedGeos.map(s => (
+                    <button
+                      key={s.geo}
+                      onClick={() => onSwapGeo && onSwapGeo(s.geo)}
+                      style={{
+                        display:        'inline-flex',
+                        alignItems:     'center',
+                        gap:            4,
+                        background:     'rgba(6,182,212,0.10)',
+                        border:         '1px solid rgba(6,182,212,0.28)',
+                        borderRadius:   6,
+                        padding:        '4px 11px',
+                        fontSize:       12,
+                        fontWeight:     600,
+                        color:          '#06b6d4',
+                        cursor:         'pointer',
+                        whiteSpace:     'nowrap',
+                      }}
+                    >
+                      {s.geo}
+                      {s.count > 0 && (
+                        <span style={{
+                          background: 'rgba(6,182,212,0.15)',
+                          borderRadius: 4,
+                          padding: '1px 5px',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: '#0891b2',
+                        }}>
+                          {s.count}
+                        </span>
+                      )}
+                      <span style={{ opacity: 0.7 }}>→</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
       )}
 
 
