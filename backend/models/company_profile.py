@@ -28,17 +28,19 @@ class CompanyProfileORM(Base):
 
 
 class CompanyProfileCreate(BaseModel):
-    company_name: str = ""
-    founded_year: str = ""
-    location: str = ""
-    what_we_do: str = ""
-    what_we_need: str = ""
+    company_name:  str       = ""
+    founded_year:  str       = ""
+    location:      str       = ""
+    what_we_do:    str       = ""
+    what_we_need:  str       = ""
+    client_names:  list[str] = []   # optional list of client company names
 
 
 class CompanyProfileRead(CompanyProfileCreate):
     id: str
     deck_filename: str = ""
     created_at: datetime
+
 
     class Config:
         from_attributes = True
