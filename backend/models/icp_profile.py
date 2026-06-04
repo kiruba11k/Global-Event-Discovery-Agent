@@ -22,6 +22,9 @@ class ICPProfile(BaseModel):
     # ── Company email — forwarded from CompanyForm step 0 ────
     email: str = ""
 
+    # ── Client names — optional social-proof list ─────────────
+    client_names: List[str] = []   # company names the user has served
+
 
 class CompanyContext(BaseModel):
     """Optional enriched context from saved company profile + deck."""
