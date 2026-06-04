@@ -82,6 +82,7 @@ export default function App() {
   const [emailModalOpen,   setEmailModalOpen]   = useState(false)
   const [regionFallback,   setRegionFallback]   = useState(null)
   const [loadingProfile,   setLoadingProfile]   = useState(null)
+  const [allRelevantEvents,setAllRelevantEvents]= useState([])
 
 
   /* ── Deep dive ─────────────────────────────────────────────── */
@@ -141,6 +142,8 @@ export default function App() {
       const events = res.events || []
       setProfileId(res.profile_id || '')
       setResults(events)
+      setAllRelevantEvents(res.all_relevant_events || [])
+
       if (res.universe_stats) setUniverseStats(res.universe_stats)
       if (res.region_fallback_note) setRegionFallback(res.region_fallback_note)
 
@@ -211,6 +214,7 @@ export default function App() {
 
         <ShowRankingPage
           events={allDisplay}
+          allRelevantEvents={allRelevantEvents}
           profile={lastProfile}
           userEmail={userEmail}
           dealSizeCategory={dealSizeCategory}
