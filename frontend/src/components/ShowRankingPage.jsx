@@ -303,7 +303,7 @@ export default function ShowRankingPage({
               {totalICPsAcrossShows > 0 ? (
                 <>
                   <div className="rk-stat-num rk-stat-accent">
-                    ~<Counter target={totalICPsAcrossShows} triggered={statsVisible} />
+                    <Counter target={totalICPsAcrossShows} triggered={statsVisible} />
                   </div>
                   <div className="rk-stat-label">total ICPs across all relevant shows</div>
                   <div className="rk-stat-method">
