@@ -413,19 +413,38 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     except Exception as _e:
         logger.debug(f"Recall boost error: {_e}")
 
-    scored     = score_candidates(candidates, profile, cosine_scores)
-    top        = scored[:settings.top_k_for_llm]
+    scored = score_candidates(candidates, profile, cosine_scores)
+
+    # ── Determine relevance threshold dynamically ─────────────────
+    # Events with score >= threshold are "worth considering".
+    # Threshold = 10% of the max score (so at least 10% ICP match).
+    # Always guarantee at least RESULT_LIMIT events pass the cut.
+    if scored:
+        max_score = max(s for _, s, _, _ in scored)
+        threshold = max(0.10, max_score * 0.10)
+    else:
+        threshold = 0.10
+
+    all_relevant = [(e, s, t, d) for e, s, t, d in scored if s >= threshold]
+    # Safety: always include at least RESULT_LIMIT events
+    if len(all_relevant) < RESULT_LIMIT:
+        all_relevant = scored[:max(RESULT_LIMIT, len(all_relevant))]
+
+    shows_worth_considering_count = len(all_relevant)
+
+    top        = all_relevant[:settings.top_k_for_llm]
     top_events = [e for e, _, _, _ in top]
     pre_scores = {e.id: s for e, s, _, _ in top}
     pre_tiers  = {e.id: t for e, _, t, _ in top}
     pre_details= {e.id: d for e, _, _, d in top}
 
     logger.info(
-        f"Scored top {len(top_events)}: "
+        f"Scored top {len(top_events)} (of {shows_worth_considering_count} relevant): "
         f"GO={sum(1 for _,_,t,_ in top if t=='GO')}  "
         f"CONSIDER={sum(1 for _,_,t,_ in top if t=='CONSIDER')}  "
         f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
     )
+
 
     # Build shared Groq async client (reused for both enrichment and ranking)
     _groq_client_async = None
@@ -570,8 +589,36 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         ev_dict["meeting_potential"] = meeting_pot
         serialised_events.append(ev_dict)
 
-    # Universe stats banner
+    # Universe stats banner — pass real relevant count so "shows worth considering"
+    # reflects ALL ICP-matched events, not just the 6 displayed.
     universe = calculate_universe_stats(serialised_events, total_indexed=await count_events(db))
+    universe["shows_worth_considering"] = shows_worth_considering_count
+
+    # ── Build lightweight rows for relevant events not in top 6 ───
+    # These populate the Event Table without SerpAPI cost.
+    top6_ids = {r.id for r in ranked}
+    all_relevant_events: list[dict] = []
+    for ev, score, tier, detail in all_relevant:
+        if ev.id in top6_ids:
+            continue
+        all_relevant_events.append({
+            "event_id":        ev.id,
+            "event_name":      ev.name or "",
+            "date":            ev.start_date or "",
+            "place":           getattr(ev, "event_cities", "") or f"{ev.city or ''}, {ev.country or ''}".strip(", "),
+            "industry":        getattr(ev, "related_industries", "") or ev.industry_tags or "",
+            "audience_personas": ev.audience_personas or "",
+            "est_attendees":   ev.est_attendees or 0,
+            "relevance_score": round(score * 100),
+            "fit_verdict":     tier,
+            "source_platform": ev.source_platform or "",
+            "source_url":      ev.source_url or "",
+            "registration_url": getattr(ev, "registration_url", "") or getattr(ev, "website", "") or ev.source_url or "",
+            "website":          getattr(ev, "website", "") or getattr(ev, "registration_url", "") or ev.source_url or "",
+            "description":     (ev.description or "")[:300],
+            "price_description": ev.price_description or "",
+        })
+
 
     go_n  = sum(1 for r in ranked if r.fit_verdict == "GO")
     con_n = sum(1 for r in ranked if r.fit_verdict == "CONSIDER")
@@ -588,6 +635,8 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     resp_dict["universe_stats"]        = universe
     resp_dict["profile_hash"]          = profile_core_hash(profile)
     resp_dict["region_fallback_note"]  = region_fallback_note
+    resp_dict["all_relevant_events"]   = all_relevant_events
+
 
 
     # ── Record search results for future recall (async, non-blocking) ─
