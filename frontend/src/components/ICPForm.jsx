@@ -315,8 +315,6 @@ export default function ICPForm({
   const [errors,   setErrors]   = useState({})
   const [geoOpen,  setGeoOpen]  = useState(false)
   const [geoSearch,setGeoSearch]= useState('')
-  const [geoOpen,  setGeoOpen]  = useState(false)
-  const [geoSearch,setGeoSearch]= useState('')
   const geoInputRef = useRef(null)
 
   const [buyerSugs,setBuyerSugs]= useState([])
