@@ -665,31 +665,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     except Exception as _geo_err:
         logger.debug(f"Post-ranking geo check: {_geo_err}")
 
-            matched = sum(1 for ev in serialised_events if _event_matches_geo(ev, non_global_geos))
-            if matched == 0:
-                # Zero of the final events are in the requested geos — explain why
-                # and surface the neighbour suggestions from the geo-hint map
-                neighbours: list[str] = []
-                for geo in non_global_geos:
-                    geo_l = geo.lower().strip()
-                    for key, nbrs in _GEO_NEIGHBOURS.items():
-                        if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
-                            neighbours.extend(nbrs[:3])
-                            break
-                neighbours = list(dict.fromkeys(neighbours))[:4]
-                neighbour_str = ", ".join(t.title() for t in neighbours) if neighbours else "nearby hubs"
-                region_fallback_note = (
-                    f"No events found yet in {', '.join(non_global_geos)}. "
-                    f"Showing the most relevant global events for your ICP instead. "
-                    f"Try nearby regions with more coverage: {neighbour_str}."
-                )
-            elif matched < len(serialised_events) // 2:
-                # Fewer than half the results match — soft warning
-                region_fallback_note = (
-                    f"Limited events in {', '.join(non_global_geos)} — "
-                    f"showing the best global matches for your ICP to complete the ranking."
-                )
-
+            
 
     resp = SearchResponse(
         profile_id=profile_id, company_name=profile.company_name,
