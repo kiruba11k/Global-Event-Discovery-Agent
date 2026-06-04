@@ -108,33 +108,38 @@ _NEW_COLUMNS = [
 
 async def _add_missing_columns(conn):
     """
-    Add new columns to the `events` table without dropping existing data.
+    Add new columns to `events` and `company_profiles` without dropping data.
     Uses IF NOT EXISTS — safe to run on every startup.
     """
+    # (table, column_name, sql_type, default_value)
+    _TABLE_COLUMNS = [
+        ("events", col, typ, dflt) for col, typ, dflt in _NEW_COLUMNS
+    ] + [
+        ("company_profiles", "client_names", "TEXT", "''"),
+    ]
+
     if IS_POSTGRES:
-        for col_name, col_type, default in _NEW_COLUMNS:
+        for table, col_name, col_type, default in _TABLE_COLUMNS:
             try:
                 await conn.execute(text(
-                    f"ALTER TABLE events "
+                    f"ALTER TABLE {table} "
                     f"ADD COLUMN IF NOT EXISTS {col_name} {col_type} DEFAULT {default}"
                 ))
-                logger.debug(f"Column '{col_name}' ensured.")
+                logger.debug(f"{table}.{col_name} ensured.")
             except Exception as e:
-                logger.debug(f"Column '{col_name}' check: {e}")
+                logger.debug(f"{table}.{col_name} check: {e}")
     elif IS_SQLITE:
-        # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
-        # Check existing columns first
-        result = await conn.execute(text("PRAGMA table_info(events)"))
-        existing = {row[1] for row in result.fetchall()}
-        for col_name, col_type, default in _NEW_COLUMNS:
-            if col_name not in existing:
-                try:
+        for table, col_name, col_type, default in _TABLE_COLUMNS:
+            try:
+                result  = await conn.execute(text(f"PRAGMA table_info({table})"))
+                existing = {row[1] for row in result.fetchall()}
+                if col_name not in existing:
                     await conn.execute(text(
-                        f"ALTER TABLE events ADD COLUMN {col_name} {col_type} DEFAULT {default}"
+                        f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT {default}"
                     ))
-                    logger.info(f"Added column: {col_name}")
-                except Exception as e:
-                    logger.debug(f"Column '{col_name}' add failed: {e}")
+                    logger.info(f"Added column: {table}.{col_name}")
+            except Exception as e:
+                logger.debug(f"{table}.{col_name} add failed: {e}")
 
 
 async def init_db():
