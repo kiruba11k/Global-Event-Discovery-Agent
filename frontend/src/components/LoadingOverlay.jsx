@@ -150,126 +150,209 @@ export default function LoadingOverlay({ profile }) {
   }, [])
 
   const isHighProb = prob >= 75
-  const probColor  = prob >= 80 ? '#10b981' : prob >= 65 ? '#f59e0b' : '#6366f1'
+  // Match app accent colours: cyan for high, indigo for mid, amber for lower
+  const ringColor  = prob >= 80 ? '#06b6d4' : prob >= 65 ? '#6366f1' : '#f59e0b'
+  const ringGlow   = prob >= 80
+    ? '0 0 40px rgba(6,182,212,0.35)'
+    : prob >= 65
+    ? '0 0 40px rgba(99,102,241,0.35)'
+    : '0 0 30px rgba(245,158,11,0.25)'
 
   return (
     <div style={{
-      position:        'fixed',
-      inset:           0,
-      zIndex:          9999,
-      background:      'rgba(8,15,30,0.93)',
-      backdropFilter:  'blur(8px)',
-      display:         'flex',
-      alignItems:      'center',
-      justifyContent:  'center',
-      flexDirection:   'column',
-      gap:             0,
-      padding:         '24px',
+      position:       'fixed',
+      inset:          0,
+      zIndex:         9999,
+      background:     'linear-gradient(160deg, #060d1a 0%, #0a1628 50%, #070e1c 100%)',
+      backdropFilter: 'blur(12px)',
+      display:        'flex',
+      alignItems:     'center',
+      justifyContent: 'center',
+      padding:        '24px',
+      overflow:       'hidden',
     }}>
 
-      {/* Probability ring */}
-      <div style={{ position: 'relative', marginBottom: 28 }}>
-        <svg width="160" height="160" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="10" />
-          <circle
-            cx="80" cy="80" r="68"
-            fill="none"
-            stroke={probColor}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={`${2 * Math.PI * 68}`}
-            strokeDashoffset={`${2 * Math.PI * 68 * (1 - prob / 100)}`}
-            style={{ transition: 'stroke-dashoffset 1.8s cubic-bezier(0.16,1,0.3,1)' }}
-          />
-        </svg>
+      {/* Orb glows — matches homepage OrbBackground */}
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         <div style={{
-          position:   'absolute',
-          inset:      0,
-          display:    'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <div style={{ fontSize: 38, fontWeight: 800, color: '#f1f5f9', lineHeight: 1 }}>
-            <ProbCounter target={prob} />%
-          </div>
-          <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.9)', marginTop: 4, textAlign: 'center', maxWidth: 80 }}>
-            meeting success chance
-          </div>
-        </div>
+          position: 'absolute', top: '-10%', left: '50%', transform: 'translateX(-50%)',
+          width: 600, height: 600,
+          background: 'radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 65%)',
+          borderRadius: '50%',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-5%', right: '-10%',
+          width: 400, height: 400,
+          background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 65%)',
+          borderRadius: '50%',
+        }} />
+        <div style={{
+          position: 'absolute', top: '30%', left: '-8%',
+          width: 300, height: 300,
+          background: 'radial-gradient(circle, rgba(6,182,212,0.05) 0%, transparent 65%)',
+          borderRadius: '50%',
+        }} />
       </div>
 
-      {/* Headline */}
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', marginBottom: 6 }}>
-        {isHighProb ? 'Strong ICP - high meeting potential' : 'Ranking your events now'}
-      </div>
-      <div style={{ fontSize: 13, color: 'rgba(148,163,184,0.8)', marginBottom: 28, textAlign: 'center' }}>
-        Analysing 50,000+ events{dots}
-      </div>
-
-      {/* Rotating tip */}
+      {/* Main card */}
       <div style={{
-        background:   'rgba(255,255,255,0.04)',
-        border:       '1px solid rgba(255,255,255,0.09)',
-        borderRadius: 12,
-        padding:      '14px 20px',
-        maxWidth:     400,
+        position:     'relative',
+        background:   'rgba(10,18,40,0.85)',
+        border:       '1px solid rgba(6,182,212,0.15)',
+        borderRadius: 24,
+        padding:      '40px 36px',
+        maxWidth:     440,
         width:        '100%',
-        minHeight:    56,
         display:      'flex',
+        flexDirection:'column',
         alignItems:   'center',
-        gap:          10,
-        marginBottom: 28,
+        gap:          0,
+        boxShadow:    '0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)',
       }}>
-        <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
-        <p style={{
-          fontSize:   13,
-          color:      'rgba(203,213,225,0.95)',
-          margin:     0,
-          lineHeight: 1.5,
-          transition: 'opacity 0.35s ease',
-          opacity:    tipFading ? 0 : 1,
-        }}>
-          {tips[tipIdx]}
-        </p>
-      </div>
 
-      {/* CTA for high-probability profiles */}
-      {isHighProb && (
+        {/* LeadStrategus badge */}
         <div style={{
-          background:   `linear-gradient(135deg, rgba(16,185,129,0.12), rgba(99,102,241,0.12))`,
-          border:       '1px solid rgba(16,185,129,0.25)',
-          borderRadius: 12,
-          padding:      '16px 20px',
-          maxWidth:     400,
-          width:        '100%',
-          textAlign:    'center',
+          display:      'flex',
+          alignItems:   'center',
+          gap:          6,
+          marginBottom: 28,
+          padding:      '4px 12px',
+          background:   'rgba(6,182,212,0.08)',
+          border:       '1px solid rgba(6,182,212,0.18)',
+          borderRadius: 20,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#10b981', marginBottom: 4 }}>
-            Your profile qualifies for guaranteed meetings
-          </div>
-          <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.85)', marginBottom: 12 }}>
-            Based on your ICP, deal size, and differentiator - we can pre-book meetings at your top event.
-          </div>
-          <a
-            href="https://leadstrategus.com/contact/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display:      'inline-block',
-              background:   '#10b981',
-              color:        '#fff',
-              borderRadius: 8,
-              padding:      '8px 18px',
-              fontSize:     12,
-              fontWeight:   600,
-              textDecoration: 'none',
-            }}
-          >
-            Talk to us about guaranteed meetings →
-          </a>
+          <div style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#06b6d4',
+            boxShadow:  '0 0 6px rgba(6,182,212,0.8)',
+          }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#06b6d4', letterSpacing: '0.04em' }}>
+            LeadStrategus  ·  Ranking your shows
+          </span>
         </div>
-      )}
+
+        {/* Probability ring */}
+        <div style={{ position: 'relative', marginBottom: 24 }}>
+          <svg
+            width="148" height="148" viewBox="0 0 148 148"
+            style={{ transform: 'rotate(-90deg)', filter: `drop-shadow(${ringGlow})` }}
+          >
+            {/* Track */}
+            <circle cx="74" cy="74" r="62" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="9" />
+            {/* Faint inner ring */}
+            <circle cx="74" cy="74" r="52" fill="none" stroke="rgba(6,182,212,0.05)" strokeWidth="1" />
+            {/* Progress arc */}
+            <circle
+              cx="74" cy="74" r="62"
+              fill="none"
+              stroke={ringColor}
+              strokeWidth="9"
+              strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * 62}`}
+              strokeDashoffset={`${2 * Math.PI * 62 * (1 - prob / 100)}`}
+              style={{ transition: 'stroke-dashoffset 1.8s cubic-bezier(0.16,1,0.3,1)' }}
+            />
+          </svg>
+          <div style={{
+            position:      'absolute',
+            inset:         0,
+            display:       'flex',
+            flexDirection: 'column',
+            alignItems:    'center',
+            justifyContent:'center',
+          }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: '#f1f5f9', lineHeight: 1, letterSpacing: '-0.02em' }}>
+              <ProbCounter target={prob} />%
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.75)', marginTop: 5, textAlign: 'center', maxWidth: 72, lineHeight: 1.3 }}>
+              meeting success chance
+            </div>
+          </div>
+        </div>
+
+        {/* Headline */}
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', marginBottom: 4, letterSpacing: '-0.01em' }}>
+          {isHighProb ? 'Strong ICP — high meeting potential' : 'Analysing your show matches'}
+        </div>
+        <div style={{ fontSize: 13, color: 'rgba(148,163,184,0.7)', marginBottom: 24, textAlign: 'center' }}>
+          Scanning 50,000+ events{dots}
+        </div>
+
+        {/* Rotating tip card */}
+        <div style={{
+          background:   'rgba(255,255,255,0.03)',
+          border:       '1px solid rgba(6,182,212,0.1)',
+          borderRadius: 12,
+          padding:      '13px 16px',
+          width:        '100%',
+          minHeight:    54,
+          display:      'flex',
+          alignItems:   'center',
+          gap:          10,
+          marginBottom: isHighProb ? 20 : 0,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+            background: 'rgba(6,182,212,0.1)',
+            border:     '1px solid rgba(6,182,212,0.18)',
+            display:    'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <p style={{
+            fontSize:   12.5,
+            color:      'rgba(203,213,225,0.9)',
+            margin:     0,
+            lineHeight: 1.5,
+            transition: 'opacity 0.35s ease',
+            opacity:    tipFading ? 0 : 1,
+          }}>
+            {tips[tipIdx]}
+          </p>
+        </div>
+
+        {/* CTA for high-probability profiles */}
+        {isHighProb && (
+          <div style={{
+            background:   'linear-gradient(135deg, rgba(6,182,212,0.08), rgba(99,102,241,0.1))',
+            border:       '1px solid rgba(6,182,212,0.2)',
+            borderRadius: 12,
+            padding:      '14px 16px',
+            width:        '100%',
+            textAlign:    'center',
+          }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#06b6d4', marginBottom: 4 }}>
+              Your profile qualifies for guaranteed meetings
+            </div>
+            <div style={{ fontSize: 11.5, color: 'rgba(148,163,184,0.8)', marginBottom: 12, lineHeight: 1.5 }}>
+              Based on your ICP, deal size, and differentiator — we can pre-book meetings at your top event.
+            </div>
+            <a
+              href="https://leadstrategus.com/contact/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:        'inline-flex',
+                alignItems:     'center',
+                gap:            5,
+                background:     'linear-gradient(90deg, #06b6d4, #6366f1)',
+                color:          '#fff',
+                borderRadius:   8,
+                padding:        '7px 16px',
+                fontSize:       12,
+                fontWeight:     600,
+                textDecoration: 'none',
+                letterSpacing:  '0.01em',
+              }}
+            >
+              Talk to us about guaranteed meetings →
+            </a>
+          </div>
+        )}
+      </div>
     </div>
   )
+
 }
