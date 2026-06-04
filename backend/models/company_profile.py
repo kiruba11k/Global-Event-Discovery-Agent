@@ -21,8 +21,10 @@ class CompanyProfileORM(Base):
     what_we_need    = Column(Text, default="")
     deck_text       = Column(Text, default="")   # extracted from PDF
     deck_filename   = Column(String, default="")
+    client_names    = Column(Text, default="")   # JSON array of client company names
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 
 class CompanyProfileCreate(BaseModel):
