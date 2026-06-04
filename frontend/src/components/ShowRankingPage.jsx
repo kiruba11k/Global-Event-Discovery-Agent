@@ -140,19 +140,21 @@ function Counter({ target, prefix = '', suffix = '', triggered }) {
 
 // ═══════════════════════════════════════════════════════════════════
 export default function ShowRankingPage({
-  events           = [],
-  profile          = {},
-  userEmail        = '',
-  dealSizeCategory = 'medium',
-  profileId        = '',
-  reportSent       = false,
-  universeStats    = null,   // from SearchResponse.universe_stats (API-calculated)
+  events             = [],
+  allRelevantEvents  = [],   // all ICP-matched events beyond top 6 (no SerpAPI, basic data)
+  profile            = {},
+  userEmail          = '',
+  dealSizeCategory   = 'medium',
+  profileId          = '',
+  reportSent         = false,
+  universeStats      = null,   // from SearchResponse.universe_stats (API-calculated)
   onEmailUnlock,
   onEmailReport,
   onShowClick,        // fn(event, rank) → opens Screen 3
   onBackHome,         // fn() → back to homepage form
   regionFallbackNote = null,
-}) {
+})
+ {
 
   const [unlocked,     setUnlocked]     = useState(!!userEmail)
   const [gateEmail,    setGateEmail]    = useState(userEmail)
@@ -170,13 +172,18 @@ export default function ShowRankingPage({
     return () => io.disconnect()
   }, [])
 
-  // Apply date filter to all events
+  // Apply date filter to top-6 ranked events
   const dateFiltered = applyDateFilter(events, dateWindow)
 
+  // Apply date filter to remaining relevant events
+  const relevantFiltered = applyDateFilter(allRelevantEvents, dateWindow)
+
+  // Full pool for EventTable: ranked top 6 + all remaining relevant events
+  const fullEventPool = [...dateFiltered, ...relevantFiltered]
+
   // Top 6 shown in ranked list
-  // Rows 1–3 free, rows 4–6 email-gated (one unlock = see all 20 in full table)
-  const top6      = dateFiltered.slice(0, 6)
-  const remaining = dateFiltered.slice(6)    // shows 7–20 in full EventTable
+  // Rows 1–3 free, rows 4–6 email-gated
+  const top6 = dateFiltered.slice(0, 6)
 
   // Universe stats — prefer API-provided universe_stats when available
   // Passed as prop from App.jsx (SearchResponse.universe_stats)
@@ -184,8 +191,9 @@ export default function ShowRankingPage({
   const totalICPsAcrossShows = _apiStats.total_icps_across_shows || top6.reduce((sum, e) => {
     const c = calcICPCount(e); return c ? sum + c : sum
   }, 0)
-  const totalConsidering = _apiStats.shows_worth_considering || dateFiltered.length
-  const strongCount      = _apiStats.strongly_recommended || dateFiltered.filter(e => {
+  // shows_worth_considering = all ICP-matched events (API-calculated), or full pool length
+  const totalConsidering = _apiStats.shows_worth_considering || fullEventPool.length
+  const strongCount      = _apiStats.strongly_recommended || fullEventPool.filter(e => {
     const g = getFitGrade(e); return g.grade === 'A+' || g.grade === 'A'
   }).length
 
@@ -288,11 +296,12 @@ export default function ShowRankingPage({
               Next {m} months
             </button>
           ))}
-          {dateFiltered.length !== events.length && (
+          {fullEventPool.length !== (events.length + allRelevantEvents.length) && (
             <span className="rk-date-count">
-              {dateFiltered.length} of {events.length} events
+              {fullEventPool.length} of {events.length + allRelevantEvents.length} events
             </span>
           )}
+
         </div>
       </div>
 
@@ -499,12 +508,13 @@ export default function ShowRankingPage({
           </div>
         )}
 
-        {unlocked && remaining.length > 0 && (
+        {unlocked && (fullEventPool.length - top6.length) > 0 && (
           <div className="rk-more-notice">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            <span>{remaining.length} more events in the full breakdown below.</span>
+            <span>{fullEventPool.length - top6.length} more relevant events in the full breakdown below.</span>
           </div>
         )}
+
       </div>
 
       {/* ── 4. DOWNLOADS ────────────────────────────────────── */}
@@ -646,17 +656,18 @@ export default function ShowRankingPage({
           <p className="rk-detail-sub">Expand any row for ICP analysis, meeting package pricing, and AI rationale.</p>
         </div>
         <EventTable
-          events={unlocked ? dateFiltered : dateFiltered.slice(0, 3)}
+          events={unlocked ? fullEventPool : fullEventPool.slice(0, 3)}
           profileId={profileId}
           dealSizeCategory={dealSizeCategory}
         />
-        {!unlocked && dateFiltered.length > 3 && (
+        {!unlocked && fullEventPool.length > 3 && (
           <div className="rk-detail-gate-notice">
             <button className="rk-gate-inline-btn" onClick={() => document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' })}>
               Unlock full breakdown — enter your email above
             </button>
           </div>
         )}
+
       </div>
 
     </div>
