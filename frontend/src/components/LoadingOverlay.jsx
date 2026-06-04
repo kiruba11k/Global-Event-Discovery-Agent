@@ -1,5 +1,5 @@
 /*
-  LoadingOverlay.jsx — Full-screen loading overlay shown while search runs.
+  LoadingOverlay.jsx - Full-screen loading overlay shown while search runs.
 
   Displays:
   1. Animated meeting-success probability score derived from ICP inputs
@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from 'react'
 
 // ── Probability formula ─────────────────────────────────────────────
-// Derived entirely from ICP form inputs — no API call needed.
+// Derived entirely from ICP form inputs - no API call needed.
 function calcProbability(profile) {
   if (!profile) return 72
 
@@ -29,7 +29,7 @@ function calcProbability(profile) {
   else if (diff >= 6) score += 7
   else if (diff >= 4) score += 3
 
-  // Client count range — proof / credibility signal
+  // Client count range - proof / credibility signal
   const cr = profile.client_count_range || ''
   if (cr === '500+')    score += 8
   else if (cr === '201-500') score += 6
@@ -82,7 +82,7 @@ function buildTips(profile) {
 
   // Differentiator tips
   if (diff >= 8)
-    tips.push('Strong differentiator — you'll stand out on the floor without cold pitching.')
+    tips.push('Strong differentiator - youll stand out on the floor without cold pitching.')
   else if (diff <= 4)
     tips.push('Tip: A tighter ICP message converts floor conversations 3× faster.')
 
@@ -96,7 +96,7 @@ function buildTips(profile) {
   tips.push('Running two-agent AI validation to remove hallucinations…')
   tips.push('Verifying event dates and attendee counts via live web search…')
   tips.push('Calculating expected meetings and ROI for each event…')
-  tips.push('Ranking by ICP density — not just industry keyword match.')
+  tips.push('Ranking by ICP density - not just industry keyword match.')
 
   return tips
 }
@@ -201,7 +201,7 @@ export default function LoadingOverlay({ profile }) {
 
       {/* Headline */}
       <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', marginBottom: 6 }}>
-        {isHighProb ? 'Strong ICP — high meeting potential' : 'Ranking your events now'}
+        {isHighProb ? 'Strong ICP - high meeting potential' : 'Ranking your events now'}
       </div>
       <div style={{ fontSize: 13, color: 'rgba(148,163,184,0.8)', marginBottom: 28, textAlign: 'center' }}>
         Analysing 50,000+ events{dots}
@@ -249,7 +249,7 @@ export default function LoadingOverlay({ profile }) {
             Your profile qualifies for guaranteed meetings
           </div>
           <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.85)', marginBottom: 12 }}>
-            Based on your ICP, deal size, and differentiator — we can pre-book meetings at your top event.
+            Based on your ICP, deal size, and differentiator - we can pre-book meetings at your top event.
           </div>
           <a
             href="https://leadstrategus.com/contact/"
