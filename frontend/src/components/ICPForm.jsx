@@ -326,15 +326,18 @@ export default function ICPForm({
   const [companyName,    setCompanyName]    = useState(companyData?.company_name || '')
   const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
   const [clientRange,    setClientRange]    = useState('')     // client count range
+  const [clientNames,   setClientNames]   = useState([])   // array of company name strings
+  const [clientNameInput, setClientNameInput] = useState('')
   const [eventNeeds,  setEventNeeds]  = useState('')
   const [salesMotion, setSalesMotion] = useState('')
   const [deckFile,    setDeckFile]    = useState(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeSubmitted, setUpgradeSubmitted] = useState(false)
 
-  const buyerRef = useRef(null)
-  const geoRef   = useRef(null)
-  const fileRef  = useRef(null)
+  const buyerRef         = useRef(null)
+  const geoRef           = useRef(null)
+  const fileRef          = useRef(null)
+  const clientNameInputRef = useRef(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -373,6 +376,15 @@ export default function ICPForm({
 
   const filteredGeos = GEO_OPTIONS.filter(g => g.toLowerCase().includes(geoSearch.toLowerCase()))
   const typedIsNew   = geoSearch.trim().length > 0 && !GEO_OPTIONS.some(g => g.toLowerCase() === geoSearch.trim().toLowerCase()) && !geos.map(g => g.toLowerCase()).includes(geoSearch.trim().toLowerCase())
+  const addClientName = () => {
+    const name = clientNameInput.trim()
+    if (!name) return
+    if (!clientNames.includes(name)) setClientNames(prev => [...prev, name])
+    setClientNameInput('')
+    clientNameInputRef.current?.focus()
+  }
+
+  const removeClientName = (name) => setClientNames(prev => prev.filter(n => n !== name))
 
 
   const validate = () => {
@@ -403,6 +415,8 @@ export default function ICPForm({
       buyer_description:    buyer,
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
+      client_names:         clientNames,
+
     }
     onSubmit && onSubmit(profile, email)
   }
@@ -454,8 +468,67 @@ export default function ICPForm({
             </div>
           )
         })()}
-        {errors.buyer && <p className="icp-error">{errors.buyer}</p>}
+        {errors.client && <p className="icp-error">{errors.client}</p>}
       </div>
+
+      {/* Client names — optional tag input */}
+      <div className="icp-field-group">
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+          Who are some of your clients? <span style={{ color: 'rgba(148,163,184,0.5)', fontWeight: 400, fontSize: 12 }}>(optional)</span>
+        </label>
+        <p className="icp-hint">Helps us identify events where similar companies buy. Add as many as you like.</p>
+
+        {/* Tag chips */}
+        {clientNames.length > 0 && (
+          <div className="icp-client-names-chips" role="list" aria-label="Added client names">
+            {clientNames.map(name => (
+              <span key={name} className="icp-client-name-chip" role="listitem">
+                <span className="icp-client-name-text">{name}</span>
+                <button
+                  type="button"
+                  className="icp-client-name-remove"
+                  onClick={() => removeClientName(name)}
+                  aria-label={`Remove ${name}`}
+                >×</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="icp-client-name-row">
+          <input
+            ref={clientNameInputRef}
+            type="text"
+            value={clientNameInput}
+            onChange={e => setClientNameInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); addClientName() }
+              if (e.key === ',' )    { e.preventDefault(); addClientName() }
+            }}
+            placeholder="e.g. Acme Corp, TechCo, StartupXYZ…"
+            className={`icp-input ${heroMode ? 'icp-input--hero' : ''}`}
+            autoComplete="off"
+            aria-label="Client company name"
+          />
+          <button
+            type="button"
+            className="icp-client-name-add-btn"
+            onClick={addClientName}
+            disabled={!clientNameInput.trim()}
+            aria-label="Add client name"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add
+          </button>
+        </div>
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Press Enter or comma to add · click × to remove</p>
+      </div>
+
+      {/* Field 4: Email */}
+
 
       {/* Field 2: Geography */}
       <div className="icp-field-group">
