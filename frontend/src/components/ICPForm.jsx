@@ -315,6 +315,10 @@ export default function ICPForm({
   const [errors,   setErrors]   = useState({})
   const [geoOpen,  setGeoOpen]  = useState(false)
   const [geoSearch,setGeoSearch]= useState('')
+  const [geoOpen,  setGeoOpen]  = useState(false)
+  const [geoSearch,setGeoSearch]= useState('')
+  const geoInputRef = useRef(null)
+
   const [buyerSugs,setBuyerSugs]= useState([])
   const [showSugs, setShowSugs] = useState(false)
   const [mounted,  setMounted]  = useState(false)
@@ -356,8 +360,20 @@ export default function ICPForm({
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const toggleGeo   = (g) => setGeos(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])
+  const toggleGeo = (g) => setGeos(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])
+
+  const addGeo = (g) => {
+    const trimmed = g.trim()
+    if (!trimmed) return
+    if (!geos.includes(trimmed)) setGeos(prev => [...prev, trimmed])
+    setGeoSearch('')
+    setGeoOpen(false)
+    setErrors(p => ({ ...p, geos: '' }))
+  }
+
   const filteredGeos = GEO_OPTIONS.filter(g => g.toLowerCase().includes(geoSearch.toLowerCase()))
+  const typedIsNew   = geoSearch.trim().length > 0 && !GEO_OPTIONS.some(g => g.toLowerCase() === geoSearch.trim().toLowerCase()) && !geos.map(g => g.toLowerCase()).includes(geoSearch.trim().toLowerCase())
+
 
   const validate = () => {
     const e = {}
@@ -458,26 +474,56 @@ export default function ICPForm({
           </div>
         )}
         <div ref={geoRef} style={{ position: 'relative' }}>
-          <button
-            className={`icp-geo-trigger ${heroMode ? 'icp-geo-trigger--hero' : ''} ${errors.geos ? 'icp-input--error' : ''}`}
-            onClick={() => setGeoOpen(o => !o)}
-            type="button"
-            aria-expanded={geoOpen}
-          >
-            <span style={{ color: geos.length ? 'inherit' : 'rgba(148,163,184,.5)' }}>
-              {geos.length ? `${geos.length} region${geos.length > 1 ? 's' : ''} selected` : 'Select regions…'}
-            </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: geoOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} aria-hidden="true">
+          {/* Combobox: type to search OR add any custom region */}
+          <div style={{ position: 'relative' }}>
+            <input
+              ref={geoInputRef}
+              type="text"
+              value={geoSearch}
+              onChange={e => { setGeoSearch(e.target.value); setGeoOpen(true); setErrors(p => ({ ...p, geos: '' })) }}
+              onFocus={() => setGeoOpen(true)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); if (geoSearch.trim()) addGeo(geoSearch) }
+                if (e.key === 'Escape') { setGeoOpen(false); setGeoSearch('') }
+              }}
+              placeholder={geos.length ? 'Type to add another region…' : 'Type or choose a region…'}
+              autoComplete="off"
+              className={`icp-input ${heroMode ? 'icp-input--hero' : ''} ${errors.geos ? 'icp-input--error' : ''}`}
+              aria-haspopup="listbox"
+              aria-expanded={geoOpen}
+              aria-autocomplete="list"
+            />
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+              style={{ position: 'absolute', right: 12, top: '50%', transform: `translateY(-50%) ${geoOpen ? 'rotate(180deg)' : ''}`, transition: 'transform .2s', pointerEvents: 'none', color: 'rgba(148,163,184,0.5)' }}
+            >
               <polyline points="6 9 12 15 18 9"/>
             </svg>
-          </button>
-          {geoOpen && (
+          </div>
+
+          {geoOpen && (filteredGeos.length > 0 || typedIsNew) && (
             <div className="icp-geo-dropdown" role="listbox">
-              <input type="text" value={geoSearch} onChange={e => setGeoSearch(e.target.value)} placeholder="Search regions…" className="icp-geo-search" autoFocus />
               <div className="icp-geo-list">
+                {/* Add custom region if typed text doesn't match any option */}
+                {typedIsNew && (
+                  <button
+                    role="option"
+                    className="icp-geo-option icp-geo-option--add"
+                    onMouseDown={() => addGeo(geoSearch)}
+                  >
+                    <span className="icp-geo-check" aria-hidden="true">+</span>
+                    Add "<strong>{geoSearch.trim()}</strong>"
+                  </button>
+                )}
                 {filteredGeos.map(geo => (
-                  <button key={geo} role="option" aria-selected={geos.includes(geo)} className={`icp-geo-option ${geos.includes(geo) ? 'selected' : ''}`} onMouseDown={() => toggleGeo(geo)}>
+                  <button
+                    key={geo}
+                    role="option"
+                    aria-selected={geos.includes(geo)}
+                    className={`icp-geo-option ${geos.includes(geo) ? 'selected' : ''}`}
+                    onMouseDown={() => { toggleGeo(geo); setGeoSearch(''); setGeoOpen(false); setErrors(p => ({ ...p, geos: '' })) }}
+                  >
                     <span className="icp-geo-check" aria-hidden="true">{geos.includes(geo) ? '✓' : ''}</span>
                     {geo}
                   </button>
