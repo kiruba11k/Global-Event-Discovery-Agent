@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import ICPForm          from './components/ICPForm'
 import ShowRankingPage  from './components/ShowRankingPage'
+import LoadingOverlay   from './components/LoadingOverlay'
 import ShowDeepDivePage from './components/ShowDeepDivePage'
 import EmailReportModal from './components/EmailReportModal'
 import { api }          from './api/client'
@@ -79,6 +80,9 @@ export default function App() {
   const [reportSent,       setReportSent]       = useState(false)
   const [universeStats,    setUniverseStats]    = useState(null)
   const [emailModalOpen,   setEmailModalOpen]   = useState(false)
+  const [regionFallback,   setRegionFallback]   = useState(null)
+  const [loadingProfile,   setLoadingProfile]   = useState(null)
+
 
   /* ── Deep dive ─────────────────────────────────────────────── */
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
@@ -126,17 +130,19 @@ export default function App() {
   const onSearch = async (profile, email) => {
     if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
     setLastProfile(profile)
+    setLoadingProfile(profile)
     if (email) setUserEmail(email)
     setLoading(true)
     setReportSent(false)
+    setRegionFallback(null)
 
     try {
       const res    = await api.search({ profile })
       const events = res.events || []
       setProfileId(res.profile_id || '')
       setResults(events)
-      // universe_stats comes from the backend SearchResponse
       if (res.universe_stats) setUniverseStats(res.universe_stats)
+      if (res.region_fallback_note) setRegionFallback(res.region_fallback_note)
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
@@ -201,6 +207,8 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
+          {loading && <LoadingOverlay profile={loadingProfile} />}
+
         <ShowRankingPage
           events={allDisplay}
           profile={lastProfile}
@@ -209,6 +217,7 @@ export default function App() {
           profileId={profileId}
           reportSent={reportSent}
           universeStats={universeStats}
+          regionFallbackNote={regionFallback}
           onEmailUnlock={(email) => {
             setUserEmail(email)
             if (!reportSent) _autoSendReport(results, lastProfile, email)
@@ -319,6 +328,8 @@ export default function App() {
               showUpgrade={false}
               heroMode={true}
             />
+            {loading && <LoadingOverlay profile={loadingProfile} />}
+
           </div>
           <p className="hp-microcopy">Free · Top 6 always free · No credit card · No sales call</p>
           <a className="hp-escape-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
