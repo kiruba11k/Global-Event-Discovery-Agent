@@ -625,6 +625,46 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     srcs  = {getattr(r, "source_platform", "?") for r in ranked}
     logger.info(f"RESULT: {len(ranked)} events | GO={go_n} CONSIDER={con_n} | sources={srcs}")
 
+    # ── Post-ranking geo coverage check ──────────────────────────────
+    # If NONE of the final events match the user's requested geographies,
+    # always surface a fallback note explaining the mismatch — even when
+    # the early candidate pool was large enough to skip the regional fallback.
+    if not region_fallback_note and original_geos:
+        non_global_geos = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
+        if non_global_geos:
+            def _event_matches_geo(ev_dict: dict, geos: list[str]) -> bool:
+                loc = " ".join(filter(None, [
+                    ev_dict.get("place", ""),
+                    ev_dict.get("location", ""),
+                ])).lower()
+                return any(g.lower()[:6] in loc or loc.find(g.lower()[:5]) >= 0 for g in geos)
+
+            matched = sum(1 for ev in serialised_events if _event_matches_geo(ev, non_global_geos))
+            if matched == 0:
+                # Zero of the final events are in the requested geos — explain why
+                # and surface the neighbour suggestions from the geo-hint map
+                neighbours: list[str] = []
+                for geo in non_global_geos:
+                    geo_l = geo.lower().strip()
+                    for key, nbrs in _GEO_NEIGHBOURS.items():
+                        if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
+                            neighbours.extend(nbrs[:3])
+                            break
+                neighbours = list(dict.fromkeys(neighbours))[:4]
+                neighbour_str = ", ".join(t.title() for t in neighbours) if neighbours else "nearby hubs"
+                region_fallback_note = (
+                    f"No events found yet in {', '.join(non_global_geos)}. "
+                    f"Showing the most relevant global events for your ICP instead. "
+                    f"Try nearby regions with more coverage: {neighbour_str}."
+                )
+            elif matched < len(serialised_events) // 2:
+                # Fewer than half the results match — soft warning
+                region_fallback_note = (
+                    f"Limited events in {', '.join(non_global_geos)} — "
+                    f"showing the best global matches for your ICP to complete the ranking."
+                )
+
+
     resp = SearchResponse(
         profile_id=profile_id, company_name=profile.company_name,
         total_found=len(ranked), events=serialised_events,
