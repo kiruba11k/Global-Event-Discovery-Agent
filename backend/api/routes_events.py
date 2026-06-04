@@ -287,6 +287,94 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     if profile.date_from or profile.date_to:
         candidates = [e for e in candidates if _within_dates(e, profile.date_from, profile.date_to)]
 
+    # ── Regional fallback: if specific geo yields < 3 candidates, broaden ──
+    # Maps specific countries → broader region so users always get results.
+    _GEO_REGION_MAP: dict[str, list[str]] = {
+        # Southeast Asia
+        "indonesia": ["southeast asia", "asia", "singapore", "malaysia", "thailand", "vietnam", "philippines"],
+        "vietnam":   ["southeast asia", "asia", "singapore", "thailand", "malaysia"],
+        "philippines": ["southeast asia", "asia", "singapore", "malaysia"],
+        "myanmar":   ["southeast asia", "asia", "singapore", "thailand"],
+        "cambodia":  ["southeast asia", "asia", "singapore", "thailand"],
+        "laos":      ["southeast asia", "asia", "thailand", "singapore"],
+        # South Asia
+        "bangladesh": ["south asia", "asia", "india", "singapore"],
+        "sri lanka":  ["south asia", "asia", "india", "singapore"],
+        "nepal":      ["south asia", "asia", "india"],
+        "pakistan":   ["south asia", "asia", "india", "uae"],
+        # Middle East
+        "bahrain":   ["middle east", "uae", "saudi arabia"],
+        "kuwait":    ["middle east", "uae", "saudi arabia"],
+        "oman":      ["middle east", "uae", "saudi arabia"],
+        "qatar":     ["middle east", "uae", "saudi arabia"],
+        # Africa
+        "nigeria":   ["africa", "south africa"],
+        "kenya":     ["africa", "south africa"],
+        "ghana":     ["africa", "south africa"],
+        "egypt":     ["africa", "middle east", "uae"],
+        # Europe
+        "austria":   ["europe", "germany"],
+        "switzerland": ["europe", "germany"],
+        "belgium":   ["europe", "netherlands", "germany"],
+        "denmark":   ["europe", "germany", "netherlands"],
+        "sweden":    ["europe", "germany"],
+        "norway":    ["europe", "germany"],
+        "finland":   ["europe", "germany"],
+        "poland":    ["europe", "germany"],
+        "czech":     ["europe", "germany"],
+        "hungary":   ["europe", "germany"],
+        "portugal":  ["europe", "spain"],
+        "romania":   ["europe", "germany"],
+        # Americas
+        "mexico":    ["latin america", "usa"],
+        "colombia":  ["latin america", "usa"],
+        "argentina":  ["latin america", "usa"],
+        "chile":     ["latin america", "usa"],
+        "peru":      ["latin america", "usa"],
+    }
+
+    region_fallback_note: Optional[str] = None
+    original_geos = list(profile.target_geographies or [])
+
+    if candidates and len(candidates) < 3 and original_geos:
+        # Check if specific non-global geos were requested
+        non_global = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
+        if non_global:
+            # Try broadening to regional equivalents
+            broader_geos: list[str] = []
+            for geo in non_global:
+                geo_l = geo.lower().strip()
+                for key, regions in _GEO_REGION_MAP.items():
+                    if key in geo_l or geo_l in key:
+                        broader_geos.extend(regions)
+                        break
+                else:
+                    # Generic: just try the continent/region implicitly
+                    broader_geos.append(geo)
+            broader_geos = list(dict.fromkeys(broader_geos))  # deduplicate
+
+            if broader_geos:
+                # Re-fetch with broader geo set
+                from db.crud import get_candidate_events as _gce
+                broader_candidates = await _gce(
+                    db,
+                    geographies  = broader_geos,
+                    industries   = profile.target_industries or [],
+                    date_from    = profile.date_from,
+                    date_to      = profile.date_to,
+                    limit        = 400,
+                )
+                if profile.date_from or profile.date_to:
+                    broader_candidates = [e for e in broader_candidates if _within_dates(e, profile.date_from, profile.date_to)]
+
+                if len(broader_candidates) > len(candidates):
+                    region_fallback_note = (
+                        f"No events found in {', '.join(non_global)}. "
+                        f"Showing events from the broader region ({', '.join(broader_geos[:3])}) instead."
+                    )
+                    candidates = broader_candidates
+                    logger.info(f"Regional fallback: {', '.join(non_global)} → {', '.join(broader_geos[:3])} ({len(candidates)} candidates)")
+
     if not candidates:
         logger.info("No candidates after date filter.")
         _last_results[profile_id] = []
@@ -294,6 +382,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                                total_found=0, events=[], generated_at=datetime.utcnow().isoformat() + "Z")
 
     logger.info(f"Candidates for scoring: {len(candidates)}")
+
 
     # ── Step 5: Semantic scoring (disabled on free tier) ─────────────
     cosine_scores: dict = {}
@@ -496,8 +585,10 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     )
     # Attach universe_stats as extra field (SearchResponse is a BaseModel)
     resp_dict = resp.model_dump()
-    resp_dict["universe_stats"] = universe
-    resp_dict["profile_hash"]   = profile_core_hash(profile)
+    resp_dict["universe_stats"]        = universe
+    resp_dict["profile_hash"]          = profile_core_hash(profile)
+    resp_dict["region_fallback_note"]  = region_fallback_note
+
 
     # ── Record search results for future recall (async, non-blocking) ─
     # Stores top events so future similar searches benefit from this data.
