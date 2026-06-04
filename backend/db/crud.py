@@ -11,7 +11,7 @@ Key fixes:
 """
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-
+import json as _json
 import uuid
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
@@ -582,7 +582,7 @@ async def create_company_profile(
     deck_text:     str = "",
     deck_filename: str = "",
 ) -> CompanyProfileORM:
-    profile = CompanyProfileORM(
+        profile = CompanyProfileORM(
         id           = str(uuid.uuid4()),
         company_name = data.company_name,
         founded_year = data.founded_year,
@@ -591,9 +591,11 @@ async def create_company_profile(
         what_we_need = data.what_we_need,
         deck_text    = deck_text[:8000],
         deck_filename= deck_filename,
+        client_names = _json.dumps(data.client_names or []),
         created_at   = datetime.utcnow(),
         updated_at   = datetime.utcnow(),
     )
+
     db.add(profile)
     await db.commit()
     await db.refresh(profile)
