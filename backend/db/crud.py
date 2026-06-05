@@ -610,3 +610,24 @@ async def get_company_profile(
         select(CompanyProfileORM).where(CompanyProfileORM.id == profile_id)
     )
     return result.scalar_one_or_none()
+
+
+async def update_company_profile_client_names(
+    db: AsyncSession, profile_id: str, client_names: list
+) -> None:
+    """Merge new client names into an existing company profile record."""
+    import json as _json
+    cp = await get_company_profile(db, profile_id)
+    if not cp:
+        return
+    existing = []
+    try:
+        existing = _json.loads(cp.client_names or "[]")
+        if not isinstance(existing, list):
+            existing = []
+    except Exception:
+        pass
+    merged = list(dict.fromkeys(existing + client_names))  # dedupe, preserve order
+    cp.client_names = _json.dumps(merged)
+    cp.updated_at   = datetime.utcnow()
+    await db.commit()
