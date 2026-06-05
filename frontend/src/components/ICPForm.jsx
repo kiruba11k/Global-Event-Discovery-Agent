@@ -15,7 +15,8 @@
     companyData
 */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { api } from '../api/client'
 import '../icp-form.css'
 
 // ── Smart suggestion bank ─────────────────────────────────────────
@@ -281,7 +282,6 @@ function parseBuyerText(text) {
     [['project manager','program manager','pmo','project director'],
                                                                   'Project Manager'],
   ]
- 
   for (const [kw, ind] of industryMap)
     if (kw.some(k => t.includes(k)) && !industries.includes(ind)) industries.push(ind)
   for (const [kw, per] of personaMap)
@@ -316,7 +316,6 @@ export default function ICPForm({
   const [geoOpen,  setGeoOpen]  = useState(false)
   const [geoSearch,setGeoSearch]= useState('')
   const geoInputRef = useRef(null)
-
   const [buyerSugs,setBuyerSugs]= useState([])
   const [showSugs, setShowSugs] = useState(false)
   const [mounted,  setMounted]  = useState(false)
@@ -329,6 +328,11 @@ export default function ICPForm({
   const [eventNeeds,  setEventNeeds]  = useState('')
   const [salesMotion, setSalesMotion] = useState('')
   const [deckFile,    setDeckFile]    = useState(null)
+
+  // ── Geo hint state ─────────────────────────────────────────────
+  const [geoHints,     setGeoHints]     = useState({})   // { "Indonesia": {count,status,suggestions} }
+  const [geoHintLoad,  setGeoHintLoad]  = useState(false)
+  const geoHintTimer = useRef(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeSubmitted, setUpgradeSubmitted] = useState(false)
 
@@ -338,6 +342,24 @@ export default function ICPForm({
   const clientNameInputRef = useRef(null)
 
   useEffect(() => { setMounted(true) }, [])
+
+  // ── Geo hint: debounced live fetch after geo selection changes ──
+  useEffect(() => {
+    clearTimeout(geoHintTimer.current)
+    if (!geos.length) { setGeoHints({}); return }
+    setGeoHintLoad(true)
+    geoHintTimer.current = setTimeout(async () => {
+      try {
+        const { industries } = parseBuyerText(buyer)
+        const data = await api.geoHint(geos, industries)
+        const map = {}
+        for (const item of (data.coverage || [])) map[item.geo] = item
+        setGeoHints(map)
+      } catch (_) {}
+      finally { setGeoHintLoad(false) }
+    }, 600)
+    return () => clearTimeout(geoHintTimer.current)
+  }, [geos, buyer])
 
   useEffect(() => {
     if (companyData?.email && !email)        setEmail(companyData.email)
@@ -374,6 +396,36 @@ export default function ICPForm({
 
   const filteredGeos = GEO_OPTIONS.filter(g => g.toLowerCase().includes(geoSearch.toLowerCase()))
   const typedIsNew   = geoSearch.trim().length > 0 && !GEO_OPTIONS.some(g => g.toLowerCase() === geoSearch.trim().toLowerCase()) && !geos.map(g => g.toLowerCase()).includes(geoSearch.trim().toLowerCase())
+
+  // Swap one geo for a suggested neighbour + auto-resubmit if form was already submitted
+  const swapGeo = useCallback((oldGeo, newGeo) => {
+    const updated = geos.includes(newGeo)
+      ? geos.filter(g => g !== oldGeo)
+      : geos.map(g => g === oldGeo ? newGeo : g)
+    setGeos(updated)
+    setErrors(p => ({ ...p, geos: '' }))
+    // Auto-resubmit: build profile with swapped geos and call onSubmit
+    const { industries, personas } = parseBuyerText(buyer)
+    const { date_from, date_to }   = getDefaultDateWindow()
+    if (onSubmit && dealSize && buyer.trim() && email.trim()) {
+      const profile = {
+        company_name:           companyData?.company_name || companyName || 'LeadStrategus User',
+        company_description:    buyer,
+        target_industries:      industries.length ? industries : ['Technology'],
+        target_personas:        personas,
+        target_geographies:     updated,
+        preferred_event_types:  ['conference', 'trade show', 'summit', 'expo'],
+        avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
+        date_from, date_to,
+        buyer_description:      buyer,
+        differentiator_score:   diffScore,
+        client_count_range:     clientRange || '11-50',
+        client_names:           clientNames,
+      }
+      onSubmit(profile, email)
+    }
+  }, [geos, buyer, dealSize, email, diffScore, clientRange, companyName, companyData, onSubmit])
+
   const addClientName = () => {
     const name = clientNameInput.trim()
     if (!name) return
@@ -383,7 +435,6 @@ export default function ICPForm({
   }
 
   const removeClientName = (name) => setClientNames(prev => prev.filter(n => n !== name))
-
 
   const validate = () => {
     const e = {}
@@ -414,7 +465,6 @@ export default function ICPForm({
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
       client_names:         clientNames,
-
     }
     onSubmit && onSubmit(profile, email)
   }
@@ -466,67 +516,8 @@ export default function ICPForm({
             </div>
           )
         })()}
-        {errors.client && <p className="icp-error">{errors.client}</p>}
+        {errors.buyer && <p className="icp-error">{errors.buyer}</p>}
       </div>
-
-      {/* Client names — optional tag input */}
-      <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
-          Who are some of your clients? <span style={{ color: 'rgba(148,163,184,0.5)', fontWeight: 400, fontSize: 12 }}>(optional)</span>
-        </label>
-        <p className="icp-hint">Helps us identify events where similar companies buy. Add as many as you like.</p>
-
-        {/* Tag chips */}
-        {clientNames.length > 0 && (
-          <div className="icp-client-names-chips" role="list" aria-label="Added client names">
-            {clientNames.map(name => (
-              <span key={name} className="icp-client-name-chip" role="listitem">
-                <span className="icp-client-name-text">{name}</span>
-                <button
-                  type="button"
-                  className="icp-client-name-remove"
-                  onClick={() => removeClientName(name)}
-                  aria-label={`Remove ${name}`}
-                >×</button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Input row */}
-        <div className="icp-client-name-row">
-          <input
-            ref={clientNameInputRef}
-            type="text"
-            value={clientNameInput}
-            onChange={e => setClientNameInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); addClientName() }
-              if (e.key === ',' )    { e.preventDefault(); addClientName() }
-            }}
-            placeholder="e.g. Acme Corp, TechCo, StartupXYZ…"
-            className={`icp-input ${heroMode ? 'icp-input--hero' : ''}`}
-            autoComplete="off"
-            aria-label="Client company name"
-          />
-          <button
-            type="button"
-            className="icp-client-name-add-btn"
-            onClick={addClientName}
-            disabled={!clientNameInput.trim()}
-            aria-label="Add client name"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add
-          </button>
-        </div>
-        <p style={{ margin: '5px 0 0', fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Press Enter or comma to add · click × to remove</p>
-      </div>
-
-      {/* Field 4: Email */}
-
 
       {/* Field 2: Geography */}
       <div className="icp-field-group">
@@ -604,6 +595,70 @@ export default function ICPForm({
           )}
         </div>
         {errors.geos && <p className="icp-error">{errors.geos}</p>}
+
+        {/* Live geo coverage hints */}
+        {geos.length > 0 && !geos.includes('Global') && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }} aria-live="polite">
+            {geoHintLoad && (
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>Checking event coverage…</p>
+            )}
+            {!geoHintLoad && geos.filter(g => g !== 'Global').map(geo => {
+              const hint = geoHints[geo]
+              if (!hint) return null
+              const isGood   = hint.status === 'good'
+              const isSparse = hint.status === 'sparse'
+              const isNone   = hint.status === 'none'
+              return (
+                <div key={geo} style={{
+                  background:   isGood ? 'rgba(16,185,129,0.06)' : isNone ? 'rgba(245,158,11,0.06)' : 'rgba(99,102,241,0.05)',
+                  border:       `1px solid ${isGood ? 'rgba(16,185,129,0.18)' : isNone ? 'rgba(245,158,11,0.20)' : 'rgba(99,102,241,0.18)'}`,
+                  borderRadius: 8,
+                  padding:      '8px 12px',
+                  fontSize:     12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (isSparse || isNone) && hint.suggestions?.length ? 8 : 0 }}>
+                    <span style={{ fontSize: 13 }}>{isGood ? '✅' : isNone ? '⚠️' : '🟡'}</span>
+                    <span style={{ color: isGood ? '#059669' : isNone ? '#d97706' : '#6366f1', fontWeight: 700 }}>
+                      {geo}
+                    </span>
+                    <span style={{ color: '#64748b' }}>
+                      {isGood   && `— ${hint.count} events in our index`}
+                      {isSparse && `— only ${hint.count} event${hint.count !== 1 ? 's' : ''} found`}
+                      {isNone   && '— no events found yet in this region'}
+                    </span>
+                  </div>
+                  {(isSparse || isNone) && hint.suggestions?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                        Try instead:
+                      </span>
+                      {hint.suggestions.map(s => (
+                        <button
+                          key={s.geo}
+                          type="button"
+                          onClick={() => swapGeo(geo, s.geo)}
+                          style={{
+                            background:   'rgba(6,182,212,0.08)',
+                            border:       '1px solid rgba(6,182,212,0.25)',
+                            borderRadius: 20,
+                            padding:      '3px 11px',
+                            fontSize:     11,
+                            color:        '#0891b2',
+                            cursor:       'pointer',
+                            fontWeight:   600,
+                          }}
+                        >
+                          {s.geo}
+                          <span style={{ color: '#64748b', marginLeft: 4 }}>({s.count})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Field 3: Deal value */}
@@ -694,6 +749,62 @@ export default function ICPForm({
           ))}
         </div>
         {errors.client && <p className="icp-error">{errors.client}</p>}
+      </div>
+
+      {/* Client names — optional tag input */}
+      <div className="icp-field-group">
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+          Who are some of your clients? <span style={{ color: 'rgba(148,163,184,0.5)', fontWeight: 400, fontSize: 12 }}>(optional)</span>
+        </label>
+        <p className="icp-hint">Helps us identify events where similar companies buy. Add as many as you like.</p>
+
+        {/* Tag chips */}
+        {clientNames.length > 0 && (
+          <div className="icp-client-names-chips" role="list" aria-label="Added client names">
+            {clientNames.map(name => (
+              <span key={name} className="icp-client-name-chip" role="listitem">
+                <span className="icp-client-name-text">{name}</span>
+                <button
+                  type="button"
+                  className="icp-client-name-remove"
+                  onClick={() => removeClientName(name)}
+                  aria-label={`Remove ${name}`}
+                >×</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="icp-client-name-row">
+          <input
+            ref={clientNameInputRef}
+            type="text"
+            value={clientNameInput}
+            onChange={e => setClientNameInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); addClientName() }
+              if (e.key === ',' )    { e.preventDefault(); addClientName() }
+            }}
+            placeholder="e.g. Acme Corp, TechCo, StartupXYZ…"
+            className={`icp-input ${heroMode ? 'icp-input--hero' : ''}`}
+            autoComplete="off"
+            aria-label="Client company name"
+          />
+          <button
+            type="button"
+            className="icp-client-name-add-btn"
+            onClick={addClientName}
+            disabled={!clientNameInput.trim()}
+            aria-label="Add client name"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add
+          </button>
+        </div>
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Press Enter or comma to add · click × to remove</p>
       </div>
 
       {/* Field 4: Email */}
