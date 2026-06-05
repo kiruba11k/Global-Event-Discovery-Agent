@@ -58,10 +58,90 @@ RESULT_LIMIT          = 6
 GO_RESULT_COUNT       = 3
 CONSIDER_RESULT_COUNT = 3
 
-
 _seed_10times_status: dict           = {"running": False, "last_result": None, "last_error": None}
 _seed_conferencealerts_status: dict  = {"running": False, "last_result": None, "last_error": None}
 _seed_global_status: dict            = {"running": False, "last_result": None, "last_error": None}
+
+# ── Geographic neighbour map (proximity only — counts come from DB live) ──
+# Maps every queryable geo to its geographic neighbours in order of proximity.
+_GEO_NEIGHBOURS: dict[str, list[str]] = {
+    # Southeast Asia
+    "indonesia":     ["singapore", "malaysia", "thailand", "vietnam", "philippines", "southeast asia"],
+    "vietnam":       ["thailand", "singapore", "malaysia", "philippines", "indonesia", "southeast asia"],
+    "philippines":   ["singapore", "malaysia", "indonesia", "thailand", "southeast asia"],
+    "myanmar":       ["thailand", "singapore", "malaysia", "southeast asia"],
+    "cambodia":      ["thailand", "vietnam", "singapore", "southeast asia"],
+    "laos":          ["thailand", "vietnam", "southeast asia"],
+    "brunei":        ["singapore", "malaysia", "southeast asia"],
+    "timor":         ["indonesia", "singapore", "southeast asia"],
+    # South Asia
+    "pakistan":      ["india", "uae", "singapore"],
+    "bangladesh":    ["india", "singapore"],
+    "sri lanka":     ["india", "singapore"],
+    "nepal":         ["india"],
+    "bhutan":        ["india"],
+    "maldives":      ["india", "singapore"],
+    # Middle East
+    "bahrain":       ["uae", "saudi arabia", "qatar"],
+    "kuwait":        ["uae", "saudi arabia"],
+    "oman":          ["uae", "saudi arabia"],
+    "qatar":         ["uae", "saudi arabia", "bahrain"],
+    "jordan":        ["uae", "saudi arabia"],
+    "iraq":          ["uae", "saudi arabia"],
+    "lebanon":       ["uae"],
+    "turkey":        ["germany", "uae", "netherlands"],
+    # Africa — extended to global hubs so there's always a suggestion
+    "nigeria":       ["south africa", "kenya", "ghana", "egypt", "uae", "uk", "usa"],
+    "kenya":         ["south africa", "nigeria", "ethiopia", "egypt", "uae", "india"],
+    "ghana":         ["south africa", "nigeria", "senegal", "uae", "uk"],
+    "ethiopia":      ["south africa", "kenya", "egypt", "uae"],
+    "egypt":         ["uae", "south africa", "kenya", "turkey", "uk"],
+    "tanzania":      ["south africa", "kenya", "uae"],
+    "rwanda":        ["south africa", "kenya", "uae"],
+    "senegal":       ["south africa", "ghana", "uae", "france"],
+    "morocco":       ["uae", "south africa", "france", "spain", "uk"],
+    "south africa":  ["uae", "uk", "usa", "germany", "kenya"],
+    "cameroon":      ["south africa", "nigeria", "uae"],
+    "uganda":        ["south africa", "kenya", "uae"],
+    "zambia":        ["south africa", "kenya"],
+    "zimbabwe":      ["south africa", "kenya"],
+    "mozambique":    ["south africa"],
+    "angola":        ["south africa", "uae"],
+    "ivory coast":   ["south africa", "ghana", "uae"],
+    "cote d'ivoire": ["south africa", "ghana", "uae"],
+    # Europe (suggest top hubs when smaller country is sparse)
+    "austria":       ["germany", "netherlands"],
+    "switzerland":   ["germany", "netherlands"],
+    "belgium":       ["netherlands", "germany", "france", "uk"],
+    "denmark":       ["germany", "netherlands"],
+    "sweden":        ["germany", "netherlands"],
+    "norway":        ["germany", "netherlands"],
+    "finland":       ["germany", "netherlands"],
+    "poland":        ["germany"],
+    "czech":         ["germany"],
+    "hungary":       ["germany"],
+    "romania":       ["germany"],
+    "portugal":      ["spain", "uk"],
+    "ireland":       ["uk", "netherlands"],
+    "greece":        ["germany", "netherlands"],
+    "croatia":       ["germany"],
+    "slovakia":      ["germany"],
+    "bulgaria":      ["germany"],
+    # Americas
+    "mexico":        ["usa"],
+    "colombia":      ["usa", "brazil"],
+    "argentina":     ["brazil", "usa"],
+    "chile":         ["brazil", "usa"],
+    "peru":          ["brazil", "usa"],
+    "venezuela":     ["usa", "brazil"],
+    "ecuador":       ["brazil", "usa"],
+    # APAC
+    "new zealand":   ["australia"],
+    "vietnam":       ["singapore", "thailand", "malaysia"],
+    "taiwan":        ["singapore", "japan"],
+    "hong kong":     ["singapore", "japan"],
+    "sri lanka":     ["india", "singapore"],
+}
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -111,7 +191,6 @@ def _apply_result_mix(ranked: Iterable) -> list:
         extras   = [r for r in all_ranked if r.id not in used_ids]
         result  += extras[:RESULT_LIMIT - len(result)]
     return result[:RESULT_LIMIT]
-
 
 
 # ── CSV helpers ────────────────────────────────────────────────────
@@ -226,9 +305,16 @@ async def save_company_profile(company_data: str = Form(...), deck: UploadFile =
 async def fetch_company_profile(profile_id: str, db: AsyncSession = Depends(get_db)):
     cp = await get_company_profile(db, profile_id)
     if not cp: raise HTTPException(status_code=404, detail="Not found.")
+    import json as _json
+    client_names = []
+    try:
+        client_names = _json.loads(cp.client_names or "[]") if cp.client_names else []
+    except Exception:
+        client_names = [n.strip() for n in (cp.client_names or "").split(",") if n.strip()]
     return {"id": cp.id, "company_name": cp.company_name, "founded_year": cp.founded_year,
             "location": cp.location, "what_we_do": cp.what_we_do, "what_we_need": cp.what_we_need,
-            "deck_filename": cp.deck_filename, "has_deck": bool(cp.deck_text)}
+            "deck_filename": cp.deck_filename, "has_deck": bool(cp.deck_text),
+            "client_names": client_names}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -383,7 +469,6 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     logger.info(f"Candidates for scoring: {len(candidates)}")
 
-
     # ── Step 5: Semantic scoring (disabled on free tier) ─────────────
     cosine_scores: dict = {}
     if settings.enable_semantic_search:
@@ -445,7 +530,6 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
     )
 
-
     # Build shared Groq async client (reused for both enrichment and ranking)
     _groq_client_async = None
     try:
@@ -498,7 +582,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                     f"price={sum(1 for d in enrichments.values() if d.get('price_description'))} "
                     f"link={sum(1 for d in enrichments.values() if d.get('event_link'))}"
                 )
-                                # Persist enriched data back to DB using a fresh session
+                # Persist enriched data back to DB using a fresh session
                 # (cannot reuse request db — it closes when the response is sent)
                 import asyncio as _aio
                 from db.database import AsyncSessionLocal as _SessionLocal
@@ -538,7 +622,6 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         ranked.sort(key=lambda r: -r.relevance_score)
         ranked = ranked[:RESULT_LIMIT]
         _last_results[profile_id] = ranked
-
 
     # ── Step 10: Calculate 5-factor fit scores + ICP counts ──────────
     # Attach fit_grade (A+/A/B+/B/C), icp_count, and universe_stats
@@ -619,7 +702,6 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             "price_description": ev.price_description or "",
         })
 
-
     go_n  = sum(1 for r in ranked if r.fit_verdict == "GO")
     con_n = sum(1 for r in ranked if r.fit_verdict == "CONSIDER")
     srcs  = {getattr(r, "source_platform", "?") for r in ranked}
@@ -627,10 +709,124 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     # ── Post-ranking geo coverage check ──────────────────────────────
     # If NONE of the final events match the user's requested geographies,
-    # always surface a fallback note explaining the mismatch — even when
-    # the early candidate pool was large enough to skip the regional fallback.
+    # find neighbours that ACTUALLY have ICP-matching events in the DB,
+    # return them with live counts so the user can one-click swap.
+    suggested_geos: list[dict] = []   # [{geo, count, industries_matched}]
     try:
+        from sqlalchemy import select as _sel, func as _sfunc, or_ as _sor
+        from models.event import EventORM as _EORM
+
         _geo_neighbours_ref = globals().get("_GEO_NEIGHBOURS", {})
+        _today = date.today().isoformat()
+
+        async def _count_geo_icp(geo: str, industries: list[str]) -> int:
+            """Count future events in geo, ICP-filtered then geo-only fallback."""
+            geo_l = geo.strip().lower()
+            geo_filters = [
+                _EORM.country.ilike(f"%{geo_l}%"),
+                _EORM.city.ilike(f"%{geo_l}%"),
+                _EORM.event_cities.ilike(f"%{geo_l}%"),
+            ]
+            base_stmt = _sel(_sfunc.count(_EORM.id)).where(
+                _EORM.start_date >= _today,
+                _sor(*geo_filters),
+            )
+            if industries:
+                ind_filters = []
+                for ind in industries[:5]:
+                    stem = ind.lower()[:8]
+                    ind_filters += [
+                        _EORM.industry_tags.ilike(f"%{stem}%"),
+                        _EORM.related_industries.ilike(f"%{stem}%"),
+                    ]
+                result = await db.execute(base_stmt.where(_sor(*ind_filters)))
+                cnt = result.scalar() or 0
+                if cnt > 0:
+                    return cnt
+            result = await db.execute(base_stmt)
+            return result.scalar() or 0
+
+        async def _live_top_regions(industries: list[str], exclude: list[str], limit: int = 5) -> list[dict]:
+            """
+            Dynamically query DB for countries with the most future events.
+            Works for any user input — no hardcoded list needed.
+            Tries ICP industry filter first; falls back to all industries.
+            """
+            exclude_lower = {g.strip().lower() for g in exclude}
+
+            async def _run(with_ind: bool):
+                stmt = (
+                    _sel(_EORM.country, _sfunc.count(_EORM.id).label("cnt"))
+                    .where(
+                        _EORM.start_date >= _today,
+                        _EORM.country.isnot(None),
+                        _EORM.country != "",
+                    )
+                    .group_by(_EORM.country)
+                    .order_by(_sfunc.count(_EORM.id).desc())
+                    .limit(40)
+                )
+                if with_ind and industries:
+                    ind_f = []
+                    for ind in industries[:5]:
+                        stem = ind.lower()[:8]
+                        ind_f += [
+                            _EORM.industry_tags.ilike(f"%{stem}%"),
+                            _EORM.related_industries.ilike(f"%{stem}%"),
+                        ]
+                    stmt = stmt.where(_sor(*ind_f))
+                rows = (await db.execute(stmt)).fetchall()
+                out = []
+                for row in rows:
+                    country = (row[0] or "").strip()
+                    cnt     = row[1] or 0
+                    if country and country.lower() not in exclude_lower and cnt > 0:
+                        out.append({"geo": country, "count": int(cnt)})
+                    if len(out) >= limit:
+                        break
+                return out
+
+            results = await _run(with_ind=True)
+            if not results:
+                results = await _run(with_ind=False)
+            return results
+
+        async def _build_suggestions(non_global_geos: list[str], icp_industries: list[str]) -> list[dict]:
+            """
+            Build geo suggestions for any user-entered region:
+            1. Check static proximity map (known neighbours)
+            2. Fill remaining slots with live DB top-regions query
+            """
+            suggestions: list[dict] = []
+            seen: set[str] = {g.lower() for g in non_global_geos}
+
+            # Step 1: known neighbours from proximity map
+            map_nbrs: list[str] = []
+            for geo in non_global_geos:
+                geo_l = geo.lower().strip()
+                for key, nbrs in _geo_neighbours_ref.items():
+                    if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
+                        map_nbrs.extend(nbrs)
+                        break
+            for nbr in list(dict.fromkeys(map_nbrs))[:8]:
+                if nbr.lower() not in seen:
+                    cnt = await _count_geo_icp(nbr, icp_industries)
+                    if cnt > 0:
+                        suggestions.append({"geo": nbr.title(), "count": cnt})
+                        seen.add(nbr.lower())
+
+            # Step 2: fill with live DB query — handles any region, even unlisted ones
+            if len(suggestions) < 5:
+                live = await _live_top_regions(
+                    industries=icp_industries,
+                    exclude=list(seen),
+                    limit=5 - len(suggestions),
+                )
+                suggestions.extend(live)
+
+            suggestions.sort(key=lambda x: -x["count"])
+            return suggestions[:5]
+
         if not region_fallback_note and original_geos:
             non_global_geos = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
             if non_global_geos:
@@ -642,30 +838,32 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                     return any(g.lower()[:6] in loc or loc.find(g.lower()[:5]) >= 0 for g in geos)
 
                 matched = sum(1 for ev in serialised_events if _event_matches_geo(ev, non_global_geos))
-                if matched == 0:
-                    neighbours: list[str] = []
-                    for geo in non_global_geos:
-                        geo_l = geo.lower().strip()
-                        for key, nbrs in _geo_neighbours_ref.items():
-                            if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
-                                neighbours.extend(nbrs[:3])
-                                break
-                    neighbours = list(dict.fromkeys(neighbours))[:4]
-                    neighbour_str = ", ".join(t.title() for t in neighbours) if neighbours else "nearby hubs"
-                    region_fallback_note = (
-                        f"No events found yet in {', '.join(non_global_geos)}. "
-                        f"Showing the most relevant global events for your ICP instead. "
-                        f"Try nearby regions with more coverage: {neighbour_str}."
-                    )
-                elif matched < len(serialised_events) // 2:
-                    region_fallback_note = (
-                        f"Limited events in {', '.join(non_global_geos)} — "
-                        f"showing the best global matches for your ICP to complete the ranking."
-                    )
+
+                if matched == 0 or matched < len(serialised_events) // 2:
+                    icp_industries = list(profile.target_industries or [])
+                    suggested_geos = await _build_suggestions(non_global_geos, icp_industries)
+
+                    if matched == 0:
+                        nbr_str = ", ".join(f"{s['geo']} ({s['count']})" for s in suggested_geos) or "nearby hubs"
+                        region_fallback_note = (
+                            f"No events found yet in {', '.join(non_global_geos)}. "
+                            f"Showing the most relevant global events for your ICP instead. "
+                            f"Regions with matching events: {nbr_str}."
+                        )
+                    else:
+                        region_fallback_note = (
+                            f"Limited events in {', '.join(non_global_geos)} — "
+                            f"showing best global matches to complete your ranking."
+                        )
+
+        elif region_fallback_note and original_geos:
+            # Early regional fallback already fired — compute live neighbour counts
+            non_global_geos = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
+            icp_industries   = list(profile.target_industries or [])
+            suggested_geos   = await _build_suggestions(non_global_geos, icp_industries)
+
     except Exception as _geo_err:
         logger.debug(f"Post-ranking geo check: {_geo_err}")
-
-            
 
     resp = SearchResponse(
         profile_id=profile_id, company_name=profile.company_name,
@@ -677,9 +875,8 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     resp_dict["universe_stats"]        = universe
     resp_dict["profile_hash"]          = profile_core_hash(profile)
     resp_dict["region_fallback_note"]  = region_fallback_note
+    resp_dict["suggested_geos"]        = suggested_geos   # [{geo, count}] live neighbour suggestions
     resp_dict["all_relevant_events"]   = all_relevant_events
-
-
 
     # ── Record search results for future recall (async, non-blocking) ─
     # Stores top events so future similar searches benefit from this data.
@@ -695,8 +892,28 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     except Exception as _e:
         logger.debug(f"Record search results error: {_e}")
 
+    # ── Persist client names to company profile if provided ───────────
+    # Stores named clients so future deeper analyses can use social-proof context.
+    if getattr(profile, "client_names", None):
+        try:
+            import asyncio as _aio2, json as _json2
+            from db.database import AsyncSessionLocal as _SL2
+            from db.crud import create_company_profile as _ccp
+            from models.company_profile import CompanyProfileCreate as _CPC
+            _client_names_snap = list(profile.client_names)
+            _company_snap      = profile.company_name or ""
+            async def _save_clients():
+                async with _SL2() as _db3:
+                    await _ccp(_db3, _CPC(
+                        company_name = _company_snap,
+                        client_names = _client_names_snap,
+                    ))
+            _aio2.ensure_future(_save_clients())
+        except Exception as _ce:
+            logger.debug(f"Client names persist: {_ce}")
 
     return resp_dict
+
 
 # ══════════════════════════════════════════════════════════════════════
 # GET /api/geo-hint  —  live event counts per geo + neighbour suggestions
@@ -726,26 +943,88 @@ async def geo_hint(
 
     today = date.today().isoformat()
 
-    async def _count_geo(geo: str) -> int:
-        """Live count of future events matching a geo string."""
+    async def _count_geo(geo: str, with_industries: bool = True) -> int:
+        """Live count of future events matching a geo string (+ optional industry filter).
+        Falls back to geo-only if industry-filtered count is 0.
+        """
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
         if " - " in geo_l:
             geo_parts.extend(p.strip() for p in geo_l.split(" - "))
-        filters = []
+        geo_filters = []
         for part in geo_parts:
             if len(part) > 1:
-                filters.append(_ORM.country.ilike(f"%{part}%"))
-                filters.append(_ORM.city.ilike(f"%{part}%"))
-                filters.append(_ORM.event_cities.ilike(f"%{part}%"))
-        if not filters:
+                geo_filters.append(_ORM.country.ilike(f"%{part}%"))
+                geo_filters.append(_ORM.city.ilike(f"%{part}%"))
+                geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
+        if not geo_filters:
             return 0
-        stmt = _sel(_func.count(_ORM.id)).where(
+        base_stmt = _sel(_func.count(_ORM.id)).where(
             _ORM.start_date >= today,
-            _or(*filters),
+            _or(*geo_filters),
         )
-        result = await db.execute(stmt)
+        if with_industries and ind_list:
+            ind_filters = []
+            for ind in ind_list[:5]:
+                stem = ind.lower()[:8]
+                ind_filters += [
+                    _ORM.industry_tags.ilike(f"%{stem}%"),
+                    _ORM.related_industries.ilike(f"%{stem}%"),
+                ]
+            icp_stmt = base_stmt.where(_or(*ind_filters))
+            result = await db.execute(icp_stmt)
+            cnt = result.scalar() or 0
+            if cnt > 0:
+                return cnt
+        # Fall back to geo-only count
+        result = await db.execute(base_stmt)
         return result.scalar() or 0
+
+    async def _top_available_regions(exclude_geos: list[str], limit: int = 5) -> list[dict]:
+        """
+        Query DB for countries/regions that actually have the most future
+        ICP-matching events — fully dynamic, works for any user input.
+        First tries with industry filter; falls back to all industries.
+        """
+        exclude_lower = {g.strip().lower() for g in exclude_geos}
+
+        async def _query_top(with_ind: bool):
+            stmt = (
+                _sel(_ORM.country, _func.count(_ORM.id).label("cnt"))
+                .where(
+                    _ORM.start_date >= today,
+                    _ORM.country.isnot(None),
+                    _ORM.country != "",
+                )
+                .group_by(_ORM.country)
+                .order_by(_func.count(_ORM.id).desc())
+                .limit(30)
+            )
+            if with_ind and ind_list:
+                ind_filters = []
+                for ind in ind_list[:5]:
+                    stem = ind.lower()[:8]
+                    ind_filters += [
+                        _ORM.industry_tags.ilike(f"%{stem}%"),
+                        _ORM.related_industries.ilike(f"%{stem}%"),
+                    ]
+                stmt = stmt.where(_or(*ind_filters))
+            result = await db.execute(stmt)
+            rows = result.fetchall()
+            out = []
+            for row in rows:
+                country = (row[0] or "").strip()
+                cnt     = row[1] or 0
+                if country and country.lower() not in exclude_lower and cnt > 0:
+                    out.append({"geo": country, "count": cnt})
+                if len(out) >= limit:
+                    break
+            return out
+
+        results = await _query_top(with_ind=True)
+        if not results:
+            results = await _query_top(with_ind=False)
+        return results
 
     coverage = []
     for geo in geo_list:
@@ -755,21 +1034,28 @@ async def geo_hint(
         suggestions = []
         if status != "good":
             geo_l = geo.strip().lower()
-            # Find neighbours from the static proximity map
-            neighbours: list[str] = []
+
+            # Step 1: check the static proximity map for known neighbours
+            map_neighbours: list[str] = []
             for key, nbrs in _GEO_NEIGHBOURS.items():
                 if key in geo_l or geo_l in key or geo_l.startswith(key[:6]):
-                    neighbours = nbrs
+                    map_neighbours = list(nbrs)
                     break
-            if not neighbours:
-                # Generic fallback: global hubs always have events
-                neighbours = ["singapore", "germany", "usa", "uk", "uae"]
 
-            for nbr in neighbours[:6]:
+            # Step 2: count map neighbours that actually have events
+            for nbr in map_neighbours[:8]:
                 nbr_count = await _count_geo(nbr)
                 if nbr_count > 0:
                     suggestions.append({"geo": nbr.title(), "count": nbr_count})
-            # Sort by count descending
+
+            # Step 3: if map neighbours didn't yield enough, fill with live DB top regions
+            if len(suggestions) < 4:
+                live_tops = await _top_available_regions(
+                    exclude_geos=[geo] + [s["geo"] for s in suggestions],
+                    limit=5 - len(suggestions),
+                )
+                suggestions.extend(live_tops)
+
             suggestions.sort(key=lambda x: -x["count"])
             suggestions = suggestions[:4]
 
@@ -782,10 +1068,6 @@ async def geo_hint(
 
     return {"coverage": coverage}
 
-
-# ══════════════════════════════════════════════════════════════════════
-# GET /api/stats  —  includes real-time API key status
-# ══════════════════════════════════════════════════════════════════════
 
 # ══════════════════════════════════════════════════════════════════════
 # GET /api/stats  —  includes real-time API key status
