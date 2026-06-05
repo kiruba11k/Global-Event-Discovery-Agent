@@ -985,7 +985,7 @@ export default function ICPForm({
           </div>
           <div>
             <div className="icp-header-title">Find your events</div>
-            <div className="icp-header-sub">4 fields. 2 minutes. 6 ranked shows.</div>
+            <div className="icp-header-sub">4 fields. 3 minutes. 6 ranked shows.</div>
           </div>
         </div>
         {fields}
