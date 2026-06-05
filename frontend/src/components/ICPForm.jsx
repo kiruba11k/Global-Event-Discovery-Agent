@@ -681,6 +681,7 @@ export default function ICPForm({
             })}
           </div>
         )}
+        </div>
       </div>
 
       {/* Field 3: Deal value */}
