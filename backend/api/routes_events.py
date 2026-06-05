@@ -890,24 +890,33 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                 await record_search_results(_db2, _prof_snap, _evts_snap)
         _asyncio.ensure_future(_record())
     except Exception as _e:
-        logger.debug(f"Record search results error: {_e}")
+      logger.debug(f"Record search results error: {_e}")
 
-    # ── Persist client names to company profile if provided ───────────
-    # Stores named clients so future deeper analyses can use social-proof context.
-    if getattr(profile, "client_names", None):
+      
+           # ── Persist client names to company profile if provided ───────────
+    _cp_id_snap = request.company_profile_id or None
+    _cl_snap    = list(getattr(profile, "client_names", None) or [])
+    if _cl_snap:
         try:
             import asyncio as _aio2, json as _json2
             from db.database import AsyncSessionLocal as _SL2
-            from db.crud import create_company_profile as _ccp
+            from db.crud import (
+                update_company_profile_client_names as _ucn,
+                create_company_profile              as _ccp,
+            )
             from models.company_profile import CompanyProfileCreate as _CPC
-            _client_names_snap = list(profile.client_names)
-            _company_snap      = profile.company_name or ""
+            _company_snap = profile.company_name or ""
             async def _save_clients():
                 async with _SL2() as _db3:
-                    await _ccp(_db3, _CPC(
-                        company_name = _company_snap,
-                        client_names = _client_names_snap,
-                    ))
+                    if _cp_id_snap:
+                        # Update the existing profile record
+                        await _ucn(_db3, _cp_id_snap, _cl_snap)
+                    else:
+                        # No profile ID yet — create a minimal record to store the names
+                        await _ccp(_db3, _CPC(
+                            company_name = _company_snap,
+                            client_names = _cl_snap,
+                        ))
             _aio2.ensure_future(_save_clients())
         except Exception as _ce:
             logger.debug(f"Client names persist: {_ce}")
