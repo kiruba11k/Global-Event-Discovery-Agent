@@ -155,9 +155,7 @@ export default function ShowRankingPage({
   regionFallbackNote = null,
   suggestedGeos      = [],
   onSwapGeo,
-})
- {
-
+}) {
   const [unlocked,     setUnlocked]     = useState(!!userEmail)
   const [gateEmail,    setGateEmail]    = useState(userEmail)
   const [gateError,    setGateError]    = useState('')
@@ -246,20 +244,22 @@ export default function ShowRankingPage({
           )}
         </div>
       </nav>
+
       {/* ── Regional fallback notice ─────────────────────────── */}
       {regionFallbackNote && (
         <div style={{
-          background: 'linear-gradient(90deg,rgba(245,158,11,0.12),rgba(245,158,11,0.06))',
-          borderBottom: '1px solid rgba(245,158,11,0.25)',
-          padding: '10px 24px',
+          background: 'linear-gradient(90deg,rgba(245,158,11,0.10),rgba(245,158,11,0.05))',
+          borderBottom: '1px solid rgba(245,158,11,0.22)',
+          padding: '12px 24px',
           display: 'flex',
-          alignItems: 'center',
-          gap: 10,
+          alignItems: 'flex-start',
+          gap: 12,
         }} role="alert">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-          <p style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.6, margin: '0 0 8px' }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.6, margin: '0 0 8px' }}>
               {regionFallbackNote}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
@@ -323,8 +323,9 @@ export default function ShowRankingPage({
                 </>
               )}
             </div>
+          </div>
+        </div>
       )}
-
 
       {/* ── 1. REPORT BANNER ─────────────────────────────────── */}
       <div className="rk-banner">
@@ -348,7 +349,7 @@ export default function ShowRankingPage({
       <div className="rk-date-filter" aria-label="Filter by time window">
         <div className="rk-date-filter-inner">
           <span className="rk-date-label">Showing events in:</span>
-              <button
+          <button
             onClick={() => setDateWindow(0)}
             className={`rk-date-pill ${dateWindow === 0 ? 'rk-date-pill--active' : ''}`}
             aria-pressed={dateWindow === 0}
@@ -370,7 +371,6 @@ export default function ShowRankingPage({
               {fullEventPool.length} of {events.length + allRelevantEvents.length} events
             </span>
           )}
-
         </div>
       </div>
 
@@ -381,7 +381,7 @@ export default function ShowRankingPage({
               {totalICPsAcrossShows > 0 ? (
                 <>
                   <div className="rk-stat-num rk-stat-accent">
-                    <Counter target={totalICPsAcrossShows} triggered={statsVisible} />
+                    ~<Counter target={totalICPsAcrossShows} triggered={statsVisible} />
                   </div>
                   <div className="rk-stat-label">total ICPs across all relevant shows</div>
                   <div className="rk-stat-method">
@@ -583,7 +583,6 @@ export default function ShowRankingPage({
             <span>{fullEventPool.length - top6.length} more relevant events in the full breakdown below.</span>
           </div>
         )}
-
       </div>
 
       {/* ── 4. DOWNLOADS ────────────────────────────────────── */}
@@ -736,7 +735,6 @@ export default function ShowRankingPage({
             </button>
           </div>
         )}
-
       </div>
 
     </div>
