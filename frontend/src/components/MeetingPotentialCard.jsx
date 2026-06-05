@@ -139,7 +139,7 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
               <div className="mp-pkg-price">₹{Math.round(pricing.price_inr / 100_000)}L</div>
             )}
             {pricing.is_custom && (
-              <div className="mp-pkg-custom">Custom — contact us</div>
+              <div className="mp-pkg-custom">Custom - contact us</div>
             )}
           </div>
         </div>
