@@ -593,14 +593,24 @@ export default function ICPForm({
               </div>
             </div>
           )}
-        </div>
-        {errors.geos && <p className="icp-error">{errors.geos}</p>}
-
-        {/* Live geo coverage hints */}
+               {/* Live geo coverage hints — shown as soon as a region is added */}
         {geos.length > 0 && !geos.includes('Global') && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }} aria-live="polite">
             {geoHintLoad && (
-              <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>Checking event coverage…</p>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'rgba(6,182,212,0.04)',
+                border: '1px solid rgba(6,182,212,0.12)',
+                borderRadius: 8, padding: '8px 12px',
+              }}>
+                <div style={{
+                  width: 14, height: 14, borderRadius: '50%',
+                  border: '2px solid rgba(6,182,212,0.3)',
+                  borderTopColor: '#06b6d4',
+                animation: 'icp-spin 0.8s linear infinite',
+                }} />
+                <span style={{ fontSize: 11, color: '#64748b' }}>Checking event coverage for your regions…</span>
+              </div>
             )}
             {!geoHintLoad && geos.filter(g => g !== 'Global').map(geo => {
               const hint = geoHints[geo]
@@ -610,49 +620,61 @@ export default function ICPForm({
               const isNone   = hint.status === 'none'
               return (
                 <div key={geo} style={{
-                  background:   isGood ? 'rgba(16,185,129,0.06)' : isNone ? 'rgba(245,158,11,0.06)' : 'rgba(99,102,241,0.05)',
-                  border:       `1px solid ${isGood ? 'rgba(16,185,129,0.18)' : isNone ? 'rgba(245,158,11,0.20)' : 'rgba(99,102,241,0.18)'}`,
+                  background:   isGood ? 'rgba(16,185,129,0.06)' : isNone ? 'rgba(239,68,68,0.05)' : 'rgba(245,158,11,0.06)',
+                  border:       `1px solid ${isGood ? 'rgba(16,185,129,0.20)' : isNone ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.22)'}`,
                   borderRadius: 8,
-                  padding:      '8px 12px',
+                  padding:      '10px 12px',
                   fontSize:     12,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (isSparse || isNone) && hint.suggestions?.length ? 8 : 0 }}>
-                    <span style={{ fontSize: 13 }}>{isGood ? '✅' : isNone ? '⚠️' : '🟡'}</span>
-                    <span style={{ color: isGood ? '#059669' : isNone ? '#d97706' : '#6366f1', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (isSparse || isNone) && hint.suggestions?.length ? 10 : 0 }}>
+                    <span style={{ fontSize: 14 }}>{isGood ? '✅' : isNone ? '🚫' : '⚠️'}</span>
+                    <span style={{ color: isGood ? '#059669' : isNone ? '#dc2626' : '#d97706', fontWeight: 700 }}>
                       {geo}
                     </span>
                     <span style={{ color: '#64748b' }}>
-                      {isGood   && `— ${hint.count} events in our index`}
-                      {isSparse && `— only ${hint.count} event${hint.count !== 1 ? 's' : ''} found`}
-                      {isNone   && '— no events found yet in this region'}
+                      {isGood   && `— ${hint.count} events available in our index`}
+                      {isSparse && `— only ${hint.count} event${hint.count !== 1 ? 's' : ''} found, consider a nearby hub`}
+                      {isNone   && '— no events in our index for this region'}
                     </span>
                   </div>
-                  {(isSparse || isNone) && hint.suggestions?.length > 0 && (
+                  {(isSparse || isNone) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
-                        Try instead:
+                        {hint.suggestions?.length > 0 ? 'Switch to:' : 'No nearby data found'}
                       </span>
-                      {hint.suggestions.map(s => (
+                      {(hint.suggestions || []).map(s => (
                         <button
                           key={s.geo}
                           type="button"
                           onClick={() => swapGeo(geo, s.geo)}
                           style={{
+                            display:      'inline-flex',
+                            alignItems:   'center',
+                            gap:          5,
                             background:   'rgba(6,182,212,0.08)',
-                            border:       '1px solid rgba(6,182,212,0.25)',
+                            border:       '1px solid rgba(6,182,212,0.28)',
                             borderRadius: 20,
-                            padding:      '3px 11px',
-                            fontSize:     11,
+                            padding:      '4px 12px',
+                            fontSize:     11.5,
                             color:        '#0891b2',
                             cursor:       'pointer',
                             fontWeight:   600,
                           }}
                         >
                           {s.geo}
-                          <span style={{ color: '#64748b', marginLeft: 4 }}>({s.count})</span>
+                          <span style={{
+                            background: 'rgba(6,182,212,0.12)',
+                            borderRadius: 4,
+                            padding: '1px 5px',
+                            fontSize: 10,
+                            color: '#0e7490',
+                            fontWeight: 700,
+                          }}>{s.count}</span>
                         </button>
                       ))}
                     </div>
+ 
+
                   )}
                 </div>
               )
