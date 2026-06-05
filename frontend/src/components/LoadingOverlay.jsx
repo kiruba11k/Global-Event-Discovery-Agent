@@ -82,7 +82,7 @@ function buildTips(profile) {
 
   // Differentiator tips
   if (diff >= 8)
-    tips.push('Strong differentiator - youll stand out on the floor without cold pitching.')
+    tips.push('Strong differentiator - you`ll stand out on the floor without cold pitching.')
   else if (diff <= 4)
     tips.push('Tip: A tighter ICP message converts floor conversations 3× faster.')
 
@@ -324,7 +324,7 @@ export default function LoadingOverlay({ profile }) {
               Your profile qualifies for guaranteed meetings
             </div>
             <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
-              Based on your ICP, deal size, and differentiator — we can pre-book meetings at your top event.
+              Based on your ICP, deal size and differentiator - we can pre-book meetings at your top event.
             </div>
             <a
               href="https://leadstrategus.com/contact/"
