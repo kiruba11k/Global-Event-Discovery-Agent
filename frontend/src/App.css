@@ -3,32 +3,14 @@
    Clean light theme · Syne + DM Sans · Cinematic forms
    ═══════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
 
 /* ── Tokens ──────────────────────────────────────────────── */
 :root {
-  --bg:           #f2f6fc;
   --bg:           #ffffff;
   --bg-card:      #ffffff;
-  --bg-card-2:    #f8fafd;
   --bg-card-2:    #f7fafb;
   --bg-input:     #ffffff;
-  --border:       #dce6f3;
-  --border-focus: #06b6d4;
-  --text:         #0f172a;
-  --text-sub:     #374151;
-  --text-dim:     #6b7280;
-  --accent:       #06b6d4;
-  --accent-2:     #3b82f6;
-  --accent-glow:  rgba(6,182,212,0.12);
-  --accent-glow2: rgba(59,130,246,0.10);
-  --gold:         #f59e0b;
-  --gold-glow:    rgba(245,158,11,0.2);
-  --go:           #10b981;
-  --consider:     #f59e0b;
-  --skip:         #f43f5e;
-  --radius:       16px;
   --border:       #e7ebf0;
   --border-focus: #11b6cd;
   --text:         #16202e;
@@ -45,10 +27,6 @@
   --skip:         #d23f3f;
   --radius:       14px;
   --radius-sm:    10px;
-  --shadow:       0 4px 24px rgba(15,23,42,0.08);
-  --shadow-lg:    0 16px 48px rgba(15,23,42,0.14);
-  --font-display: 'Syne', sans-serif;
-  --font-body:    'DM Sans', sans-serif;
   --radius-lg:    20px;
   --shadow:       0 1px 2px rgba(22,32,46,.04), 0 8px 28px rgba(22,32,46,.06);
   --shadow-lg:    0 10px 40px rgba(17,182,205,.18);
