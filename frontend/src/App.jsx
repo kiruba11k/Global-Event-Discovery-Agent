@@ -1,7 +1,7 @@
 /*
   App.jsx   three-screen app with simple state router
 
-  screen === 'home'     → homepage + hero form
+  screen === 'home'     → homepage + hero formea
   screen === 'ranking'  → ShowRankingPage (full page, scroll to top)
   screen === 'deepdive' → ShowDeepDivePage (full page, scroll to top)
 
@@ -305,19 +305,13 @@ export default function App() {
         <div className="hp-hero-solo-inner">
           <div className="hero-badge hp-hero-eyebrow">
             <Sparkles size={11} aria-hidden="true" />
-            <span>The only platform that tells you which shows to attend, how many meetings to expect, what it will cost  before you spend a rupee</span>
             <span>See the buyers, the meetings, and the cost of a show  before you book the booth</span>
           </div>
           <h1 className="hp-hero-solo-h1">
-            The agent earns trust.<br />
-            The agency earns revenue.
             Your next 50 meetings are already at a <span className="hp-h1-accent">trade show</span>.<br />
             We tell you which one.
           </h1>
           <p className="hp-hero-solo-sub">
-            Rank every B2B trade show for your exact ICP. See how many decision-makers
-            attend, how many meetings to expect, and what it will cost  before you fly out.
-            Then let us guarantee those meetings actually happen.
             Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
             of your exact buyers attend  then forecast the qualified prospects, the meetings, and
             the cost before you commit a rupee. Strong references and a willingness to fly are all it takes.
@@ -327,15 +321,13 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </div>
             <div>
-              <strong>Two-agent validation</strong>  every event detail is checked by a second AI before it reaches you.
-              Most tools hallucinate event data confidently. We built a guard against that.
+          
               <strong>Two-agent validation</strong>  every attendee estimate and cost is checked by a
               second AI before it reaches you. Event data is easy to get confidently wrong; we built
               a guard against it.
             </div>
           </div>
           <p className="hp-hero-bridge">
-            Answer 6 questions. Get your ranked list in 90 seconds.
             Six inputs. One ranked shortlist of shows where your buyers actually are.
           </p>          <div className="hp-form-zone" id="icp-form">
             {stats?.resend_enabled === false && (
