@@ -306,15 +306,21 @@ export default function App() {
           <div className="hero-badge hp-hero-eyebrow">
             <Sparkles size={11} aria-hidden="true" />
             <span>The only platform that tells you which shows to attend, how many meetings to expect, what it will cost  before you spend a rupee</span>
+            <span>See the buyers, the meetings, and the cost of a show  before you book the booth</span>
           </div>
           <h1 className="hp-hero-solo-h1">
             The agent earns trust.<br />
             The agency earns revenue.
+            Your next 50 meetings are already at a <span className="hp-h1-accent">trade show</span>.<br />
+            We tell you which one.
           </h1>
           <p className="hp-hero-solo-sub">
             Rank every B2B trade show for your exact ICP. See how many decision-makers
             attend, how many meetings to expect, and what it will cost  before you fly out.
             Then let us guarantee those meetings actually happen.
+            Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
+            of your exact buyers attend  then forecast the qualified prospects, the meetings, and
+            the cost before you commit a rupee. Strong references and a willingness to fly are all it takes.
           </p>
           <div className="hp-validator-badge" aria-label="Two-agent validator">
             <div className="hp-validator-icon" aria-hidden="true">
@@ -323,12 +329,15 @@ export default function App() {
             <div>
               <strong>Two-agent validation</strong>  every event detail is checked by a second AI before it reaches you.
               Most tools hallucinate event data confidently. We built a guard against that.
+              <strong>Two-agent validation</strong>  every attendee estimate and cost is checked by a
+              second AI before it reaches you. Event data is easy to get confidently wrong; we built
+              a guard against it.
             </div>
           </div>
           <p className="hp-hero-bridge">
             Answer 6 questions. Get your ranked list in 90 seconds.
-          </p>
-          <div className="hp-form-zone" id="icp-form">
+            Six inputs. One ranked shortlist of shows where your buyers actually are.
+          </p>          <div className="hp-form-zone" id="icp-form">
             {stats?.resend_enabled === false && (
               <div className="hp-status-notice">
                 <AlertCircle size={11} /><span>Email service not configured on server</span>
@@ -344,7 +353,7 @@ export default function App() {
             {loading && <LoadingOverlay profile={loadingProfile} />}
 
           </div>
-          <p className="hp-microcopy">Free · Top 6 always free · No credit card · No sales call</p>
+          <p className="hp-microcopy">Free · Top 6 shows always free · No credit card · No sales call</p>
           <a className="hp-escape-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
             Already know your show? Get show-specific intel →
           </a>
@@ -354,22 +363,25 @@ export default function App() {
       {/* DUAL-PATH CARDS */}
       <div className="hp-paths" aria-label="How we help">
         <div className="hp-paths-inner">
+          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }}>Two ways to win a show</div>
+          <h2 className="hp-section-title" style={{ textAlign: 'center' }}>Whether you're walking the floor or holding a booth.</h2>
+          <p className="hp-paths-sub" style={{ textAlign: 'center' }}>The room is the same. What you do with it isn't. We forecast the buyers either way.</p>
           <div className="hp-path-card hp-path-attending">
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/></svg>
             </div>
-            <div className="hp-path-tag">Attending  hunting meetings</div>
-            <h3 className="hp-path-title">Sales, BD, founders. Find your ICPs before you fly out.</h3>
-            <p className="hp-path-desc">Walk in knowing exactly who to find  meetings already on the calendar.</p>
+            <div className="hp-path-tag">Attending · hunting meetings</div>
+            <h3 className="hp-path-title">Sales, BD, founders  book your ICP before you fly out.</h3>
+            <p className="hp-path-desc">Walk in with a calendar, not a hope. We tell you how many of your buyers attend each show and hand you the prospect list to work it yourself.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Find my shows →</button>
           </div>
           <div className="hp-path-card hp-path-exhibiting">
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
             </div>
-            <div className="hp-path-tag">Exhibiting  need booth traffic</div>
+            <div className="hp-path-tag">Exhibiting · need booth traffic</div>
             <h3 className="hp-path-title">Get 5× the qualified meetings around your booth.</h3>
-            <p className="hp-path-desc">Stop waiting for walk-ups. Pre-book your target buyers before the floor opens.</p>
+            <p className="hp-path-desc">Stop waiting for walk-ups. We pre-book your target buyers into booked slots before the floor opens  so day one starts full.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Boost my booth →</button>
           </div>
         </div>
@@ -421,7 +433,8 @@ export default function App() {
       <section className="hp-pain" id="how-it-works" aria-labelledby="pain-heading">
         <div className="hp-pain-inner">
           <div className="hp-section-eyebrow">Sound familiar?</div>
-          <h2 className="hp-section-title" id="pain-heading">The trade show ROI problem is universal.</h2>
+          <h2 className="hp-section-title" id="pain-heading">The trade-show ROI problem is universal.</h2>
+          <p className="hp-pain-sub">Every line below is a meeting that should have happened  and the intel that would have made it.</p>
           <div className="hp-pain-grid">
             {PAIN_QUOTES.map((q, i) => (
               <div key={i} data-pain-card data-idx={i}
@@ -441,7 +454,7 @@ export default function App() {
         <div className="hp-footer-cta-inner">
           <div className="hp-section-eyebrow" style={{ textAlign: 'center' }}>Ready to stop guessing?</div>
           <h2 className="hp-footer-cta-h2">Rank your shows in 2 minutes.</h2>
-          <p className="hp-footer-cta-sub">Tell us your ICP. We'll tell you which events are worth flying to.</p>
+          <p className="hp-footer-cta-sub">Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.</p>
           <div className="hp-footer-cta-btns">
             <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows  it's free</button>
             <a className="hp-cta-outline" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Book a demo</a>
