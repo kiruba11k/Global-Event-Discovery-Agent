@@ -121,26 +121,26 @@
 /* ── Base input ─────────────────────────────────────────────────── */
 .icp-input {
   width:         100%;
-  background:    var(--bg-input, rgba(255,255,255,0.05));
-  border:        1px solid var(--border, rgba(255,255,255,0.09));
-  border-radius: var(--radius-sm, 8px);
-  padding:       11px 14px;
-  font-size:     14px;
-  color:         var(--text, #f1f5f9);
+  background:    var(--bg-input, #fff);
+  border:        1px solid var(--border, #e7ebf0);
+  border-radius: var(--radius, 14px);
+  padding:       15px 16px;
+  font-size:     16px;
+  color:         var(--text, #16202e);
   font-family:   var(--font-body, inherit);
   outline:       none;
-  transition:    border-color .2s, box-shadow .2s;
+  transition:    border-color .15s, box-shadow .15s;
   box-sizing:    border-box;
 }
 .icp-input:focus {
-  border-color: var(--accent, #06b6d4);
-  box-shadow:   0 0 0 3px rgba(6,182,212,.12);
+  border-color: var(--accent, #11b6cd);
+  box-shadow:   0 0 0 4px var(--accent-glow, rgba(17,182,205,.12));
 }
 .icp-input--error {
-  border-color: #f43f5e;
-  box-shadow:   0 0 0 3px rgba(244,63,94,.1);
+  border-color: var(--skip, #d23f3f);
+  box-shadow:   0 0 0 3px rgba(210,63,63,.1);
 }
-.icp-input::placeholder { color: rgba(148,163,184,.5); }
+.icp-input::placeholder { color: #aab4c0; }
 .icp-textarea {
   resize:      vertical;
   line-height: 1.6;
@@ -330,18 +330,20 @@
 .icp-deal-option {
   position:      relative;
   display:       flex;
+
   flex-direction:column;
   align-items:   flex-start;
-  gap:           8px;
-  background:    var(--bg-input, rgba(255,255,255,0.04));
-  border:        1px solid var(--border, rgba(255,255,255,0.08));
-  border-radius: var(--radius-sm, 8px);
-  padding:       16px 18px;
+   gap:           8px;
+  background:    var(--bg-input, #fff);
+  border:        1px solid var(--border, #e7ebf0);
+  border-radius: var(--radius, 14px);
+  padding:       14px 14px 13px;
   cursor:        pointer;
   text-align:    left;
-  transition:    all .2s;
+  transition:    border-color .15s, box-shadow .15s, transform .05s;
   overflow:      hidden;
 }
+
 .icp-deal-option:hover:not(.disabled) {
   border-color: var(--deal-border);
   background:   var(--deal-bg);
@@ -430,26 +432,21 @@
   display:        flex;
   align-items:    center;
   justify-content:center;
-  gap:            8px;
-  width:          100%;
-  margin-top:     20px;
-  background:     linear-gradient(135deg, var(--accent, #06b6d4), var(--accent-2, #6366f1));
+  background:     linear-gradient(180deg, var(--accent, #11b6cd), var(--border-focus, #0a93a8));
   color:          #fff;
   border:         none;
-  border-radius:  var(--radius-sm, 10px);
-  padding:        14px 24px;
+  border-radius:  var(--radius-lg, 20px);
+  padding:        20px 24px;
   font-family:    var(--font-display, inherit);
-  font-size:      15px;
-  font-weight:    700;
+  font-size:      21px;
+  font-weight:    800;
   cursor:         pointer;
-  box-shadow:     0 4px 20px rgba(6,182,212,.3);
-  transition:     opacity .2s, transform .15s, box-shadow .2s;
+  box-shadow:     var(--shadow-lg, 0 10px 40px rgba(17,182,205,.18));
+  transition:     filter .15s;
   letter-spacing: .01em;
 }
 .icp-submit-btn:hover:not(:disabled) {
-  opacity:   .95;
-  transform: translateY(-1px);
-  box-shadow:0 6px 24px rgba(6,182,212,.4);
+  filter: brightness(1.04);
 }
 .icp-submit-btn:active:not(:disabled) { transform: scale(.98); }
 .icp-submit-btn:disabled {
