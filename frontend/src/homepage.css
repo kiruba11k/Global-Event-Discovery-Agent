@@ -196,20 +196,14 @@ div {
     flex:      none;
     max-width: 480px;
   }
-.hp-hero-solo-sub {
-  color: rgb(203, 213, 225);
-  opacity: 1;
-  transform: translateY(0px);
-  visibility: visible;
-  animation: auto ease 0s 1 normal none running none;
-}
+
 /* Eyebrow pill */
 .hp-hero-eyebrow {
   display:       inline-flex !important;
   align-items:   center;
   gap:           7px;
   margin-bottom: 22px !important;
-  animation:     hp-fade-up .45s ease both;
+  /* animation:     hp-fade-up .45s ease both; */
 }
 .hp-eyebrow-dot {
   display:       inline-block;
@@ -230,7 +224,7 @@ div {
   color:         #0f172a;
   letter-spacing:-0.5px;
   margin:        0 0 18px;
-  animation:     hp-fade-up .5s .1s ease both;
+  /* animation:     hp-fade-up .5s .1s ease both; */
 }
 /* Gradient accent word in headline */
 .hp-h1-accent {
@@ -247,7 +241,7 @@ div {
   line-height: 1.75;
   max-width:   460px;
   margin:      0 0 20px;
-  animation:   hp-fade-up .5s .2s ease both;
+  /* animation:   hp-fade-up .5s .2s ease both; */
 }
 
 /* Bridge line — makes the form feel like the beginning of an insight */
@@ -257,7 +251,7 @@ div {
   line-height:   1.65;
   max-width:     480px;
   margin:        0 auto 28px;
-  animation:     hp-fade-up .5s .28s ease both;
+  /* animation:     hp-fade-up .5s .28s ease both; */
   padding:       10px 16px;
   background:    rgba(6,182,212,.05);
   border-left:   3px solid var(--accent);
@@ -273,7 +267,7 @@ div {
   max-width:   600px;
   margin:      0 auto;
   text-align:  left;
-  animation:   hp-fade-up .55s .34s ease both;
+  /* animation:   hp-fade-up .55s .34s ease both; */
 }
 
 /* Microcopy below CTA */
@@ -282,7 +276,7 @@ div {
   color:       var(--text-dim);
   margin:      12px 0 8px;
   opacity:     .65;
-  animation:   hp-fade-up .5s .5s ease both;
+  /* animation:   hp-fade-up .5s .5s ease both; */
 }
 
 /* Escape hatch */
@@ -293,7 +287,7 @@ div {
   text-decoration: none;
   opacity:         .55;
   transition:      opacity .2s, color .2s;
-  animation:       hp-fade-up .5s .56s ease both;
+  /* animation:       hp-fade-up .5s .56s ease both; */
 }
 .hp-escape-link:hover { opacity: 1; color: var(--accent); }
 
