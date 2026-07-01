@@ -99,43 +99,55 @@
 
 /* ════════════════════════════════════════════════════════════
    3. HERO ENTRANCE (CSS-only — fires on page load)
-   Sequential stagger from top to bottom.
+   Delays are kept ≤ 250ms so nothing looks "blank".
+   fill-mode: forwards — elements start at CSS default (visible)
+   and stay at the `to` state after animation completes.
+   opacity: 0 is set explicitly so there is no flash.
    ════════════════════════════════════════════════════════════ */
 
 .hp-nav {
-  animation: ma-fade-in 0.35s ease 0s both;
+  opacity: 0;
+  animation: ma-fade-in 0.3s ease 0s forwards;
 }
 
 .hp-hero-eyebrow {
-  animation: ma-badge-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  opacity: 0;
+  animation: ma-badge-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.05s forwards;
 }
 
 .hp-hero-solo-h1 {
-  animation: ma-fade-up 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  opacity: 0;
+  animation: ma-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.08s forwards;
 }
 
 .hp-hero-solo-sub {
-  animation: ma-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+  opacity: 0;
+  animation: ma-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
 }
 
 .hp-validator-badge {
-  animation: ma-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+  opacity: 0;
+  animation: ma-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.16s forwards;
 }
 
 .hp-hero-bridge {
-  animation: ma-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both;
+  opacity: 0;
+  animation: ma-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
 }
 
 .hp-form-zone {
-  animation: ma-scale-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+  opacity: 0;
+  animation: ma-scale-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.22s forwards;
 }
 
 .hp-microcopy {
-  animation: ma-fade-in 0.5s ease 1.05s both;
+  opacity: 0;
+  animation: ma-fade-in 0.4s ease 0.24s forwards;
 }
 
 .hp-escape-link {
-  animation: ma-fade-in 0.5s ease 1.15s both;
+  opacity: 0;
+  animation: ma-fade-in 0.4s ease 0.26s forwards;
 }
 
 
