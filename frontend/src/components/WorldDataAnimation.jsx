@@ -29,6 +29,7 @@ const OUTPUT_CARDS = [
   { rank: 2, name: 'Money20/20 2025',   date: 'Oct 22–25',  buyers: 89,  meetings: '14–21', verdict: 'GO' },
   { rank: 3, name: 'SaaStr Annual 2025',date: 'Sep 9–11',   buyers: 74,  meetings: '11–17', verdict: 'GO' },
 ]
+const CURVE_OFFSETS = [28, -22, 35, -18, 25, -30, 20, -25, 32, -15]
 
 export default function WorldDataAnimation() {
   const wrapRef   = useRef(null)
@@ -197,21 +198,19 @@ export default function WorldDataAnimation() {
           ))}
 
           {/* Signal paths from cities to center */}
-          {CITIES.map(city => (
-            <path
-              key={city.id}
-              className="wda-signal-path"
-              d={`M ${city.x} ${city.y} Q ${(city.x + CENTER.x) / 2 + (Math.random() > 0.5 ? 30 : -30)} ${(city.y + CENTER.y) / 2 - 20} ${CENTER.x} ${CENTER.y}`}
-              fill="none"
-              stroke="url(#globeGrad)"
-              strokeWidth="1.5"
-              style={{
-                stroke: city.x < 360 ? '#3b82f6' : '#06b6d4',
-                opacity: 0,
-              }}
-            />
-          ))}
-
+          {CITIES.map((city, i) => {
+            const offset = CURVE_OFFSETS[i % CURVE_OFFSETS.length]
+            return (
+              <path
+                key={city.id}
+                className="wda-signal-path"
+                d={`M ${city.x} ${city.y} Q ${(city.x + CENTER.x) / 2 + offset} ${(city.y + CENTER.y) / 2 - 20} ${CENTER.x} ${CENTER.y}`}
+                fill="none"
+                strokeWidth="1.5"
+                style={{ stroke: city.x < 360 ? '#3b82f6' : '#06b6d4', opacity: 0 }}
+              />
+            )
+          })}
           {/* ICP Processor ring */}
           <circle className="wda-processor-ring" cx="360" cy="185" r="26" fill="url(#processorGrad)" stroke="#11b6cd" strokeWidth="1.5" opacity="0.9" filter="url(#glow)" />
           <circle cx="360" cy="185" r="18" fill="rgba(17,182,205,0.12)" stroke="#11b6cd" strokeWidth="1" />
