@@ -146,12 +146,42 @@
 .hp-hero-solo-inner {
   position:    relative;
   z-index:     1;
-  max-width:   680px;
+  max-width:   1100px;
   margin:      0 auto;
-  padding:     72px 28px 56px;
+  padding:     64px 28px 56px;
   text-align:  center;
 }
+.hp-hero-two-col {
+  display:     flex;
+  align-items: center;
+  gap:         40px;
+  text-align:  left;
+  margin:      0 0 28px;
+}
 
+.hp-hero-text-col {
+  flex:      1;
+  min-width: 0;
+}
+
+.hp-hero-visual-col {
+  flex:       0 0 420px;
+  width:      420px;
+  max-width:  420px;
+}
+
+@media (max-width: 900px) {
+  .hp-hero-two-col {
+    flex-direction: column;
+    text-align:     center;
+  }
+  .hp-hero-visual-col {
+    width:     100%;
+    flex:      none;
+    max-width: 480px;
+  }
+  .hp-hero-solo-sub { margin: 0 auto 22px; }
+}
 /* Eyebrow pill */
 .hp-hero-eyebrow {
   display:       inline-flex !important;
@@ -173,22 +203,29 @@
 /* Headline */
 .hp-hero-solo-h1 {
   font-family:   var(--font-display, inherit);
-  font-size:     clamp(34px, 5.5vw, 58px);
+  font-size:     clamp(30px, 4.2vw, 52px);
   font-weight:   800;
   line-height:   1.13;
-  color:         var(--text);
-  letter-spacing:-0.6px;
-  margin:        0 0 20px;
+  color:         #0f172a;
+  letter-spacing:-0.5px;
+  margin:        0 0 18px;
   animation:     hp-fade-up .5s .1s ease both;
+}
+/* Gradient accent word in headline */
+.hp-h1-accent {
+  background:            linear-gradient(125deg, #0ea5e9 0%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip:       text;
 }
 
 /* Sub */
 .hp-hero-solo-sub {
-  font-size:   clamp(15px, 2vw, 18px);
-  color:       var(--text-sub);
-  line-height: 1.7;
-  max-width:   520px;
-  margin:      0 auto 22px;
+  font-size:   clamp(14px, 1.6vw, 16px);
+  color:       #334155;
+  line-height: 1.75;
+  max-width:   460px;
+  margin:      0 0 20px;
   animation:   hp-fade-up .5s .2s ease both;
 }
 
