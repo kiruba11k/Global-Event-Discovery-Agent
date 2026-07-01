@@ -41,28 +41,6 @@ function OrbBackground() {
   )
 }
 
-/* ─── Animated counter ─────────────────────────────────────────── */
-function StatCounter({ target, prefix = '', suffix = '', label, decimal = false, triggered }) {
-  const [val, setVal] = useState(0)
-  useEffect(() => {
-    if (!triggered) return
-    const s = performance.now()
-    const step = (now) => {
-      const p    = Math.min((now - s) / 1100, 1)
-      const ease = 1 - Math.pow(1 - p, 3)
-      setVal(decimal ? parseFloat((ease * target).toFixed(1)) : Math.round(ease * target))
-      if (p < 1) requestAnimationFrame(step)
-    }
-    requestAnimationFrame(step)
-  }, [triggered, target])
-  return (
-    <div className="hp-stat-item">
-      <div className="hp-stat-num">{prefix}{val.toLocaleString()}{suffix}</div>
-      <div className="hp-stat-label">{label}</div>
-    </div>
-  )
-}
-
 /* ─── Static data ───────────────────────────────────────────────── */
 const LOGOS = [
   'Dreamforce','Medica','Gartner Symposium','BSMA','CES',
@@ -101,17 +79,9 @@ export default function App() {
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
 
   /* ── Homepage animation state ──────────────────────────────── */
-  const [statsVisible,     setStatsVisible]     = useState(false)
   const [visibleCards,     setVisibleCards]     = useState([])
-  const statsRef = useRef(null)
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
-
-  useEffect(() => {
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.3 })
-    if (statsRef.current) io.observe(statsRef.current)
-    return () => io.disconnect()
-  }, [])
 
   useEffect(() => {
     const io = new IntersectionObserver((entries) => {
@@ -452,22 +422,6 @@ export default function App() {
           ))}
         </div>
       </div>
-
-      {/* PROOF ROW: real DB stats from /api/stats */}
-      <section className="hp-proof" ref={statsRef} aria-label="Our event index">
-        <div className="hp-proof-inner">
-          {stats?.total_events_in_db > 0 ? (
-            <div className="hp-stat-item hp-stat-item--single" data-reveal data-delay="0">
-              <div className="hp-stat-num">{(stats.total_events_in_db || 0).toLocaleString()}+</div>
-              <div className="hp-stat-label">B2B events indexed</div>
-            </div>
-          ) : (
-            <div className="hp-stat-item" style={{textAlign:'center',flex:'none'}}>
-              <div className="hp-stat-num" style={{fontSize:18}}>Loading…</div>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* PAIN SECTION */}
       <section className="hp-pain" id="social-proof" aria-labelledby="pain-heading">

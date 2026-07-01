@@ -122,3 +122,20 @@
   }
   .wda-heading-dot { animation: none !important; }
 }
+
+/* Continuous eclipse-orbit motion for globe grid lines. */
+.wda-eclipse-system {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wdaEclipseRotate 18s linear infinite;
+  will-change: transform;
+}
+
+.wda-globe-shell:hover .wda-eclipse-system {
+  animation-duration: 7s;
+}
+
+@keyframes wdaEclipseRotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
