@@ -49,7 +49,18 @@ body, section, div {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0);    }
 }
+body {
+  background-color: rgb(255, 255, 255);
+}
 
+div {
+  display: none;
+}
+
+.app {
+  background-color: transparent;
+  overflow: visible;
+}
 /* ════════════════════════════════════════════════════════════════
    STICKY NAV
    ════════════════════════════════════════════════════════════════ */
@@ -141,15 +152,20 @@ body, section, div {
    The form IS the conversion. No sidebars, no two columns.
    ════════════════════════════════════════════════════════════════ */
 .hp-hero-solo {
-  background-color: transparent; 
+  background-color: rgb(4, 9, 15);
+  color: rgb(255, 255, 255);
+  opacity: 1;
+  visibility: visible;
+  background-image: linear-gradient(rgb(4, 9, 15), rgb(6, 14, 28));
+  display: block;
+  position: relative;
+  z-index: 1;
+  min-height: 80vh;
 }
 .hp-hero-solo-inner {
-  position:    relative;
-  z-index:     1;
-  max-width:   1100px;
-  margin:      0 auto;
-  padding:     64px 28px 56px;
-  text-align:  center;
+  background-color: transparent;
+  color: rgb(255, 255, 255);
+}
 }
 .hp-hero-two-col {
   display:     flex;
@@ -180,7 +196,12 @@ body, section, div {
     flex:      none;
     max-width: 480px;
   }
-  .hp-hero-solo-sub { margin: 0 auto 22px; }
+.hp-hero-solo-sub {
+  color: rgb(203, 213, 225);
+  opacity: 1;
+  transform: translateY(0px);
+  visibility: visible;
+  animation: auto ease 0s 1 normal none running none;
 }
 /* Eyebrow pill */
 .hp-hero-eyebrow {
