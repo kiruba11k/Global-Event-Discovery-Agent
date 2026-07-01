@@ -327,7 +327,7 @@ export default function App() {
       <section className="hero hp-hero-solo" aria-label="Find your shows">
         <OrbBackground />
 
-        {/* Floating event-result cards — decorative, hidden on small screens */}
+        {/* Floating event-result cards - decorative, hidden on small screens */}
         <div className="hero-float-card hero-float-card-1" aria-hidden="true">
           <div className="hfc-verdict">
             <span style={{ width:6,height:6,borderRadius:'50%',background:'#0EA372',flexShrink:0,display:'inline-block' }} />
@@ -369,7 +369,7 @@ export default function App() {
               </h1>
               <p className="hp-hero-solo-sub">
                 Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
-                of your exact buyers attend — then forecast the qualified prospects, the meetings, and
+                of your exact buyers attend - then forecast the qualified prospects, the meetings, and
                 the cost before you commit a rupee.
               </p>
             </div>
