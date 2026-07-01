@@ -1,0 +1,185 @@
+/*
+  world-animation.css
+  Light-theme styles for the WorldDataAnimation component.
+  Sits between hp-hero-solo-sub and hp-validator-badge in the hero.
+*/
+
+.wda-wrap {
+  width:          100%;
+  max-width:      720px;
+  margin:         28px auto 24px;
+  padding:        0 4px;
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            20px;
+  position:       relative;
+}
+
+/* ── Section heading ──────────────────────────────────────── */
+.wda-heading {
+  display:        flex;
+  align-items:    center;
+  gap:            7px;
+  font-size:      11px;
+  font-weight:    700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color:          #0891b2;
+  opacity:        0;
+}
+
+.wda-heading-dot {
+  width:         6px;
+  height:        6px;
+  border-radius: 50%;
+  background:    #11b6cd;
+  box-shadow:    0 0 8px rgba(17,182,205,0.5);
+  flex-shrink:   0;
+  animation:     wda-dot-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes wda-dot-pulse {
+  0%,100% { opacity: 1;   transform: scale(1);    }
+  50%     { opacity: 0.5; transform: scale(0.75); }
+}
+
+/* ── Globe SVG shell ──────────────────────────────────────── */
+.wda-globe-shell {
+  width:     100%;
+  max-width: 680px;
+}
+
+.wda-svg {
+  width:   100%;
+  height:  auto;
+  display: block;
+}
+
+.wda-signal-path {
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.wda-processor-ring { opacity: 0; }
+.wda-city-dot       { opacity: 0; }
+
+/* ── Output cards ─────────────────────────────────────────── */
+.wda-cards-wrap {
+  width:          100%;
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            12px;
+  perspective:    800px;
+}
+
+.wda-cards-label {
+  font-size:      10px;
+  font-weight:    700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color:          #94a3b8;
+}
+
+.wda-cards-stack {
+  width:          100%;
+  display:        flex;
+  flex-direction: column;
+  gap:            8px;
+}
+
+.wda-card {
+  display:         flex;
+  align-items:     center;
+  gap:             12px;
+  background:      #ffffff;
+  border:          1px solid rgba(17,182,205,0.18);
+  border-radius:   12px;
+  padding:         12px 14px;
+  box-shadow:      0 2px 12px rgba(17,182,205,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  opacity:         0;
+  transform-style: preserve-3d;
+  transition:      box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.wda-card:hover {
+  box-shadow: 0 6px 24px rgba(17,182,205,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  transform:  translateY(-2px);
+}
+
+.wda-card-rank {
+  font-size:   22px;
+  font-weight: 800;
+  color:       #e2e8f0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  flex-shrink: 0;
+  line-height: 1;
+  width:       28px;
+  text-align:  center;
+}
+
+.wda-card-body { flex: 1; min-width: 0; }
+
+.wda-card-verdict {
+  display:        flex;
+  align-items:    center;
+  gap:            5px;
+  font-size:      10px;
+  font-weight:    700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color:          #0EA372;
+  margin-bottom:  3px;
+}
+
+.wda-verdict-dot {
+  width:         5px;
+  height:        5px;
+  border-radius: 50%;
+  background:    #0EA372;
+  flex-shrink:   0;
+}
+
+.wda-card-name {
+  font-size:     13px;
+  font-weight:   700;
+  color:         #0f172a;
+  font-family:   'Plus Jakarta Sans', sans-serif;
+  white-space:   nowrap;
+  overflow:      hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.wda-card-meta    { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+
+.wda-card-stats {
+  font-size:   11px;
+  color:       #475569;
+  display:     flex;
+  gap:         6px;
+  align-items: center;
+}
+
+.wda-card-sep { color: #cbd5e1; }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .wda-globe-shell { max-width: 100%; }
+  .wda-card-rank   { display: none; }
+}
+
+/* ── Reduced motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .wda-heading,
+  .wda-city-dot,
+  .wda-processor-ring,
+  .wda-card,
+  .wda-signal-path {
+    opacity:    1 !important;
+    transform:  none !important;
+    transition: none !important;
+  }
+  .wda-heading-dot { animation: none !important; }
+}
