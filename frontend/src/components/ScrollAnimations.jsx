@@ -52,104 +52,70 @@ export default function ScrollAnimations() {
             { y: 0, opacity: 1, ease: 'power2.out', duration: 0.9 }
           )
 
-          /* ── HERO EYEBROW ─────────────────────────────────────────── */
-          // fromBelow('.hp-hero-eyebrow', {
-          //   y: 24, start: 'top 95%', end: 'top 75%', scrub: 0.8,
-          // })
+          /* ── HERO — cinematic 3D entrance, not PDF-like static copy ─── */
+          const h1 = document.querySelector('.hp-hero-solo-h1')
+          if (h1 && !h1.dataset.gsapSplit) {
+            h1.dataset.gsapSplit = 'true'
+            const walker = document.createTreeWalker(h1, NodeFilter.SHOW_TEXT)
+            const textNodes = []
+            let node
+            while ((node = walker.nextNode())) textNodes.push(node)
+            textNodes.forEach(textNode => {
+              const fragment = document.createDocumentFragment()
+              textNode.textContent.split(/(\s+)/).forEach(part => {
+                if (!part) return
+                if (/^\s+$/.test(part)) {
+                  fragment.appendChild(document.createTextNode(part))
+                  return
+                }
+                const span = document.createElement('span')
+                span.className = 'hp-hero-line'
+                span.textContent = part
+                fragment.appendChild(span)
+              })
+              textNode.parentNode.replaceChild(fragment, textNode)
+            })
+          }
 
-          // /* ── HERO H1 — word-by-word scrub ────────────────────────── */
-          // const h1 = document.querySelector('.hp-hero-solo-h1')
-          // if (h1) {
-          //   const words = [...h1.querySelectorAll('*')]
-          //     .filter(el => el.childElementCount === 0)
-          //     .reduce((acc, el) => {
-          //       // wrap each text node word in a span
-          //       return acc
-          //     }, [])
+          gsap.fromTo('.hp-hero-eyebrow',
+            { y: 24, opacity: 0, rotateX: -12, filter: 'blur(8px)' },
+            { y: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', duration: 0.75, ease: 'power3.out', delay: 0.08 }
+          )
 
-          //   // Word split: wrap text-node words manually (no SplitText dep)
-          //   const wrapWords = (el) => {
-          //     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-          //     const nodes = []
-          //     let n
-          //     while ((n = walker.nextNode())) nodes.push(n)
-          //     nodes.forEach(node => {
-          //       const words = node.textContent.split(/(\s+)/)
-          //       const frag = document.createDocumentFragment()
-          //       words.forEach(w => {
-          //         if (/^\s+$/.test(w)) {
-          //           frag.appendChild(document.createTextNode(w))
-          //         } else if (w) {
-          //           const span = document.createElement('span')
-          //           span.style.display = 'inline-block'
-          //           span.style.willChange = 'transform, opacity'
-          //           span.textContent = w
-          //           frag.appendChild(span)
-          //         }
-          //       })
-          //       node.parentNode.replaceChild(frag, node)
-          //     })
-          //     return el.querySelectorAll('span[style]')
-          //   }
+          gsap.fromTo('.hp-hero-line',
+            { y: 42, z: -80, opacity: 0, rotateX: 22, filter: 'blur(7px)' },
+            { y: 0, z: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', stagger: 0.035, duration: 0.95, ease: 'power4.out', delay: 0.14 }
+          )
 
-          //   const wordSpans = wrapWords(h1)
-          //   if (wordSpans.length) {
-          //     gsap.fromTo(wordSpans,
-          //       { y: 32, opacity: 0 },
-          //       {
-          //         y: 0, opacity: 1,
-          //         stagger: 0.04,
-          //         ease: 'power3.out',
-          //         scrollTrigger: {
-          //           trigger: h1,
-          //           start: 'top 92%',
-          //           end:   'top 55%',
-          //           scrub: 1,
-          //         },
-          //       }
-          //     )
-          //   }
-          // }
+          gsap.fromTo('.hp-hero-solo-sub',
+            { y: 28, opacity: 0, rotateX: 10, filter: 'blur(6px)' },
+            { y: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', duration: 0.9, ease: 'power3.out', delay: 0.42 }
+          )
 
-          // /* ── HERO SUB PARAGRAPH ──────────────────────────────────── */
-          // fromBelow('.hp-hero-solo-sub', {
-          //   y: 28, start: 'top 90%', end: 'top 60%', scrub: 1,
-          // })
+          gsap.fromTo('.hp-hero-visual-col',
+            { x: 44, z: -120, opacity: 0, rotateY: -16, scale: 0.92 },
+            { x: 0, z: 0, opacity: 1, rotateY: 0, scale: 1, duration: 1.05, ease: 'expo.out', delay: 0.32 }
+          )
 
-          // /* ── VALIDATOR BADGE ─────────────────────────────────────── */
-          // fromBelow('.hp-validator-badge', {
-          //   y: 24, start: 'top 92%', end: 'top 62%', scrub: 1,
-          // })
+          gsap.fromTo(['.hp-validator-badge', '.hp-hero-bridge'],
+            { y: 26, opacity: 0, rotateX: 9 },
+            { y: 0, opacity: 1, rotateX: 0, stagger: 0.12, duration: 0.8, ease: 'power3.out', delay: 0.58 }
+          )
 
-          // /* ── BRIDGE LINE ─────────────────────────────────────────── */
-          // gsap.fromTo('.hp-hero-bridge',
-          //   { x: -30, opacity: 0 },
-          //   {
-          //     x: 0, opacity: 1, ease: 'power2.out',
-          //     scrollTrigger: {
-          //       trigger: '.hp-hero-bridge',
-          //       start: 'top 90%', end: 'top 65%', scrub: 1,
-          //     },
-          //   }
-          // )
+          gsap.fromTo('.hp-form-zone',
+            { y: 34, z: -80, opacity: 0, rotateX: 12, scale: 0.97, filter: 'blur(8px)' },
+            { y: 0, z: 0, opacity: 1, rotateX: 0, scale: 1, filter: 'blur(0px)', duration: 1, ease: 'power4.out', delay: 0.72 }
+          )
 
-          // /* ── FORM ZONE — scale in ────────────────────────────────── */
-          // gsap.fromTo('.hp-form-zone',
-          //   { scale: 0.96, opacity: 0, y: 20 },
-          //   {
-          //     scale: 1, opacity: 1, y: 0, ease: 'power2.out',
-          //     scrollTrigger: {
-          //       trigger: '.hp-form-zone',
-          //       start: 'top 88%', end: 'top 58%', scrub: 1.2,
-          //     },
-          //   }
-          // )
+          gsap.fromTo('.icp-form-root--hero .icp-field-group, .icp-form-root--hero .icp-submit-btn--hero',
+            { y: 16, opacity: 0, rotateX: 8 },
+            { y: 0, opacity: 1, rotateX: 0, stagger: 0.055, duration: 0.58, ease: 'power2.out', delay: 0.92 }
+          )
 
-          // /* ── MICROCOPY + ESCAPE LINK ─────────────────────────────── */
-          // fromBelow(['.hp-microcopy', '.hp-escape-link'], {
-          //   y: 14, start: 'top 90%', end: 'top 68%', scrub: 0.8, stagger: 0.2,
-          //   trigger: '.hp-microcopy',
-          // })
+          fromBelow(['.hp-microcopy', '.hp-escape-link'], {
+            y: 14, start: 'top 90%', end: 'top 68%', scrub: 0.8, stagger: 0.2,
+            trigger: '.hp-microcopy',
+          })
 
           /* ── PATHS SECTION ───────────────────────────────────────── */
           fromBelow('.hp-section-eyebrow', {

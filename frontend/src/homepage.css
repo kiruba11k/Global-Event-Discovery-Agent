@@ -163,36 +163,43 @@ body {
 .hp-hero-solo-inner {
   background-color: transparent;
   color: var(--text, #0f172a);
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 76px) 28px 56px;
 }
 
 .hp-hero-two-col {
-  display:     flex;
-  align-items: center;
-  gap:         40px;
-  text-align:  left;
-  margin:      0 0 28px;
+  display:               grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, .85fr);
+  align-items:           center;
+  gap:                   clamp(24px, 4vw, 56px);
+  text-align:            left;
+  margin:                0 0 28px;
+  perspective:           1200px;
 }
 
 .hp-hero-text-col {
-  flex:      1;
   min-width: 0;
+  transform-style: preserve-3d;
 }
 
 .hp-hero-visual-col {
-  flex:       0 0 420px;
-  width:      420px;
-  max-width:  420px;
+  width:      100%;
+  max-width:  430px;
+  justify-self:end;
+  transform-style: preserve-3d;
 }
 
 @media (max-width: 900px) {
+  .hp-hero-solo-inner { padding-inline: 18px; }
   .hp-hero-two-col {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     text-align:     center;
   }
   .hp-hero-visual-col {
     width:     100%;
-    flex:      none;
     max-width: 480px;
+    justify-self:center;
   }
 
 }
@@ -239,7 +246,7 @@ body {
   font-size:   clamp(14px, 1.6vw, 16px);
   color:       #334155;
   line-height: 1.75;
-  max-width:   460px;
+  max-width:   660px;
   margin:      0 0 20px;
   /* animation:   hp-fade-up .5s .2s ease both; */
 }
@@ -249,8 +256,8 @@ body {
   font-size:     14px;
   color:         var(--text-dim);
   line-height:   1.65;
-  max-width:     480px;
-  margin:        0 auto 28px;
+  max-width:     760px;
+  margin:        0 0 28px;
   /* animation:     hp-fade-up .5s .28s ease both; */
   padding:       10px 16px;
   background:    rgba(6,182,212,.05);
@@ -264,8 +271,8 @@ body {
 
 /* Form zone — contains the heroMode ICPForm */
 .hp-form-zone {
-  max-width:   600px;
-  margin:      0 auto;
+  max-width:   860px;
+  margin:      0;
   text-align:  left;
   /* animation:   hp-fade-up .55s .34s ease both; */
 }
@@ -877,4 +884,36 @@ body {
 /* Hide on screens where there's no horizontal room */
 @media (max-width: 1200px) {
   .hero-float-card { display: none; }
+}
+
+
+/* GSAP-driven 3D hero polish */
+.hp-hero-line {
+  display: inline-block;
+  transform-style: preserve-3d;
+  will-change: transform, opacity, filter;
+}
+.hp-hero-solo-sub,
+.hp-validator-badge,
+.hp-hero-bridge,
+.hp-form-zone {
+  will-change: transform, opacity, filter;
+}
+.hp-form-zone {
+  transform-style: preserve-3d;
+  border-radius: 24px;
+}
+@media (max-width: 900px) {
+  .hp-hero-solo-sub,
+  .hp-hero-bridge,
+  .hp-form-zone { margin-left: auto; margin-right: auto; }
+}
+
+.hp-hero-eyebrow,
+.hp-hero-solo-h1,
+.hp-hero-solo-sub,
+.hp-validator-badge,
+.hp-hero-bridge,
+.hp-form-zone {
+  animation: none;
 }
