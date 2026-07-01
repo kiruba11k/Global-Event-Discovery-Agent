@@ -10,12 +10,19 @@
 
 import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import ICPForm          from './components/ICPForm'
-import ShowRankingPage  from './components/ShowRankingPage'
-import LoadingOverlay   from './components/LoadingOverlay'
-import ShowDeepDivePage from './components/ShowDeepDivePage'
-import EmailReportModal from './components/EmailReportModal'
-import { api }          from './api/client'
+// import ICPForm          from './components/ICPForm'
+// import ShowRankingPage  from './components/ShowRankingPage'
+// import LoadingOverlay   from './components/LoadingOverlay'
+// import ShowDeepDivePage from './components/ShowDeepDivePage'
+// import EmailReportModal from './components/EmailReportModal'
+// import { api }          from './api/client'
+import ICPForm           from './components/ICPForm'
+import ShowRankingPage   from './components/ShowRankingPage'
+import ShowDeepDivePage  from './components/ShowDeepDivePage'
+import EmailReportModal  from './components/EmailReportModal'
+import LoadingOverlay    from './components/LoadingOverlay'
+import PipelineSection   from './components/PipelineSection'
+import { api }           from './api/client'
 import { Mail, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import './App.css'
 import './homepage.css'
@@ -313,9 +320,39 @@ export default function App() {
         </div>
       </nav>
 
-      {/* HERO */}
+    
+              {/* HERO */}
       <section className="hero hp-hero-solo" aria-label="Find your shows">
         <OrbBackground />
+
+        {/* Floating event-result cards — decorative, hidden on small screens */}
+        <div className="hero-float-card hero-float-card-1" aria-hidden="true">
+          <div className="hfc-verdict">
+            <span style={{ width:6,height:6,borderRadius:'50%',background:'#0EA372',flexShrink:0,display:'inline-block' }} />
+            GO · Strong match
+          </div>
+          <div className="hfc-title">Dreamforce 2025</div>
+          <div className="hfc-meta">Sep 15–18 · San Francisco</div>
+          <div className="hfc-stat"><span className="hfc-stat-dot" />127 ICP buyers attending</div>
+          <div className="hfc-stat" style={{marginTop:3}}>
+            <span className="hfc-stat-dot" style={{background:'#E8932E'}} />Est. 22–35 meetings
+          </div>
+        </div>
+
+        <div className="hero-float-card hero-float-card-2" aria-hidden="true">
+          <div className="hfc-verdict">
+            <span style={{ width:6,height:6,borderRadius:'50%',background:'#0EA372',flexShrink:0,display:'inline-block' }} />
+            GO · Strong match
+          </div>
+          <div className="hfc-title">Money20/20 2025</div>
+          <div className="hfc-meta">Oct 22–25 · Las Vegas</div>
+          <div className="hfc-stat"><span className="hfc-stat-dot" />89 ICP buyers attending</div>
+          <div className="hfc-stat" style={{marginTop:3}}>
+            <span className="hfc-stat-dot" style={{background:'#E8932E'}} />Est. 14–21 meetings
+          </div>
+        </div>
+
+
         <div className="hp-hero-solo-inner">
           <div className="hero-badge hp-hero-eyebrow">
             <Sparkles size={11} aria-hidden="true" />
@@ -365,6 +402,7 @@ export default function App() {
           </a>
         </div>
       </section>
+      <PipelineSection onScrollToForm={scrollToForm} />
 
       {/* DUAL-PATH CARDS */}
       <div className="hp-paths" aria-label="How we help">
@@ -436,7 +474,7 @@ export default function App() {
       </section>
 
       {/* PAIN SECTION */}
-      <section className="hp-pain" id="how-it-works" aria-labelledby="pain-heading">
+      <section className="hp-pain" id="social-proof" aria-labelledby="pain-heading">
         <div className="hp-pain-inner">
           <div className="hp-section-eyebrow" data-reveal>Sound familiar?</div>
           <h2 className="hp-section-title" id="pain-heading" data-reveal data-delay="1">The trade-show ROI problem is universal.</h2>
