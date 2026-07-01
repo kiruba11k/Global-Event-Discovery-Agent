@@ -165,53 +165,6 @@ export default function ScrollAnimations() {
             )
           })
 
-          /* ── PROOF STATS ─────────────────────────────────────────── */
-          const statItems = document.querySelectorAll('.hp-stat-item')
-          statItems.forEach((item, i) => {
-            gsap.fromTo(item,
-              { y: 35, opacity: 0, scale: 0.92 },
-              {
-                y: 0, opacity: 1, scale: 1, ease: 'back.out(1.5)',
-                scrollTrigger: {
-                  trigger: '.hp-proof',
-                  start: `top 85%`,
-                  end:   `top 50%`,
-                  scrub: 1 + i * 0.1,
-                },
-              }
-            )
-          })
-
-          /* Proof numbers — count-up tied to scroll position */
-          statItems.forEach(item => {
-            const numEl = item.querySelector('.hp-stat-num')
-            if (!numEl) return
-            const text = numEl.textContent.trim()
-            const match = text.match(/^(\D*)(\d[\d,]*)(\D*)$/)
-            if (!match) return
-            const [, pre, rawNum, suf] = match
-            const target = parseInt(rawNum.replace(/,/g, ''), 10)
-            if (isNaN(target) || target < 2) return
-
-            gsap.fromTo({ v: 0 },
-              { v: 0 },
-              {
-                v: target,
-                ease: 'none',
-                scrollTrigger: {
-                  trigger: item,
-                  start: 'top 85%',
-                  end:   'top 40%',
-                  scrub: 1.4,
-                  onUpdate(self) {
-                    const cur = Math.round(target * self.progress)
-                    numEl.textContent = `${pre}${cur.toLocaleString()}${suf}`
-                  },
-                },
-              }
-            )
-          })
-
           /* ── PAIN SECTION ────────────────────────────────────────── */
           fromBelow(document.querySelectorAll('.hp-pain .hp-section-eyebrow'), {
             y: 20, start: 'top 88%', end: 'top 68%', scrub: 1,
@@ -301,7 +254,7 @@ export default function ScrollAnimations() {
           )
 
           /* ── Section divider parallax ─────────────────────────────── */
-          document.querySelectorAll('.hp-proof, .hp-paths, .hp-pain, .hp-footer-cta').forEach(section => {
+          document.querySelectorAll('.hp-paths, .hp-pain, .hp-footer-cta').forEach(section => {
             gsap.fromTo(section,
               { backgroundPositionY: '0%' },
               {

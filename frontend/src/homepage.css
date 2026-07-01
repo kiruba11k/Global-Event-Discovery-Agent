@@ -170,10 +170,10 @@ body {
 
 .hp-hero-two-col {
   display:               grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, .85fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items:           center;
   gap:                   clamp(24px, 4vw, 56px);
-  text-align:            left;
+  text-align:            center;
   margin:                0 0 28px;
   perspective:           1200px;
 }
@@ -185,8 +185,8 @@ body {
 
 .hp-hero-visual-col {
   width:      100%;
-  max-width:  430px;
-  justify-self:end;
+  max-width:  520px;
+  justify-self:center;
   transform-style: preserve-3d;
 }
 
@@ -225,13 +225,26 @@ body {
 /* Headline */
 .hp-hero-solo-h1 {
   font-family:   var(--font-display, inherit);
-  font-size:     clamp(30px, 4.2vw, 52px);
+  font-size:     clamp(42px, 6.4vw, 78px);
   font-weight:   800;
-  line-height:   1.13;
+  line-height:   1.04;
   color:         #0f172a;
-  letter-spacing:-0.5px;
-  margin:        0 0 18px;
+  letter-spacing:-1.6px;
+  margin:        0 auto 18px;
+  max-width:     980px;
+  text-align:    center;
+  text-wrap:     balance;
+  transition:    transform .45s cubic-bezier(.22,1,.36,1), letter-spacing .45s ease;
   /* animation:     hp-fade-up .5s .1s ease both; */
+}
+
+.hp-hero-solo-h1:hover {
+  letter-spacing: -0.9px;
+  transform:      translateY(-2px) scale(1.01);
+}
+
+.hp-hero-line {
+  display: inline-block;
 }
 /* Gradient accent word in headline */
 .hp-h1-accent {
@@ -246,8 +259,8 @@ body {
   font-size:   clamp(14px, 1.6vw, 16px);
   color:       #334155;
   line-height: 1.75;
-  max-width:   660px;
-  margin:      0 0 20px;
+  max-width:   100%;
+  margin:      0 auto 20px;
   /* animation:   hp-fade-up .5s .2s ease both; */
 }
 
@@ -497,52 +510,6 @@ body {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   PROOF ROW
-   ════════════════════════════════════════════════════════════════ */
-.hp-proof {
-  background:    #ffffff;
-  border-top:    1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding:       40px 28px;
-}
-.hp-proof-inner {
-  max-width:       780px;
-  margin:          0 auto;
-  display:         flex;
-  align-items:     center;
-  justify-content: center;
-}
-.hp-stat-item {
-  flex:       1;
-  text-align: center;
-  padding:    0 20px;
-}
-.hp-stat-item--single {
-  flex:      0 1 auto;
-  min-width: 240px;
-}
-.hp-stat-num {
-  font-family:          var(--font-display, inherit);
-  font-size:            clamp(28px, 4vw, 44px);
-  font-weight:          800;
-  color:                var(--accent);
-  line-height:          1.1;
-  margin-bottom:        5px;
-  font-variant-numeric: tabular-nums;
-}
-.hp-stat-label {
-  font-size:   12px;
-  color:       var(--text-dim);
-  line-height: 1.45;
-}
-.hp-proof-divider {
-  width:       1px;
-  height:      48px;
-  background:  var(--border);
-  flex-shrink: 0;
-}
-
-/* ════════════════════════════════════════════════════════════════
    PAIN SECTION
    ════════════════════════════════════════════════════════════════ */
 .hp-pain { padding: 72px 28px; }
@@ -712,11 +679,6 @@ body {
   .hp-pain             { padding: 48px 16px; }
   .hp-footer-cta       { padding: 48px 16px; }
   .hp-paths            { padding: 24px 16px; }
-  .hp-proof            { padding: 28px 16px; }
-  .hp-proof-inner      { flex-wrap: wrap; }
-  .hp-stat-item        { flex: 0 0 45%; padding: 10px 8px; }
-  .hp-proof-divider    { display: none; }
-  .hp-stat-num         { font-size: 28px; }
   .icp-deal-grid--hero { grid-template-columns: 1fr 1fr !important; }
 }
 @media (max-width: 380px) {
@@ -736,11 +698,12 @@ body {
   border-radius: var(--radius, 14px);
   padding:       16px 18px;
   max-width:     700px;
-  margin:        0 0 20px;
+  margin:        0 auto 20px;
   font-size:     14.5px;
   color:         var(--text-sub);
   line-height:   1.55;
-  text-align:    left;
+  text-align:    center;
+  justify-content:center;
 }
 .hp-validator-badge strong {
   color: var(--go);
@@ -772,13 +735,6 @@ body {
   background:   #ffffff;
   border-top:   1px solid var(--border);
   border-bottom:1px solid var(--border);
-}
-
-/* Proof strip */
-.hp-proof {
-  background:   #ffffff;
-  border-top-color:    var(--border);
-  border-bottom-color: var(--border);
 }
 
 /* Pain section */

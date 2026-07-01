@@ -227,35 +227,37 @@ export default function WorldDataAnimation() {
             fill="none" stroke="#0ea5e9" strokeWidth="2" opacity="0.18"
             filter="url(#wdaGlowSoft)" />
 
-          {/* Latitude rings — interactive via GSAP */}
-          {[1, 2, 3, 4, 5, 6].map((n, i) => (
-            <ellipse
-              key={i}
-              className="wda-lat"
-              cx={CENTER.x} cy={CENTER.y}
-              rx={Math.round(168 * Math.sin((n / 7) * Math.PI))}
-              ry={n * 24}
-              fill="none"
-              stroke="#38bdf8"
-              strokeWidth="0.6"
-              opacity={0.22 + i * 0.04}
-            />
-          ))}
+          <g className="wda-eclipse-system">
+            {/* Latitude rings — interactive via GSAP */}
+            {[1, 2, 3, 4, 5, 6].map((n, i) => (
+              <ellipse
+                key={i}
+                className="wda-lat"
+                cx={CENTER.x} cy={CENTER.y}
+                rx={Math.round(168 * Math.sin((n / 7) * Math.PI))}
+                ry={n * 24}
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="0.6"
+                opacity={0.22 + i * 0.04}
+              />
+            ))}
 
-          {/* Longitude ellipses — interactive via GSAP */}
-          {LNG_ANGLES.map((angle, i) => (
-            <ellipse
-              key={i}
-              className="wda-lng"
-              cx={CENTER.x} cy={CENTER.y}
-              rx={18 + i * 28} ry="158"
-              fill="none"
-              stroke="#38bdf8"
-              strokeWidth="0.6"
-              opacity={0.18 + i * 0.03}
-              transform={`rotate(${angle}, ${CENTER.x}, ${CENTER.y})`}
-            />
-          ))}
+            {/* Longitude ellipses — interactive via GSAP */}
+            {LNG_ANGLES.map((angle, i) => (
+              <ellipse
+                key={i}
+                className="wda-lng"
+                cx={CENTER.x} cy={CENTER.y}
+                rx={18 + i * 28} ry="158"
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="0.6"
+                opacity={0.18 + i * 0.03}
+                transform={`rotate(${angle}, ${CENTER.x}, ${CENTER.y})`}
+              />
+            ))}
+          </g>
 
           {/* Signal paths */}
           {CITIES.map((city, i) => {
