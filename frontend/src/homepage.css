@@ -58,8 +58,8 @@ body, section, div {
   position:        sticky;
   top:             0;
   z-index:         200;
-  background:      rgb(250 254 255);
-  backdrop-filter: blur(14px);
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom:   1px solid var(--border);
 }
