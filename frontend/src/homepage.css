@@ -24,9 +24,12 @@
   are carried forward unchanged.
   Uses only existing App.css variables — no new dependencies.
 */
-body, section, div {
-  background-color: white ;
-  color: #1e293b; /* Ensuring text remains readable */
+/* Keep the page readable without applying global rules to every element.
+   A previous broad `body, section, div` rule forced all sections to a white
+   background, overriding the dark hero and card surfaces. */
+body {
+  background-color: #ffffff;
+  color: #1e293b;
 }
 /* ── Keyframes ──────────────────────────────────────────────────── */
 @keyframes hp-ticker {
@@ -51,10 +54,6 @@ body, section, div {
 }
 body {
   background-color: rgb(255, 255, 255);
-}
-
-div {
-  display: none;
 }
 
 .app {
