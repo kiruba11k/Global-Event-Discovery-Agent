@@ -360,17 +360,23 @@ export default function App() {
             <Sparkles size={11} aria-hidden="true" />
             <span>See the buyers, the meetings, and the cost of a show  before you book the booth</span>
           </div>
-          <h1 className="hp-hero-solo-h1">
-            Your next 50 meetings are already at a <span className="hp-h1-accent">trade show</span>.<br />
-            We tell you which one.
-          </h1>
-          <p className="hp-hero-solo-sub">
-            Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
-            of your exact buyers attend  then forecast the qualified prospects, the meetings, and
-            the cost before you commit a rupee. Strong references and a willingness to fly are all it takes.
-          </p>
-          <WorldDataAnimation />
-
+                    {/* Two-column: text left · globe right */}
+          <div className="hp-hero-two-col">
+            <div className="hp-hero-text-col">
+              <h1 className="hp-hero-solo-h1">
+                Your next 50 meetings are already at a <span className="hp-h1-accent">trade show</span>.<br />
+                We tell you which one.
+              </h1>
+              <p className="hp-hero-solo-sub">
+                Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
+                of your exact buyers attend — then forecast the qualified prospects, the meetings, and
+                the cost before you commit a rupee.
+              </p>
+            </div>
+            <div className="hp-hero-visual-col">
+              <WorldDataAnimation />
+            </div>
+          </div>
           <div className="hp-validator-badge" aria-label="Two-agent validator">
             <div className="hp-validator-icon" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
