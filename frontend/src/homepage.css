@@ -69,6 +69,12 @@
   justify-content: space-between;
   gap:             20px;
 }
+.hp-paths-inner > .hp-section-eyebrow,
+.hp-paths-inner > .hp-section-title,
+.hp-paths-inner > .hp-paths-sub {
+  grid-column: 1 / -1;
+  text-align: center;
+}
 .hp-logo {
   display:         flex;
   align-items:     center;
