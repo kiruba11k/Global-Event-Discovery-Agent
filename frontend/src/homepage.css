@@ -25,9 +25,8 @@
   Uses only existing App.css variables — no new dependencies.
 */
 body, section, div {
-  background-color: white !important;
-  background-image: none !important;
-  color: #1e293b !important; /* Ensuring text remains readable */
+  background-color: white ;
+  color: #1e293b; /* Ensuring text remains readable */
 }
 /* ── Keyframes ──────────────────────────────────────────────────── */
 @keyframes hp-ticker {
@@ -142,8 +141,7 @@ body, section, div {
    The form IS the conversion. No sidebars, no two columns.
    ════════════════════════════════════════════════════════════════ */
 .hp-hero-solo {
- background-color: transparent;
-  background-image: none;
+  background-color: transparent; 
 }
 .hp-hero-solo-inner {
   position:    relative;
