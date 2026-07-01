@@ -165,7 +165,7 @@ body {
   color: var(--text, #0f172a);
   max-width: 1240px;
   margin: 0 auto;
-  padding: clamp(32px, 6vw, 76px) 28px 56px;
+  padding: clamp(24px, 5vw, 62px) 28px 56px;
 }
 
 .hp-hero-two-col {
@@ -288,7 +288,8 @@ body {
 
 /* Form zone — contains the heroMode ICPForm */
 .hp-form-zone {
-  max-width:   860px;
+  width:       min(100%, 720px);
+  max-width:   720px;
   margin:      0 auto;
   text-align:  left;
   /* animation:   hp-fade-up .55s .34s ease both; */
@@ -298,16 +299,21 @@ body {
 .hp-microcopy {
   font-size:   11px;
   color:       var(--text-dim);
-  margin:      12px 0 8px;
+  margin:      12px auto 8px;
+  max-width:   720px;
+  text-align:  center;
   opacity:     .65;
   /* animation:   hp-fade-up .5s .5s ease both; */
 }
 
 /* Escape hatch */
 .hp-escape-link {
-  display:         inline-block;
+  display:         block;
+  width:           fit-content;
+  margin:          0 auto;
   font-size:       11px;
   color:           var(--text-dim);
+  text-align:      center;
   text-decoration: none;
   opacity:         .55;
   transition:      opacity .2s, color .2s;
@@ -679,7 +685,7 @@ body {
 @media (max-width: 640px) {
   .hp-nav-inner        { padding: 0 16px; }
   .hp-nav-links        { display: none; }
-  .hp-hero-solo-inner  { padding: 48px 16px 40px; }
+  .hp-hero-solo-inner  { padding: 36px 16px 40px; }
   .hp-pain             { padding: 48px 16px; }
   .hp-footer-cta       { padding: 48px 16px; }
   .hp-paths            { padding: 24px 16px; }
