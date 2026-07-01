@@ -17,7 +17,8 @@ import toast, { Toaster } from 'react-hot-toast'
 // import EmailReportModal from './components/EmailReportModal'
 // import { api }          from './api/client'
 import './world-animation.css'
-import WorldDataAnimation from './components/WorldDataAnimation'
+import WorldDataAnimation  from './components/WorldDataAnimation'
+import ScrollAnimations    from './components/ScrollAnimations'
 import ICPForm           from './components/ICPForm'
 import ShowRankingPage   from './components/ShowRankingPage'
 import ShowDeepDivePage  from './components/ShowDeepDivePage'
@@ -299,6 +300,8 @@ export default function App() {
   /* ── Screen: Home ──────────────────────────────────────────── */
   return (
     <div className="app">
+      <ScrollAnimations />
+
       <Toaster position="top-right" toastOptions={{
         style:   { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
         success: { iconTheme: { primary: '#06b6d4', secondary: '#1e293b' } },
