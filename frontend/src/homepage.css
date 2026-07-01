@@ -185,7 +185,7 @@ div {
   width:      420px;
   max-width:  420px;
 }
-}
+
 @media (max-width: 900px) {
   .hp-hero-two-col {
     flex-direction: column;
@@ -196,6 +196,8 @@ div {
     flex:      none;
     max-width: 480px;
   }
+
+}
 
 /* Eyebrow pill */
 .hp-hero-eyebrow {
