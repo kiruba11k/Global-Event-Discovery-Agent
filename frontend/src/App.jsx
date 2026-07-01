@@ -16,6 +16,8 @@ import toast, { Toaster } from 'react-hot-toast'
 // import ShowDeepDivePage from './components/ShowDeepDivePage'
 // import EmailReportModal from './components/EmailReportModal'
 // import { api }          from './api/client'
+import './world-animation.css'
+import WorldDataAnimation from './components/WorldDataAnimation'
 import ICPForm           from './components/ICPForm'
 import ShowRankingPage   from './components/ShowRankingPage'
 import ShowDeepDivePage  from './components/ShowDeepDivePage'
@@ -367,6 +369,8 @@ export default function App() {
             of your exact buyers attend  then forecast the qualified prospects, the meetings, and
             the cost before you commit a rupee. Strong references and a willingness to fly are all it takes.
           </p>
+          <WorldDataAnimation />
+
           <div className="hp-validator-badge" aria-label="Two-agent validator">
             <div className="hp-validator-icon" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
