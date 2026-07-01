@@ -457,27 +457,10 @@ export default function App() {
       <section className="hp-proof" ref={statsRef} aria-label="Our event index">
         <div className="hp-proof-inner">
           {stats?.total_events_in_db > 0 ? (
-            <>
-              <div className="hp-stat-item" data-reveal data-delay="0">
-                <div className="hp-stat-num">{(stats.total_events_in_db || 0).toLocaleString()}+</div>
-                <div className="hp-stat-label">B2B events indexed</div>
-              </div>
-              <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item" data-reveal data-delay="2">
-                <div className="hp-stat-num">20+</div>
-                <div className="hp-stat-label">countries covered</div>
-              </div>
-              <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item" data-reveal data-delay="3">
-                <div className="hp-stat-num">90s</div>
-                <div className="hp-stat-label">to your ranked list</div>
-              </div>
-              <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item" data-reveal data-delay="4">
-                <div className="hp-stat-num">Free</div>
-                <div className="hp-stat-label">top 6 always free</div>
-              </div>
-            </>
+            <div className="hp-stat-item hp-stat-item--single" data-reveal data-delay="0">
+              <div className="hp-stat-num">{(stats.total_events_in_db || 0).toLocaleString()}+</div>
+              <div className="hp-stat-label">B2B events indexed</div>
+            </div>
           ) : (
             <div className="hp-stat-item" style={{textAlign:'center',flex:'none'}}>
               <div className="hp-stat-num" style={{fontSize:18}}>Loading…</div>

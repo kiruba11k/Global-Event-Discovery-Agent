@@ -25,8 +25,7 @@
   Uses only existing App.css variables — no new dependencies.
 */
 /* Keep the page readable without applying global rules to every element.
-   A previous broad `body, section, div` rule forced all sections to a white
-   background, overriding the dark hero and card surfaces. */
+   Keep homepage surfaces white while preserving card/input contrast. */
 body {
   background-color: #ffffff;
   color: #1e293b;
@@ -151,11 +150,11 @@ body {
    The form IS the conversion. No sidebars, no two columns.
    ════════════════════════════════════════════════════════════════ */
 .hp-hero-solo {
-  background-color: rgb(4, 9, 15);
-  color: rgb(255, 255, 255);
+  background-color: #ffffff;
+  color: var(--text, #0f172a);
   opacity: 1;
   visibility: visible;
-  background-image: linear-gradient(rgb(4, 9, 15), rgb(6, 14, 28));
+  background-image: none;
   display: block;
   position: relative;
   z-index: 1;
@@ -163,7 +162,7 @@ body {
 }
 .hp-hero-solo-inner {
   background-color: transparent;
-  color: rgb(255, 255, 255);
+  color: var(--text, #0f172a);
 }
 
 .hp-hero-two-col {
@@ -370,7 +369,7 @@ body {
    DUAL-PATH CARDS
    ════════════════════════════════════════════════════════════════ */
 .hp-paths {
-  background: rgb(230, 243, 255);
+  background: #ffffff;
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding:       36px 28px;
@@ -494,7 +493,7 @@ body {
    PROOF ROW
    ════════════════════════════════════════════════════════════════ */
 .hp-proof {
-  background:    rgb(230, 243, 255);
+  background:    #ffffff;
   border-top:    1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding:       40px 28px;
@@ -510,6 +509,10 @@ body {
   flex:       1;
   text-align: center;
   padding:    0 20px;
+}
+.hp-stat-item--single {
+  flex:      0 1 auto;
+  min-width: 240px;
 }
 .hp-stat-num {
   font-family:          var(--font-display, inherit);
@@ -742,13 +745,13 @@ body {
 }
 /* Nav glass */
 .hp-nav {
-  background:   rgba(4,9,15,0.90);
-  border-bottom-color: rgba(79,140,200,0.1);
+  background:   rgba(255,255,255,0.90);
+  border-bottom-color: var(--border);
 }
 .hp-logo { color: var(--text); }
 
 /* Hero dark bg */
-.hp-hero-solo { background: linear-gradient(180deg, #04090F 0%, #060E1C 100%); }
+.hp-hero-solo { background: #ffffff; }
 
 /* Hero bridge left-bar */
 .hp-hero-bridge {
@@ -759,35 +762,35 @@ body {
 
 /* Paths section */
 .hp-paths {
-  background:   #060D1A;
-  border-top:   1px solid rgba(79,140,200,0.08);
-  border-bottom:1px solid rgba(79,140,200,0.08);
+  background:   #ffffff;
+  border-top:   1px solid var(--border);
+  border-bottom:1px solid var(--border);
 }
 
 /* Proof strip */
 .hp-proof {
-  background:   rgba(6,13,26,0.9);
-  border-top-color:    rgba(79,140,200,0.1);
-  border-bottom-color: rgba(79,140,200,0.1);
+  background:   #ffffff;
+  border-top-color:    var(--border);
+  border-bottom-color: var(--border);
 }
 
 /* Pain section */
-.hp-pain { background: #04090F; }
+.hp-pain { background: #ffffff; }
 
 /* Footer CTA */
 .hp-footer-cta {
-  background: linear-gradient(135deg, rgba(17,182,205,0.07) 0%, rgba(59,123,246,0.05) 100%);
-  border-top-color: rgba(79,140,200,0.1);
+  background: #ffffff;
+  border-top-color: var(--border);
 }
 
 /* Outline CTA — dark surface */
 .hp-cta-outline {
-  background:   rgba(11,23,40,0.7);
-  border-color: rgba(79,140,200,0.25);
+  background:   #ffffff;
+  border-color: var(--border);
   color:        var(--text);
 }
 .hp-cta-outline:hover {
-  background:   rgba(17,182,205,0.09);
+  background:   var(--accent-glow);
   border-color: var(--accent);
   color:        var(--accent);
 }
@@ -795,16 +798,16 @@ body {
 /* Footer links */
 .app-footer,
 .hp-app-footer {
-  background:   #02060C;
-  border-top:   1px solid rgba(79,140,200,0.1);
+  background:   #ffffff;
+  border-top:   1px solid var(--border);
 }
 .footer-cta { color: var(--accent); }
 
 /* ── Floating event-card hero decorations ────────────────── */
 .hero-float-card {
   position:      absolute;
-  background:    rgba(11,23,40,0.85);
-  border:        1px solid rgba(79,140,200,0.18);
+  background:    rgba(255,255,255,0.92);
+  border:        1px solid var(--border);
   border-radius: var(--radius, 14px);
   padding:       14px 16px;
   width:         220px;
@@ -813,7 +816,7 @@ body {
   pointer-events: none;
   user-select:   none;
   z-index:       0;
-  box-shadow:    0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow:    var(--shadow);
 }
 .hero-float-card-1 {
   top:       22%;
