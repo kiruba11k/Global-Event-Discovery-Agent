@@ -19,6 +19,7 @@ import { api }          from './api/client'
 import { Mail, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import './App.css'
 import './homepage.css'
+import './micro-animations.css'
 
 /* ─── Orb background ───────────────────────────────────────────── */
 function OrbBackground() {
@@ -112,6 +113,19 @@ export default function App() {
       })
     }, { threshold: 0.15 })
     document.querySelectorAll('[data-pain-card]').forEach(c => io.observe(c))
+    return () => io.disconnect()
+  }, [])
+  /* ── Generic scroll-reveal observer ───────────────────────── */
+  useEffect(() => {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('revealed')
+          io.unobserve(e.target)
+        }
+      })
+    }, { threshold: 0.1, rootMargin: '0px 0px -32px 0px' })
+    document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el))
     return () => io.disconnect()
   }, [])
 
@@ -355,10 +369,10 @@ export default function App() {
       {/* DUAL-PATH CARDS */}
       <div className="hp-paths" aria-label="How we help">
         <div className="hp-paths-inner">
-          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }}>Two ways to win a show</div>
-          <h2 className="hp-section-title" style={{ textAlign: 'center' }}>Whether you're walking the floor or holding a booth.</h2>
-          <p className="hp-paths-sub" style={{ textAlign: 'center' }}>The room is the same. What you do with it isn't. We forecast the buyers either way.</p>
-          <div className="hp-path-card hp-path-attending">
+          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }} data-reveal data-delay="0">Two ways to win a show</div>
+          <h2 className="hp-section-title" style={{ textAlign: 'center' }} data-reveal data-delay="1">Whether you're walking the floor or holding a booth.</h2>
+          <p className="hp-paths-sub" style={{ textAlign: 'center' }} data-reveal data-delay="2">The room is the same. What you do with it isn't. We forecast the buyers either way.</p>
+          <div className="hp-path-card hp-path-attending" data-reveal data-delay="3">
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/></svg>
             </div>
@@ -367,7 +381,7 @@ export default function App() {
             <p className="hp-path-desc">Walk in with a calendar, not a hope. We tell you how many of your buyers attend each show and hand you the prospect list to work it yourself.</p>
             <button className="hp-path-cta" onClick={scrollToForm}>Find my shows →</button>
           </div>
-          <div className="hp-path-card hp-path-exhibiting">
+          <div className="hp-path-card hp-path-exhibiting" data-reveal data-delay="4">
             <div className="hp-path-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
             </div>
@@ -393,22 +407,22 @@ export default function App() {
         <div className="hp-proof-inner">
           {stats?.total_events_in_db > 0 ? (
             <>
-              <div className="hp-stat-item">
+              <div className="hp-stat-item" data-reveal data-delay="0">
                 <div className="hp-stat-num">{(stats.total_events_in_db || 0).toLocaleString()}+</div>
                 <div className="hp-stat-label">B2B events indexed</div>
               </div>
               <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item">
+              <div className="hp-stat-item" data-reveal data-delay="2">
                 <div className="hp-stat-num">20+</div>
                 <div className="hp-stat-label">countries covered</div>
               </div>
               <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item">
+              <div className="hp-stat-item" data-reveal data-delay="3">
                 <div className="hp-stat-num">90s</div>
                 <div className="hp-stat-label">to your ranked list</div>
               </div>
               <div className="hp-proof-divider" aria-hidden="true" />
-              <div className="hp-stat-item">
+              <div className="hp-stat-item" data-reveal data-delay="4">
                 <div className="hp-stat-num">Free</div>
                 <div className="hp-stat-label">top 6 always free</div>
               </div>
@@ -424,10 +438,9 @@ export default function App() {
       {/* PAIN SECTION */}
       <section className="hp-pain" id="how-it-works" aria-labelledby="pain-heading">
         <div className="hp-pain-inner">
-          <div className="hp-section-eyebrow">Sound familiar?</div>
-          <h2 className="hp-section-title" id="pain-heading">The trade-show ROI problem is universal.</h2>
-          <p className="hp-pain-sub">Every line below is a meeting that should have happened  and the intel that would have made it.</p>
-          <div className="hp-pain-grid">
+          <div className="hp-section-eyebrow" data-reveal>Sound familiar?</div>
+          <h2 className="hp-section-title" id="pain-heading" data-reveal data-delay="1">The trade-show ROI problem is universal.</h2>
+          <p className="hp-pain-sub" data-reveal data-delay="2">Every line below is a meeting that should have happened  and the intel that would have made it.</p>          <div className="hp-pain-grid">
             {PAIN_QUOTES.map((q, i) => (
               <div key={i} data-pain-card data-idx={i}
                 className={`hp-pain-card ${visibleCards.includes(i) ? 'hp-card-visible' : ''}`}
@@ -444,10 +457,10 @@ export default function App() {
       {/* FOOTER CTA */}
       <section className="hp-footer-cta" aria-label="Get started">
         <div className="hp-footer-cta-inner">
-          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }}>Ready to stop guessing?</div>
-          <h2 className="hp-footer-cta-h2">Rank your shows in 2 minutes.</h2>
-          <p className="hp-footer-cta-sub">Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.</p>
-          <div className="hp-footer-cta-btns">
+          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }} data-reveal>Ready to stop guessing?</div>
+          <h2 className="hp-footer-cta-h2" data-reveal data-delay="1">Rank your shows in 2 minutes.</h2>
+          <p className="hp-footer-cta-sub" data-reveal data-delay="2">Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.</p>
+          <div className="hp-footer-cta-btns" data-reveal="scale" data-delay="3">
             <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows  it's free</button>
             <a className="hp-cta-outline" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Book a demo</a>
           </div>
