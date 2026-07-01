@@ -48,8 +48,11 @@
 }
 
 @keyframes ma-pulse-glow {
-  0%,100% { box-shadow: var(--shadow-lg, 0 10px 40px rgba(17,182,205,.18)); }
-  50%     { box-shadow: 0 14px 50px rgba(17,182,205,.38); }
+  /* 0%,100% { box-shadow: var(--shadow-lg, 0 10px 40px rgba(17,182,205,.18)); }
+  50%     { box-shadow: 0 14px 50px rgba(17,182,205,.38); } */
+    0%,100% { box-shadow: 0 8px 40px rgba(17,182,205,.25); }
+  50%     { box-shadow: 0 12px 52px rgba(17,182,205,.45); }
+
 }
 
 @keyframes ma-underline-in {
