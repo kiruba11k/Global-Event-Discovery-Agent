@@ -53,103 +53,103 @@ export default function ScrollAnimations() {
           )
 
           /* ── HERO EYEBROW ─────────────────────────────────────────── */
-          fromBelow('.hp-hero-eyebrow', {
-            y: 24, start: 'top 95%', end: 'top 75%', scrub: 0.8,
-          })
+          // fromBelow('.hp-hero-eyebrow', {
+          //   y: 24, start: 'top 95%', end: 'top 75%', scrub: 0.8,
+          // })
 
-          /* ── HERO H1 — word-by-word scrub ────────────────────────── */
-          const h1 = document.querySelector('.hp-hero-solo-h1')
-          if (h1) {
-            const words = [...h1.querySelectorAll('*')]
-              .filter(el => el.childElementCount === 0)
-              .reduce((acc, el) => {
-                // wrap each text node word in a span
-                return acc
-              }, [])
+          // /* ── HERO H1 — word-by-word scrub ────────────────────────── */
+          // const h1 = document.querySelector('.hp-hero-solo-h1')
+          // if (h1) {
+          //   const words = [...h1.querySelectorAll('*')]
+          //     .filter(el => el.childElementCount === 0)
+          //     .reduce((acc, el) => {
+          //       // wrap each text node word in a span
+          //       return acc
+          //     }, [])
 
-            // Word split: wrap text-node words manually (no SplitText dep)
-            const wrapWords = (el) => {
-              const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-              const nodes = []
-              let n
-              while ((n = walker.nextNode())) nodes.push(n)
-              nodes.forEach(node => {
-                const words = node.textContent.split(/(\s+)/)
-                const frag = document.createDocumentFragment()
-                words.forEach(w => {
-                  if (/^\s+$/.test(w)) {
-                    frag.appendChild(document.createTextNode(w))
-                  } else if (w) {
-                    const span = document.createElement('span')
-                    span.style.display = 'inline-block'
-                    span.style.willChange = 'transform, opacity'
-                    span.textContent = w
-                    frag.appendChild(span)
-                  }
-                })
-                node.parentNode.replaceChild(frag, node)
-              })
-              return el.querySelectorAll('span[style]')
-            }
+          //   // Word split: wrap text-node words manually (no SplitText dep)
+          //   const wrapWords = (el) => {
+          //     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+          //     const nodes = []
+          //     let n
+          //     while ((n = walker.nextNode())) nodes.push(n)
+          //     nodes.forEach(node => {
+          //       const words = node.textContent.split(/(\s+)/)
+          //       const frag = document.createDocumentFragment()
+          //       words.forEach(w => {
+          //         if (/^\s+$/.test(w)) {
+          //           frag.appendChild(document.createTextNode(w))
+          //         } else if (w) {
+          //           const span = document.createElement('span')
+          //           span.style.display = 'inline-block'
+          //           span.style.willChange = 'transform, opacity'
+          //           span.textContent = w
+          //           frag.appendChild(span)
+          //         }
+          //       })
+          //       node.parentNode.replaceChild(frag, node)
+          //     })
+          //     return el.querySelectorAll('span[style]')
+          //   }
 
-            const wordSpans = wrapWords(h1)
-            if (wordSpans.length) {
-              gsap.fromTo(wordSpans,
-                { y: 32, opacity: 0 },
-                {
-                  y: 0, opacity: 1,
-                  stagger: 0.04,
-                  ease: 'power3.out',
-                  scrollTrigger: {
-                    trigger: h1,
-                    start: 'top 92%',
-                    end:   'top 55%',
-                    scrub: 1,
-                  },
-                }
-              )
-            }
-          }
+          //   const wordSpans = wrapWords(h1)
+          //   if (wordSpans.length) {
+          //     gsap.fromTo(wordSpans,
+          //       { y: 32, opacity: 0 },
+          //       {
+          //         y: 0, opacity: 1,
+          //         stagger: 0.04,
+          //         ease: 'power3.out',
+          //         scrollTrigger: {
+          //           trigger: h1,
+          //           start: 'top 92%',
+          //           end:   'top 55%',
+          //           scrub: 1,
+          //         },
+          //       }
+          //     )
+          //   }
+          // }
 
-          /* ── HERO SUB PARAGRAPH ──────────────────────────────────── */
-          fromBelow('.hp-hero-solo-sub', {
-            y: 28, start: 'top 90%', end: 'top 60%', scrub: 1,
-          })
+          // /* ── HERO SUB PARAGRAPH ──────────────────────────────────── */
+          // fromBelow('.hp-hero-solo-sub', {
+          //   y: 28, start: 'top 90%', end: 'top 60%', scrub: 1,
+          // })
 
-          /* ── VALIDATOR BADGE ─────────────────────────────────────── */
-          fromBelow('.hp-validator-badge', {
-            y: 24, start: 'top 92%', end: 'top 62%', scrub: 1,
-          })
+          // /* ── VALIDATOR BADGE ─────────────────────────────────────── */
+          // fromBelow('.hp-validator-badge', {
+          //   y: 24, start: 'top 92%', end: 'top 62%', scrub: 1,
+          // })
 
-          /* ── BRIDGE LINE ─────────────────────────────────────────── */
-          gsap.fromTo('.hp-hero-bridge',
-            { x: -30, opacity: 0 },
-            {
-              x: 0, opacity: 1, ease: 'power2.out',
-              scrollTrigger: {
-                trigger: '.hp-hero-bridge',
-                start: 'top 90%', end: 'top 65%', scrub: 1,
-              },
-            }
-          )
+          // /* ── BRIDGE LINE ─────────────────────────────────────────── */
+          // gsap.fromTo('.hp-hero-bridge',
+          //   { x: -30, opacity: 0 },
+          //   {
+          //     x: 0, opacity: 1, ease: 'power2.out',
+          //     scrollTrigger: {
+          //       trigger: '.hp-hero-bridge',
+          //       start: 'top 90%', end: 'top 65%', scrub: 1,
+          //     },
+          //   }
+          // )
 
-          /* ── FORM ZONE — scale in ────────────────────────────────── */
-          gsap.fromTo('.hp-form-zone',
-            { scale: 0.96, opacity: 0, y: 20 },
-            {
-              scale: 1, opacity: 1, y: 0, ease: 'power2.out',
-              scrollTrigger: {
-                trigger: '.hp-form-zone',
-                start: 'top 88%', end: 'top 58%', scrub: 1.2,
-              },
-            }
-          )
+          // /* ── FORM ZONE — scale in ────────────────────────────────── */
+          // gsap.fromTo('.hp-form-zone',
+          //   { scale: 0.96, opacity: 0, y: 20 },
+          //   {
+          //     scale: 1, opacity: 1, y: 0, ease: 'power2.out',
+          //     scrollTrigger: {
+          //       trigger: '.hp-form-zone',
+          //       start: 'top 88%', end: 'top 58%', scrub: 1.2,
+          //     },
+          //   }
+          // )
 
-          /* ── MICROCOPY + ESCAPE LINK ─────────────────────────────── */
-          fromBelow(['.hp-microcopy', '.hp-escape-link'], {
-            y: 14, start: 'top 90%', end: 'top 68%', scrub: 0.8, stagger: 0.2,
-            trigger: '.hp-microcopy',
-          })
+          // /* ── MICROCOPY + ESCAPE LINK ─────────────────────────────── */
+          // fromBelow(['.hp-microcopy', '.hp-escape-link'], {
+          //   y: 14, start: 'top 90%', end: 'top 68%', scrub: 0.8, stagger: 0.2,
+          //   trigger: '.hp-microcopy',
+          // })
 
           /* ── PATHS SECTION ───────────────────────────────────────── */
           fromBelow('.hp-section-eyebrow', {
