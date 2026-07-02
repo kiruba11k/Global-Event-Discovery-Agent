@@ -1,3 +1,6 @@
+/*
+  HeroSection.jsx — Split hero with GSAP DrawSVG decorative lines
+*/
 import { CheckCircle } from 'lucide-react'
 import EventRankViz from './EventRankViz'
 import '../landing.css'
@@ -5,23 +8,76 @@ import '../landing.css'
 export default function HeroSection({ onScrollToForm }) {
   return (
     <section className="ld-hero" aria-label="Find your shows">
+
+      {/* DrawSVG decorative lines — animated by GSAPAnimations */}
+      <svg
+        className="ld-hero-deco"
+        viewBox="0 0 1200 600"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <defs>
+          <linearGradient id="deco-g1" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35"/>
+            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.12"/>
+          </linearGradient>
+          <linearGradient id="deco-g2" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.22"/>
+            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.08"/>
+          </linearGradient>
+          <linearGradient id="deco-g3" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.15"/>
+            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path
+          className="gsap-deco-line"
+          d="M-100 420 C180 300 320 520 560 400 S820 220 1100 340 1300 380 1400 360"
+          stroke="url(#deco-g1)"
+          strokeWidth="1.8"
+        />
+        <path
+          className="gsap-deco-line"
+          d="M-80 180 C100 140 240 280 420 200 S680 80 900 160 1100 220 1300 180"
+          stroke="url(#deco-g2)"
+          strokeWidth="1.2"
+        />
+        <circle
+          className="gsap-deco-line"
+          cx="1050" cy="90" r="200"
+          stroke="#0ea5e9" strokeWidth="0.9" strokeDasharray="5 10"
+        />
+        <circle
+          className="gsap-deco-line"
+          cx="160" cy="480" r="80"
+          stroke="url(#deco-g3)" strokeWidth="1" strokeDasharray="3 6"
+        />
+        <line
+          className="gsap-deco-line"
+          x1="600" y1="0" x2="600" y2="600"
+          stroke="#0ea5e9" strokeWidth="0.6" strokeOpacity="0.08"
+        />
+      </svg>
+
       <div className="ld-hero-inner">
+        {/* Left column */}
         <div className="ld-hero-left">
           <div className="ld-hero-badge">
             <span className="ld-hero-badge-dot" aria-hidden="true" />
-            See the buyers, the meetings, and the cost of a show - before you book the booth
+            AI-Powered Event Intelligence
           </div>
 
           <h1 className="ld-hero-h1">
-            Your next 50 meetings are already at a{' '}
-            <em>trade show.</em>
-            We tell you which one.{' '}
+            Find the exact trade shows{' '}
+            <em>where your buyers are.</em>
           </h1>
 
           <p className="ld-hero-sub">
-Tell us who you sell to and where you'll travel. 
-            We rank<b>10,000+ B2B events</b>  by how many of your exact buyers attend - then forecast the qualified prospects, the meetings and the cost<b>before you commit a rupee</b>  
-            Strong references and a willingness to fly are all it takes.
+            We rank 10,000+ B2B events by how many of your ideal customers attend —
+            with buyer counts, cost forecasts, and prospect lists.
+            Six inputs. Done in 90 seconds.
           </p>
 
           <div className="ld-hero-actions">
@@ -49,6 +105,7 @@ Tell us who you sell to and where you'll travel.
           </div>
         </div>
 
+        {/* Right column */}
         <div className="ld-hero-right">
           <EventRankViz />
         </div>
