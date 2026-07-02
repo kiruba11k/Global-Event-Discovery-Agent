@@ -9,18 +9,19 @@ export default function HeroSection({ onScrollToForm }) {
         <div className="ld-hero-left">
           <div className="ld-hero-badge">
             <span className="ld-hero-badge-dot" aria-hidden="true" />
-            AI-Powered Event Intelligence
+            AI Powered Event Intelligence
           </div>
 
           <h1 className="ld-hero-h1">
-            Find the exact trade shows{' '}
-            <em>where your buyers are.</em>
+            Your next 50 meetings are already at a{' '}
+            <em>trade show.</em>
+            We tell you which one.{' '}
           </h1>
 
           <p className="ld-hero-sub">
-            We rank 10,000+ B2B events by how many of your ideal customers attend —
-            with buyer counts, cost forecasts, and prospect lists.
-            Six inputs. Done in 90 seconds.
+Tell us who you sell to and where you'll travel. 
+            We rank<b>10,000+ B2B events</b>  by how many of your exact buyers attend - then forecast the qualified prospects, the meetings and the cost<b>before you commit a rupee</b>  
+            Strong references and a willingness to fly are all it takes.
           </p>
 
           <div className="ld-hero-actions">
