@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import '../landing.css'
 
 const EVENTS = [
-  { rank: 1, name: 'Dreamforce 2025',  date: 'Oct 14–17', city: 'San Francisco', score: 94, buyers: 1240, trend: 'hot' },
-  { rank: 2, name: 'SaaStr Annual',    date: 'Sep 9–11',  city: 'San Jose',      score: 87, buyers: 820,  trend: 'up'  },
-  { rank: 3, name: 'Gartner IT Symp.', date: 'Nov 4–7',  city: 'Orlando',       score: 81, buyers: 680,  trend: 'up'  },
-  { rank: 4, name: 'Money20/20 USA',   date: 'Oct 26–29', city: 'Las Vegas',    score: 76, buyers: 540,  trend: 'new' },
+[
+  { rank: 1, name: 'Dreamforce 2026',    date: 'Sep 15–17', city: 'San Francisco', score: 94, buyers: 1240, trend: 'hot' },
+  { rank: 2, name: 'Money20/20 MidEast', date: 'Sep 14–16', city: 'Riyadh',        score: 87, buyers: 820,  trend: 'up'  },
+  { rank: 3, name: 'Gartner IT Symp.',   date: 'Oct 19–22', city: 'Orlando',       score: 81, buyers: 680,  trend: 'up'  },
+  { rank: 4, name: 'Money20/20 USA',     date: 'Oct 18–21', city: 'Las Vegas',     score: 76, buyers: 540,  trend: 'new' }
+
 ]
 
 function TrendBadge({ trend }) {
