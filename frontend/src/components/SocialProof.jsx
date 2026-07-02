@@ -28,7 +28,7 @@ export default function SocialProof() {
           The trade-show ROI problem is universal.
         </h2>
         <p className="ld-section-sub" data-reveal-ld data-delay="2">
-          Every line below is a meeting that should have happened — and the intel that would have made it.
+          Every line below is a meeting that should have happened - and the intel that would have made it.
         </p>
         <div className="ld-proof-grid">
           {QUOTES.map((q, i) => (
@@ -40,7 +40,7 @@ export default function SocialProof() {
             >
               <div className="ld-quote-mark" aria-hidden="true">"</div>
               <p className="ld-quote-text">{q.text}</p>
-              <div className="ld-quote-role">— {q.role}</div>
+              <div className="ld-quote-role">- {q.role}</div>
             </div>
           ))}
         </div>
