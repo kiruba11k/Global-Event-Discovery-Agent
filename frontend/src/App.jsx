@@ -25,6 +25,7 @@ import './App.css'
 import './homepage.css'
 import './micro-animations.css'
 import './landing.css'
+import ScrollAnimations  from './components/ScrollAnimations'
 
 /* ── Static data ───────────────────────────────────────────────── */
 const LOGOS = [
