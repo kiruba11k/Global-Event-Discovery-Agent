@@ -299,7 +299,7 @@
 }
 .ld-hero-badge {
   opacity: 0;
-  animation: ldFadeUp 0.5s 0.05s forwards;
+  /* animation: ldFadeUp 0.5s 0.05s forwards; */
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -320,7 +320,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--ld-blue);
-  animation: ldPulseDot 2s ease-in-out infinite;
+  /* animation: ldPulseDot 2s ease-in-out infinite; */
   flex-shrink: 0;
 }
 .ld-hero-h1 {
@@ -332,6 +332,7 @@
   letter-spacing: -1.5px;
   color: var(--ld-ink);
   margin: 0 0 20px;
+  overflow: hidden;
 }
 .ld-hero-h1 em {
   font-style: normal;
@@ -342,7 +343,7 @@
 }
 .ld-hero-sub {
   opacity: 0;
-  animation: ldFadeUp 0.5s 0.14s forwards;
+  /* animation: ldFadeUp 0.5s 0.14s forwards; */
   font-size: var(--ld-t-body);
   color: var(--ld-ink-mute);
   line-height: 1.7;
@@ -351,7 +352,7 @@
 }
 .ld-hero-actions {
   opacity: 0;
-  animation: ldFadeUp 0.5s 0.2s forwards;
+  /* animation: ldFadeUp 0.5s 0.2s forwards; */
   display: flex;
   gap: 12px;
   align-items: center;
@@ -360,7 +361,7 @@
 }
 .ld-hero-trust {
   opacity: 0;
-  animation: ldFadeUp 0.5s 0.28s forwards;
+  /* animation: ldFadeUp 0.5s 0.28s forwards; */
   display: flex;
   align-items: center;
   gap: 16px;
@@ -380,10 +381,37 @@
 }
 .ld-hero-right {
   opacity: 0;
-  animation: ldFadeRight 0.5s 0.2s forwards;
+  /* animation: ldFadeRight 0.5s 0.2s forwards; */
   position: relative;
 }
+/* Decorative SVG (DrawSVG) */
+.ld-hero-deco {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.ld-hero-inner {
+  position: relative;
+  z-index: 1;
+}
 
+/* ERV card draggable cursor */
+.erv-card { cursor: grab; }
+.erv-card:active { cursor: grabbing; }
+
+/* Flip hover state for path cards */
+.ld-path-card--active {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: var(--ld-shadow-lg);
+  border-color: var(--ld-line-2);
+}
+
+/* GSAP word/line wrappers */
+.gsap-word { display: inline-block; }
+.gsap-line { display: block; overflow: hidden; }
 /* Buttons */
 .ld-btn-primary {
   display: inline-flex;
@@ -1096,7 +1124,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    SCROLL REVEAL
 ═══════════════════════════════════════════════════════════════════ */
-[data-reveal-ld] {
+/* [data-reveal-ld] {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.5s ease, transform 0.5s ease;
@@ -1108,7 +1136,7 @@
 [data-reveal-ld][data-delay="1"] { transition-delay: 80ms; }
 [data-reveal-ld][data-delay="2"] { transition-delay: 160ms; }
 [data-reveal-ld][data-delay="3"] { transition-delay: 240ms; }
-[data-reveal-ld][data-delay="4"] { transition-delay: 320ms; }
+[data-reveal-ld][data-delay="4"] { transition-delay: 320ms; } */
 
 /* ═══════════════════════════════════════════════════════════════════
    REDUCED MOTION
