@@ -170,15 +170,15 @@ export default function App() {
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
-  /* ── Scroll reveal observer ────────────────────────────────── */
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      entries => entries.forEach(e => e.isIntersecting && e.target.classList.add('in-view')),
-      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
-    )
-    document.querySelectorAll('[data-reveal-ld]').forEach(el => io.observe(el))
-    return () => io.disconnect()
-  }, [])
+  // /* ── Scroll reveal observer ────────────────────────────────── */
+  // useEffect(() => {
+  //   const io = new IntersectionObserver(
+  //     entries => entries.forEach(e => e.isIntersecting && e.target.classList.add('in-view')),
+  //     { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+  //   )
+  //   document.querySelectorAll('[data-reveal-ld]').forEach(el => io.observe(el))
+  //   return () => io.disconnect()
+  // }, [])
 
   const goTo = (s, url = '/') => {
     setScreen(s)
@@ -366,6 +366,8 @@ export default function App() {
           error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
         }}
       />
+      <ScrollAnimations />
+
       <LandingNav onScrollToForm={scrollToForm} />
       <HeroSection onScrollToForm={scrollToForm} />
       <LogoTicker />
