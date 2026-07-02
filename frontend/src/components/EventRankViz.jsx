@@ -2,13 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import '../landing.css'
 
 const EVENTS = [
-[
   { rank: 1, name: 'Dreamforce 2026',    date: 'Sep 15–17', city: 'San Francisco', score: 94, buyers: 1240, trend: 'hot' },
   { rank: 2, name: 'Money20/20 MidEast', date: 'Sep 14–16', city: 'Riyadh',        score: 87, buyers: 820,  trend: 'up'  },
   { rank: 3, name: 'Gartner IT Symp.',   date: 'Oct 19–22', city: 'Orlando',       score: 81, buyers: 680,  trend: 'up'  },
   { rank: 4, name: 'Money20/20 USA',     date: 'Oct 18–21', city: 'Las Vegas',     score: 76, buyers: 540,  trend: 'new' }
-
-]
 ]
 function TrendBadge({ trend }) {
   const map = {
@@ -35,29 +32,33 @@ function ErvLoading() {
 }
 
 function ErvResults({ events, barWidths, buyers }) {
+  const safeEvents = Array.isArray(events) ? events.filter(ev => ev && typeof ev === 'object' && !Array.isArray(ev)) : []
   return (
     <div className="erv-body">
-      {events.map((ev, i) => (
-        <div key={ev.rank} className="erv-row" style={{ animationDelay: `${i * 100}ms` }}>
-          <RankBadge rank={ev.rank} />
-          <div className="erv-info">
-            <div className="erv-name">{ev.name}</div>
-            <div className="erv-meta">
-              <span>{ev.date}</span>
-              <span className="erv-meta-sep" />
-              <span>{ev.city}</span>
+      {safeEvents.map((ev, i) => {
+        const buyerCount = Number.isFinite(buyers[i]) ? buyers[i] : Number(ev.buyers || 0)
+        return (
+          <div key={ev.rank || ev.name || i} className="erv-row" style={{ animationDelay: `${i * 100}ms` }}>
+            <RankBadge rank={ev.rank} />
+            <div className="erv-info">
+              <div className="erv-name">{ev.name}</div>
+              <div className="erv-meta">
+                <span>{ev.date}</span>
+                <span className="erv-meta-sep" />
+                <span>{ev.city}</span>
+              </div>
+              <div className="erv-bar-wrap">
+                <div className="erv-bar" style={{ width: `${barWidths[i] || 0}%` }} />
+              </div>
             </div>
-            <div className="erv-bar-wrap">
-              <div className="erv-bar" style={{ width: `${barWidths[i] || 0}%` }} />
+            <div className="erv-score-col">
+              <div className="erv-score">{ev.score}</div>
+              <div className="erv-buyers">{buyerCount.toLocaleString()} buyers</div>
+              <TrendBadge trend={ev.trend} />
             </div>
           </div>
-          <div className="erv-score-col">
-            <div className="erv-score">{ev.score}</div>
-            <div className="erv-buyers">{(buyers[i] ?? ev.buyers).toLocaleString()} buyers</div>
-            <TrendBadge trend={ev.trend} />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
