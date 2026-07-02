@@ -1,64 +1,155 @@
 /*
   App.jsx   three-screen app with simple state router
 
-  screen === 'home'     → homepage + hero formea
+  screen === 'home'     → homepage + hero form
   screen === 'ranking'  → ShowRankingPage (full page, scroll to top)
   screen === 'deepdive' → ShowDeepDivePage (full page, scroll to top)
-
-  No react-router needed. URL is updated via history.pushState for shareability.
 */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-// import ICPForm          from './components/ICPForm'
-// import ShowRankingPage  from './components/ShowRankingPage'
-// import LoadingOverlay   from './components/LoadingOverlay'
-// import ShowDeepDivePage from './components/ShowDeepDivePage'
-// import EmailReportModal from './components/EmailReportModal'
-// import { api }          from './api/client'
-import './world-animation.css'
-import WorldDataAnimation  from './components/WorldDataAnimation'
-import ScrollAnimations    from './components/ScrollAnimations'
 import ICPForm           from './components/ICPForm'
 import ShowRankingPage   from './components/ShowRankingPage'
 import ShowDeepDivePage  from './components/ShowDeepDivePage'
 import EmailReportModal  from './components/EmailReportModal'
 import LoadingOverlay    from './components/LoadingOverlay'
-import PipelineSection   from './components/PipelineSection'
+import LandingNav        from './components/LandingNav'
+import HeroSection       from './components/HeroSection'
+import HowItWorks        from './components/HowItWorks'
+import StatsRow          from './components/StatsRow'
+import SocialProof       from './components/SocialProof'
+import FormSection       from './components/FormSection'
 import { api }           from './api/client'
-import { Mail, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
+import { ChevronRight, AlertCircle } from 'lucide-react'
 import './App.css'
 import './homepage.css'
 import './micro-animations.css'
+import './landing.css'
 
-/* ─── Orb background ───────────────────────────────────────────── */
-function OrbBackground() {
-  return (
-    <div className="orb-container" aria-hidden>
-      <div className="orb orb-1" /><div className="orb orb-2" /><div className="orb orb-3" />
-      <div className="grid-overlay" />
-    </div>
-  )
-}
-
-/* ─── Static data ───────────────────────────────────────────────── */
+/* ── Static data ───────────────────────────────────────────────── */
 const LOGOS = [
   'Dreamforce','Medica','Gartner Symposium','BSMA','CES',
   'Money20/20','Web Summit','AWS re:Invent','HIMSS','Salesforce World Tour',
 ]
-const PAIN_QUOTES = [
-  { text: "We spent ₹15L on a booth and walked away with 4 qualified conversations.", role: 'VP Sales, B2B SaaS, India' },
-  { text: "I had no idea who was coming until I was already there.",                  role: 'Enterprise AE, Series B startup' },
-  { text: "The follow-up email goes out, then silence. The show ROI is a guess.",     role: 'Head of BD, enterprise software' },
-  { text: "We picked the show because a competitor was there. That was the strategy.",role: 'Founder, SaaS, ₹50L ACV deals' },
-]
+
+/* ── Logo Ticker ───────────────────────────────────────────────── */
+function LogoTicker() {
+  return (
+    <div className="ld-logos" aria-label="Events we cover">
+      <div className="ld-logos-inner" aria-hidden="true">
+        {[...LOGOS, ...LOGOS].map((name, i) => (
+          <span key={i} className="ld-logos-item">
+            {name}
+            <span className="ld-logos-dot" />
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Path Cards ─────────────────────────────────────────────────── */
+function PathCards({ onScrollToForm }) {
+  return (
+    <section className="ld-paths" aria-label="How we help">
+      <div className="ld-paths-inner">
+        <div className="ld-section-eyebrow" data-reveal-ld>Two ways to win a show</div>
+        <h2 className="ld-section-h2" data-reveal-ld data-delay="1">
+          Whether you're walking the floor or holding a booth.
+        </h2>
+        <p className="ld-section-sub" data-reveal-ld data-delay="2">
+          The room is the same. What you do with it isn't. We forecast the buyers either way.
+        </p>
+        <div className="ld-path-grid">
+          <div className="ld-path-card ld-path-attend" data-reveal-ld data-delay="1">
+            <div className="ld-path-tag">Attending · hunting meetings</div>
+            <h3 className="ld-path-h3">Sales, BD, founders — book your ICP before you fly out.</h3>
+            <p className="ld-path-desc">
+              Walk in with a calendar, not a hope. We tell you how many of your buyers attend
+              each show and hand you the prospect list to work it yourself.
+            </p>
+            <button className="ld-path-cta" onClick={onScrollToForm}>
+              Find my shows →
+            </button>
+          </div>
+          <div className="ld-path-card ld-path-exhibit" data-reveal-ld data-delay="2">
+            <div className="ld-path-tag">Exhibiting · need booth traffic</div>
+            <h3 className="ld-path-h3">Get 5× the qualified meetings around your booth.</h3>
+            <p className="ld-path-desc">
+              Stop waiting for walk-ups. We pre-book your target buyers into slots before
+              the floor opens — so day one starts full.
+            </p>
+            <button className="ld-path-cta" onClick={onScrollToForm}>
+              Boost my booth →
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ── Footer CTA ─────────────────────────────────────────────────── */
+function FooterCTA({ onScrollToForm }) {
+  return (
+    <section className="ld-footer-cta" aria-label="Get started">
+      <div className="ld-footer-cta-inner">
+        <div className="ld-section-eyebrow" data-reveal-ld>Ready to stop guessing?</div>
+        <h2 className="ld-footer-cta-h2" data-reveal-ld data-delay="1">
+          Rank your shows in 2 minutes.
+        </h2>
+        <p className="ld-footer-cta-sub" data-reveal-ld data-delay="2">
+          Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.
+        </p>
+        <div className="ld-footer-cta-btns" data-reveal-ld data-delay="3">
+          <button className="ld-btn-primary" onClick={onScrollToForm}>
+            Rank my shows — it's free
+          </button>
+          <a
+            className="ld-btn-outline"
+            href="https://leadstrategus.com/contact/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Book a demo
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ── Landing Footer ─────────────────────────────────────────────── */
+function LandingFooter() {
+  return (
+    <footer className="ld-footer">
+      <div className="ld-footer-inner">
+        <div className="ld-footer-logo">
+          LeadStrategus
+        </div>
+        <nav className="ld-footer-links" aria-label="Footer">
+          {['Privacy', 'Terms', 'Pricing', 'Contact'].map(l => (
+            <a key={l} href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
+              {l}
+            </a>
+          ))}
+        </nav>
+        <a
+          href="https://leadstrategus.com/contact/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ld-footer-copy"
+        >
+          © 2025 LeadStrategus
+        </a>
+      </div>
+    </footer>
+  )
+}
 
 /* ═══════════════════════════════════════════════════════════════ */
 export default function App() {
-  /* ── Screen router ─────────────────────────────────────────── */
-  const [screen,           setScreen]           = useState('home')   // 'home' | 'ranking' | 'deepdive'
-
-  /* ── Search state ──────────────────────────────────────────── */
+  const [screen,           setScreen]           = useState('home')
   const [loading,          setLoading]          = useState(false)
   const [results,          setResults]          = useState([])
   const [profileId,        setProfileId]        = useState('')
@@ -73,43 +164,21 @@ export default function App() {
   const [loadingProfile,   setLoadingProfile]   = useState(null)
   const [allRelevantEvents,setAllRelevantEvents]= useState([])
   const [suggestedGeos,    setSuggestedGeos]    = useState([])
-
-  /* ── Deep dive ─────────────────────────────────────────────── */
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
 
-  /* ── Homepage animation state ──────────────────────────────── */
-  const [visibleCards,     setVisibleCards]     = useState([])
-
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
+  /* ── Scroll reveal observer ────────────────────────────────── */
   useEffect(() => {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          const idx = parseInt(e.target.dataset.idx)
-          setVisibleCards(p => p.includes(idx) ? p : [...p, idx])
-        }
-      })
-    }, { threshold: 0.15 })
-    document.querySelectorAll('[data-pain-card]').forEach(c => io.observe(c))
-    return () => io.disconnect()
-  }, [])
-  /* ── Generic scroll-reveal observer ───────────────────────── */
-  useEffect(() => {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          e.target.classList.add('revealed')
-          io.unobserve(e.target)
-        }
-      })
-    }, { threshold: 0.1, rootMargin: '0px 0px -32px 0px' })
-    document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el))
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => e.isIntersecting && e.target.classList.add('in-view')),
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    )
+    document.querySelectorAll('[data-reveal-ld]').forEach(el => io.observe(el))
     return () => io.disconnect()
   }, [])
 
-  /* ── Navigation helpers ────────────────────────────────────── */
   const goTo = (s, url = '/') => {
     setScreen(s)
     window.scrollTo({ top: 0, behavior: 'instant' })
@@ -117,11 +186,14 @@ export default function App() {
   }
 
   const scrollToForm = () => {
-    if (screen !== 'home') { goTo('home'); setTimeout(() => document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' }), 100); return }
+    if (screen !== 'home') {
+      goTo('home')
+      setTimeout(() => document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' }), 100)
+      return
+    }
     document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  /* ── Search handler ────────────────────────────────────────── */
   const onSearch = async (profile, email) => {
     if (profile.avg_deal_size_category) setDealSizeCategory(profile.avg_deal_size_category)
     setLastProfile(profile)
@@ -139,45 +211,50 @@ export default function App() {
       setResults(events)
       setAllRelevantEvents(res.all_relevant_events || [])
       setSuggestedGeos(res.suggested_geos || [])
-
-
       if (res.universe_stats) setUniverseStats(res.universe_stats)
       if (res.region_fallback_note) setRegionFallback(res.region_fallback_note)
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
-        toast.error('No matching events found  try a wider geography or different buyer description.')
+        toast.error('No matching events found — try a wider geography or different buyer description.')
         setLoading(false)
         return
       }
 
       const go = display.filter(e => e.fit_verdict === 'GO').length
-      toast.success(`Found ${display.length} events  ${go} strong matches`, { duration: 3500 })
+      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 3500 })
 
       if (email) _autoSendReport(events, profile, email)
 
-      // Navigate to ranking page
       goTo('ranking', '/')
     } catch (err) {
-      toast.error(err.message || 'Search failed  please try again')
+      toast.error(err.message || 'Search failed — please try again')
     } finally {
       setLoading(false)
     }
   }
+
   const onSwapGeo = (newGeo) => {
     if (!lastProfile) return
     const updated = { ...lastProfile, target_geographies: [newGeo] }
     onSearch(updated, userEmail)
   }
+
   const onDeeperAnalysis = (data) => {
     if (!lastProfile) return
-    onSearch({ ...lastProfile, company_name: data.company_name || lastProfile.company_name, company_description: data.event_needs || lastProfile.company_description }, userEmail)
+    onSearch(
+      { ...lastProfile, company_name: data.company_name || lastProfile.company_name, company_description: data.event_needs || lastProfile.company_description },
+      userEmail
+    )
     toast.success('Reranking with your company context…')
   }
 
   const _autoSendReport = async (events, profile, email) => {
     if (!email || !events?.length) return
-    if (stats?.resend_enabled === false) { toast.error('Email service not configured.', { icon: '⚠️', duration: 5000 }); return }
+    if (stats?.resend_enabled === false) {
+      toast.error('Email service not configured.', { icon: '⚠️', duration: 5000 })
+      return
+    }
     try {
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       await api.emailReport({
@@ -199,8 +276,10 @@ export default function App() {
       toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
     } catch (err) {
       const msg = err.message || ''
-      if (msg.includes('RESEND') || msg.includes('503')) toast.error('RESEND_API_KEY not set  add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
-      else toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
+      if (msg.includes('RESEND') || msg.includes('503'))
+        toast.error('RESEND_API_KEY not set — add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
+      else
+        toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
     }
   }
 
@@ -211,8 +290,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
-          {loading && <LoadingOverlay profile={loadingProfile} />}
-
+        {loading && <LoadingOverlay profile={loadingProfile} />}
         <ShowRankingPage
           events={allDisplay}
           allRelevantEvents={allRelevantEvents}
@@ -242,7 +320,16 @@ export default function App() {
           isOpen={emailModalOpen}
           onClose={() => setEmailModalOpen(false)}
           events={allDisplay}
-          profile={{ company_name: lastProfile?.company_name || '', company_description: lastProfile?.company_description || '', target_industries: lastProfile?.target_industries || [], target_personas: lastProfile?.target_personas || [], target_geographies: lastProfile?.target_geographies || [], deal_size_category: dealSizeCategory, date_from: lastProfile?.date_from || null, date_to: lastProfile?.date_to || null }}
+          profile={{
+            company_name: lastProfile?.company_name || '',
+            company_description: lastProfile?.company_description || '',
+            target_industries: lastProfile?.target_industries || [],
+            target_personas: lastProfile?.target_personas || [],
+            target_geographies: lastProfile?.target_geographies || [],
+            deal_size_category: dealSizeCategory,
+            date_from: lastProfile?.date_from || null,
+            date_to: lastProfile?.date_to || null,
+          }}
           dealSizeCategory={dealSizeCategory}
           prefillEmail={userEmail}
         />
@@ -270,208 +357,30 @@ export default function App() {
   /* ── Screen: Home ──────────────────────────────────────────── */
   return (
     <div className="app">
-      <ScrollAnimations />
-
-      <Toaster position="top-right" toastOptions={{
-        style:   { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
-        success: { iconTheme: { primary: '#06b6d4', secondary: '#1e293b' } },
-        error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
-      }} />
-
-      {/* NAV */}
-      <nav className="hp-nav" aria-label="Main navigation">
-        <div className="hp-nav-inner">
-          <div className="hp-logo">
-            <span className="hp-logo-dot" aria-hidden="true" />
-            LeadStrategus
-          </div>
-          <div className="hp-nav-links">
-            <button className="hp-nav-link" onClick={scrollToForm}>Find your shows</button>
-            <a className="hp-nav-link" href="#how-it-works">How it works</a>
-            <a className="hp-nav-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Services</a>
-            <a className="hp-nav-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Resources</a>
-          </div>
-          <button className="hp-nav-cta" onClick={scrollToForm}>Get free intel</button>
-        </div>
-      </nav>
-
-    
-              {/* HERO */}
-      <section className="hero hp-hero-solo" aria-label="Find your shows">
-        <OrbBackground />
-
-        {/* Floating event-result cards - decorative, hidden on small screens */}
-        <div className="hero-float-card hero-float-card-1" aria-hidden="true">
-          <div className="hfc-verdict">
-            <span style={{ width:6,height:6,borderRadius:'50%',background:'#0EA372',flexShrink:0,display:'inline-block' }} />
-            GO · Strong match
-          </div>
-          <div className="hfc-title">Dreamforce 2025</div>
-          <div className="hfc-meta">Sep 15–18 · San Francisco</div>
-          <div className="hfc-stat"><span className="hfc-stat-dot" />127 ICP buyers attending</div>
-          <div className="hfc-stat" style={{marginTop:3}}>
-            <span className="hfc-stat-dot" style={{background:'#E8932E'}} />Est. 22–35 meetings
-          </div>
-        </div>
-
-        <div className="hero-float-card hero-float-card-2" aria-hidden="true">
-          <div className="hfc-verdict">
-            <span style={{ width:6,height:6,borderRadius:'50%',background:'#0EA372',flexShrink:0,display:'inline-block' }} />
-            GO · Strong match
-          </div>
-          <div className="hfc-title">Money20/20 2025</div>
-          <div className="hfc-meta">Oct 22–25 · Las Vegas</div>
-          <div className="hfc-stat"><span className="hfc-stat-dot" />89 ICP buyers attending</div>
-          <div className="hfc-stat" style={{marginTop:3}}>
-            <span className="hfc-stat-dot" style={{background:'#E8932E'}} />Est. 14–21 meetings
-          </div>
-        </div>
-
-
-        <div className="hp-hero-solo-inner">
-          <div className="hero-badge hp-hero-eyebrow">
-            <Sparkles size={11} aria-hidden="true" />
-            <span>See the buyers, the meetings, and the cost of a show  before you book the booth</span>
-          </div>
-                    {/* Two-column: text left · globe right */}
-          <div className="hp-hero-two-col">
-            <div className="hp-hero-text-col">
-              <h1 className="hp-hero-solo-h1">
-                Your next 50 meetings are already at a <span className="hp-h1-accent">trade show</span>.<br />
-                We tell you which one.
-              </h1>
-              <p className="hp-hero-solo-sub">
-                Tell us who you sell to and where you'll travel. We rank 10,000+ B2B events by how many
-                of your exact buyers attend - then forecast the qualified prospects, the meetings, and
-                the cost before you commit a rupee.
-              </p>
-            </div>
-            <div className="hp-hero-visual-col">
-              <WorldDataAnimation />
-            </div>
-          </div>
-          <div className="hp-validator-badge" aria-label="Two-agent validator">
-            <div className="hp-validator-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div>
-          
-              <strong>Two-agent validation</strong>  every attendee estimate and cost is checked by a
-              second AI before it reaches you. Event data is easy to get confidently wrong; we built
-              a guard against it.
-            </div>
-          </div>
-          <p className="hp-hero-bridge">
-            Six inputs. One ranked shortlist of shows where your buyers actually are.
-          </p>          <div className="hp-form-zone" id="icp-form">
-            {stats?.resend_enabled === false && (
-              <div className="hp-status-notice">
-                <AlertCircle size={11} /><span>Email service not configured on server</span>
-              </div>
-            )}
-            <ICPForm
-              onSubmit={onSearch}
-              loading={loading}
-              onDeeperAnalysis={onDeeperAnalysis}
-              showUpgrade={false}
-              heroMode={true}
-            />
-            {loading && <LoadingOverlay profile={loadingProfile} />}
-
-          </div>
-          <p className="hp-microcopy">Free · Top 6 shows always free · No credit card · No sales call</p>
-          <a className="hp-escape-link" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
-            Already know your show? Get show-specific intel →
-          </a>
-        </div>
-      </section>
-      <PipelineSection onScrollToForm={scrollToForm} />
-
-      {/* DUAL-PATH CARDS */}
-      <div className="hp-paths" aria-label="How we help">
-        <div className="hp-paths-inner">
-          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }} data-reveal data-delay="0">Two ways to win a show</div>
-          <h2 className="hp-section-title" style={{ textAlign: 'center' }} data-reveal data-delay="1">Whether you're walking the floor or holding a booth.</h2>
-          <p className="hp-paths-sub" style={{ textAlign: 'center' }} data-reveal data-delay="2">The room is the same. What you do with it isn't. We forecast the buyers either way.</p>
-          <div className="hp-path-card hp-path-attending" data-reveal data-delay="3">
-            <div className="hp-path-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><circle cx="11" cy="7" r="2.5"/><path d="M5.5 19.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5"/><path d="m17 17 3 3"/></svg>
-            </div>
-            <div className="hp-path-tag">Attending · hunting meetings</div>
-            <h3 className="hp-path-title">Sales, BD, founders  book your ICP before you fly out.</h3>
-            <p className="hp-path-desc">Walk in with a calendar, not a hope. We tell you how many of your buyers attend each show and hand you the prospect list to work it yourself.</p>
-            <button className="hp-path-cta" onClick={scrollToForm}>Find my shows →</button>
-          </div>
-          <div className="hp-path-card hp-path-exhibiting" data-reveal data-delay="4">
-            <div className="hp-path-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="13" rx="2"/><path d="M8 9V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
-            </div>
-            <div className="hp-path-tag">Exhibiting · need booth traffic</div>
-            <h3 className="hp-path-title">Get 5× the qualified meetings around your booth.</h3>
-            <p className="hp-path-desc">Stop waiting for walk-ups. We pre-book your target buyers into booked slots before the floor opens  so day one starts full.</p>
-            <button className="hp-path-cta" onClick={scrollToForm}>Boost my booth →</button>
-          </div>
-        </div>
-      </div>
-
-      {/* LOGO TICKER */}
-      <div className="hp-ticker-wrap" aria-label="Events we cover">
-        <div className="hp-ticker-inner" aria-hidden="true">
-          {[...LOGOS, ...LOGOS].map((name, i) => (
-            <span key={i} className="hp-ticker-item">{name}<span className="hp-ticker-dot" /></span>
-          ))}
-        </div>
-      </div>
-
-      {/* PAIN SECTION */}
-      <section className="hp-pain" id="social-proof" aria-labelledby="pain-heading">
-        <div className="hp-pain-inner">
-          <div className="hp-section-eyebrow" data-reveal>Sound familiar?</div>
-          <h2 className="hp-section-title" id="pain-heading" data-reveal data-delay="1">The trade-show ROI problem is universal.</h2>
-          <p className="hp-pain-sub" data-reveal data-delay="2">Every line below is a meeting that should have happened  and the intel that would have made it.</p>          <div className="hp-pain-grid">
-            {PAIN_QUOTES.map((q, i) => (
-              <div key={i} data-pain-card data-idx={i}
-                className={`hp-pain-card ${visibleCards.includes(i) ? 'hp-card-visible' : ''}`}
-                style={{ transitionDelay: `${i * 80}ms` }}>
-                <div className="hp-pain-quote-mark" aria-hidden="true">"</div>
-                <p className="hp-pain-quote">{q.text}</p>
-                <div className="hp-pain-role"> {q.role}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER CTA */}
-      <section className="hp-footer-cta" aria-label="Get started">
-        <div className="hp-footer-cta-inner">
-          <div className="hp-section-eyebrow" style={{ textAlign: 'center' }} data-reveal>Ready to stop guessing?</div>
-          <h2 className="hp-footer-cta-h2" data-reveal data-delay="1">Rank your shows in 2 minutes.</h2>
-          <p className="hp-footer-cta-sub" data-reveal data-delay="2">Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.</p>
-          <div className="hp-footer-cta-btns" data-reveal="scale" data-delay="3">
-            <button className="hp-cta-primary" onClick={scrollToForm}>Rank my shows  it's free</button>
-            <a className="hp-cta-outline" href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">Book a demo</a>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="app-footer hp-app-footer">
-        <div className="footer-inner">
-          <div className="hp-logo" style={{ fontSize: 13 }}>
-            <span className="hp-logo-dot" style={{ width: 6, height: 6 }} aria-hidden="true" />
-            LeadStrategus
-          </div>
-          <nav className="hp-footer-links" aria-label="Footer">
-            {['Privacy','Terms','Pricing','Contact'].map(l => (
-              <a key={l} href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">{l}</a>
-            ))}
-          </nav>
-          <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="footer-cta">
-            <b>Book a Demo</b> <ChevronRight size={16} aria-hidden="true" />
-          </a>
-        </div>
-      </footer>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style:   { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
+          success: { iconTheme: { primary: '#0ea5e9', secondary: '#1e293b' } },
+          error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
+        }}
+      />
+      <LandingNav onScrollToForm={scrollToForm} />
+      <HeroSection onScrollToForm={scrollToForm} />
+      <LogoTicker />
+      <StatsRow />
+      <HowItWorks />
+      <PathCards onScrollToForm={scrollToForm} />
+      <SocialProof />
+      <FormSection
+        onSubmit={onSearch}
+        loading={loading}
+        onDeeperAnalysis={onDeeperAnalysis}
+        stats={stats}
+      />
+      <FooterCTA onScrollToForm={scrollToForm} />
+      <LandingFooter />
+      {loading && <LoadingOverlay profile={loadingProfile} />}
     </div>
   )
 }
