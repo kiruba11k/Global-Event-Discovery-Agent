@@ -30,7 +30,7 @@ export default function LandingNav({ onScrollToForm }) {
             <div className="ld-nav-logo-mark" aria-hidden="true">
               <Zap size={14} strokeWidth={2.5} />
             </div>
-            LeadStrategus
+            <span className="ld-nav-logo-text">LeadStrategus</span>
           </div>
 
           <div className="ld-nav-links" aria-hidden="false">
