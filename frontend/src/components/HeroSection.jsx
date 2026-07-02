@@ -9,7 +9,7 @@ export default function HeroSection({ onScrollToForm }) {
         <div className="ld-hero-left">
           <div className="ld-hero-badge">
             <span className="ld-hero-badge-dot" aria-hidden="true" />
-            AI Powered Event Intelligence
+            See the buyers, the meetings, and the cost of a show - before you book the booth
           </div>
 
           <h1 className="ld-hero-h1">
