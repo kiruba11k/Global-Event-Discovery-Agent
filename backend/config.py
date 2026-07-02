@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # ── Groq LLM ─────────────────────────────────
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_temperature: float = 0.1
     groq_max_tokens: int = 4096
     groq_timeout_seconds: int = 45   # validator needs full time; was 25 which caused timeouts
