@@ -9,7 +9,7 @@ const EVENTS = [
   { rank: 4, name: 'Money20/20 USA',     date: 'Oct 18–21', city: 'Las Vegas',     score: 76, buyers: 540,  trend: 'new' }
 
 ]
-
+]
 function TrendBadge({ trend }) {
   const map = {
     hot: { cls: 'erv-trend-hot',  label: '🔥 Hot' },
