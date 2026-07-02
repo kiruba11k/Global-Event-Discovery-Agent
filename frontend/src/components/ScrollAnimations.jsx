@@ -1,289 +1,421 @@
 /*
-  ScrollAnimations.jsx
-  Comprehensive GSAP ScrollTrigger scrub animations for the entire homepage.
-  All animations are bidirectional (scrub) so they reverse on scroll-up.
-  Handles: hero text, nav, section headings, path cards, proof stats, pain cards, footer CTA.
+  ScrollAnimations.jsx — GSAP premium animation system
+  Plugins: ScrollTrigger · SplitText · ScrambleText · DrawSVGPlugin
+           MotionPathPlugin · Draggable · Flip · CustomEase
+  Targets the new .ld-* / .erv-* landing design system.
 */
+import { useEffect } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger }      from 'gsap/ScrollTrigger'
+import { SplitText }          from 'gsap/SplitText'
+import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin'
+import { DrawSVGPlugin }      from 'gsap/DrawSVGPlugin'
+import { Flip }               from 'gsap/Flip'
+import { MotionPathPlugin }   from 'gsap/MotionPathPlugin'
+import { Draggable }          from 'gsap/Draggable'
+import { CustomEase }         from 'gsap/CustomEase'
 
-import { useEffect, useRef } from 'react'
+gsap.registerPlugin(
+  ScrollTrigger, SplitText, ScrambleTextPlugin, DrawSVGPlugin,
+  Flip, MotionPathPlugin, Draggable, CustomEase,
+)
 
 export default function ScrollAnimations() {
-  const initRef = useRef(false)
-
   useEffect(() => {
-    if (initRef.current) return
-    initRef.current = true
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-    let ctx = null
+    CustomEase.create('ld.expo', 'M0,0 C0.16,1 0.3,1 1,1')
+    CustomEase.create('ld.back', 'M0,0 C0.34,1.56 0.64,1 1,1')
 
-    const init = async () => {
-      try {
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const ctx = gsap.context(() => {
 
-        const { gsap }          = await import('gsap')
-        const { ScrollTrigger } = await import('gsap/ScrollTrigger')
-        const { SplitText }     = await import('gsap/SplitText').catch(() => ({ SplitText: null }))
-        gsap.registerPlugin(ScrollTrigger)
-        if (SplitText) gsap.registerPlugin(SplitText)
+      /* ─────────────────────────────────────────────────────────────
+         1. NAV — slide down + ScrambleText on logo
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-nav', {
+        yPercent: -100, opacity: 0, duration: 0.75, ease: 'power3.out',
+      })
 
-        ctx = gsap.context(() => {
-
-          /* ── Helper: stagger reveal from below ───────────────────── */
-          const fromBelow = (targets, vars = {}) =>
-            gsap.fromTo(targets,
-              { y: vars.y ?? 40, opacity: 0 },
-              {
-                y: 0, opacity: 1,
-                ease: vars.ease ?? 'power3.out',
-                stagger: vars.stagger ?? 0,
-                scrollTrigger: {
-                  trigger:  vars.trigger ?? targets,
-                  start:    vars.start   ?? 'top 88%',
-                  end:      vars.end     ?? 'top 55%',
-                  scrub:    vars.scrub   ?? 1.2,
-                },
-                ...vars.extra,
-              }
-            )
-
-          /* ── NAV ─────────────────────────────────────────────────── */
-          gsap.fromTo('.hp-nav',
-            { y: -60, opacity: 0 },
-            { y: 0, opacity: 1, ease: 'power2.out', duration: 0.9 }
-          )
-
-          /* ── HERO — cinematic 3D entrance, not PDF-like static copy ─── */
-          const h1 = document.querySelector('.hp-hero-solo-h1')
-          if (h1 && !h1.dataset.gsapSplit) {
-            h1.dataset.gsapSplit = 'true'
-            const walker = document.createTreeWalker(h1, NodeFilter.SHOW_TEXT)
-            const textNodes = []
-            let node
-            while ((node = walker.nextNode())) textNodes.push(node)
-            textNodes.forEach(textNode => {
-              const fragment = document.createDocumentFragment()
-              textNode.textContent.split(/(\s+)/).forEach(part => {
-                if (!part) return
-                if (/^\s+$/.test(part)) {
-                  fragment.appendChild(document.createTextNode(part))
-                  return
-                }
-                const span = document.createElement('span')
-                span.className = 'hp-hero-line'
-                span.textContent = part
-                fragment.appendChild(span)
-              })
-              textNode.parentNode.replaceChild(fragment, textNode)
-            })
-          }
-
-          gsap.fromTo('.hp-hero-eyebrow',
-            { y: 24, opacity: 0, rotateX: -12, filter: 'blur(8px)' },
-            { y: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', duration: 0.75, ease: 'power3.out', delay: 0.08 }
-          )
-
-          gsap.fromTo('.hp-hero-line',
-            { y: 42, z: -80, opacity: 0, rotateX: 22, filter: 'blur(7px)' },
-            { y: 0, z: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', stagger: 0.035, duration: 0.95, ease: 'power4.out', delay: 0.14 }
-          )
-
-          gsap.fromTo('.hp-hero-solo-sub',
-            { y: 28, opacity: 0, rotateX: 10, filter: 'blur(6px)' },
-            { y: 0, opacity: 1, rotateX: 0, filter: 'blur(0px)', duration: 0.9, ease: 'power3.out', delay: 0.42 }
-          )
-
-          gsap.fromTo('.hp-hero-visual-col',
-            { x: 44, z: -120, opacity: 0, rotateY: -16, scale: 0.92 },
-            { x: 0, z: 0, opacity: 1, rotateY: 0, scale: 1, duration: 1.05, ease: 'expo.out', delay: 0.32 }
-          )
-
-          gsap.fromTo(['.hp-validator-badge', '.hp-hero-bridge'],
-            { y: 26, opacity: 0, rotateX: 9 },
-            { y: 0, opacity: 1, rotateX: 0, stagger: 0.12, duration: 0.8, ease: 'power3.out', delay: 0.58 }
-          )
-
-          gsap.fromTo('.hp-form-zone',
-            { y: 34, z: -80, opacity: 0, rotateX: 12, scale: 0.97, filter: 'blur(8px)' },
-            { y: 0, z: 0, opacity: 1, rotateX: 0, scale: 1, filter: 'blur(0px)', duration: 1, ease: 'power4.out', delay: 0.72 }
-          )
-
-          gsap.fromTo('.icp-form-root--hero .icp-field-group, .icp-form-root--hero .icp-submit-btn--hero',
-            { y: 16, opacity: 0, rotateX: 8 },
-            { y: 0, opacity: 1, rotateX: 0, stagger: 0.055, duration: 0.58, ease: 'power2.out', delay: 0.92 }
-          )
-
-          fromBelow(['.hp-microcopy', '.hp-escape-link'], {
-            y: 14, start: 'top 90%', end: 'top 68%', scrub: 0.8, stagger: 0.2,
-            trigger: '.hp-microcopy',
-          })
-
-          /* ── PATHS SECTION ───────────────────────────────────────── */
-          fromBelow('.hp-section-eyebrow', {
-            y: 20, start: 'top 88%', end: 'top 68%', scrub: 1,
-            trigger: '.hp-paths',
-          })
-          fromBelow('.hp-section-title', {
-            y: 28, start: 'top 85%', end: 'top 60%', scrub: 1.1,
-            trigger: '.hp-paths',
-          })
-          fromBelow('.hp-paths-sub', {
-            y: 20, start: 'top 82%', end: 'top 58%', scrub: 1,
-            trigger: '.hp-paths',
-          })
-
-          /* Path cards — slide in from alternating sides */
-          const pathCards = document.querySelectorAll('.hp-path-card')
-          pathCards.forEach((card, i) => {
-            gsap.fromTo(card,
-              { x: i % 2 === 0 ? -50 : 50, opacity: 0, y: 20 },
-              {
-                x: 0, opacity: 1, y: 0, ease: 'power3.out',
-                scrollTrigger: {
-                  trigger: card,
-                  start: 'top 88%',
-                  end:   'top 55%',
-                  scrub: 1.3,
-                },
-              }
-            )
-          })
-
-          /* Path card content — staggered children reveal */
-          pathCards.forEach(card => {
-            const children = card.querySelectorAll('.hp-path-tag, .hp-path-title, .hp-path-desc, .hp-path-cta')
-            gsap.fromTo(children,
-              { y: 16, opacity: 0 },
-              {
-                y: 0, opacity: 1, stagger: 0.08, ease: 'power2.out',
-                scrollTrigger: {
-                  trigger: card,
-                  start: 'top 82%',
-                  end:   'top 45%',
-                  scrub: 1.2,
-                },
-              }
-            )
-          })
-
-          /* ── PAIN SECTION ────────────────────────────────────────── */
-          fromBelow(document.querySelectorAll('.hp-pain .hp-section-eyebrow'), {
-            y: 20, start: 'top 88%', end: 'top 68%', scrub: 1,
-            trigger: '.hp-pain',
-          })
-          fromBelow(document.querySelectorAll('.hp-pain .hp-section-title'), {
-            y: 28, start: 'top 85%', end: 'top 60%', scrub: 1.1,
-            trigger: '.hp-pain',
-          })
-          fromBelow(document.querySelectorAll('.hp-pain-sub'), {
-            y: 20, start: 'top 82%', end: 'top 58%', scrub: 1,
-            trigger: '.hp-pain',
-          })
-
-          /* Pain cards — cascade with scrub */
-          document.querySelectorAll('.hp-pain-card').forEach((card, i) => {
-            gsap.fromTo(card,
-              { y: 44, opacity: 0, rotateX: 6 },
-              {
-                y: 0, opacity: 1, rotateX: 0, ease: 'power3.out',
-                scrollTrigger: {
-                  trigger: card,
-                  start: 'top 90%',
-                  end:   'top 58%',
-                  scrub: 1.2 + i * 0.08,
-                },
-              }
-            )
-          })
-
-          /* ── TICKER — parallax speed boost ───────────────────────── */
-          gsap.to('.hp-ticker-inner', {
-            x: '-5%',
-            ease: 'none',
-            scrollTrigger: {
-              trigger: '.hp-ticker-wrap',
-              start: 'top bottom',
-              end:   'bottom top',
-              scrub: 1,
-            },
-          })
-
-          /* ── FOOTER CTA ──────────────────────────────────────────── */
-          const footerInner = document.querySelector('.hp-footer-cta-inner')
-          if (footerInner) {
-            const items = footerInner.querySelectorAll('.hp-section-eyebrow, .hp-footer-cta-h2, .hp-footer-cta-sub, .hp-footer-cta-btns')
-            gsap.fromTo(items,
-              { y: 36, opacity: 0 },
-              {
-                y: 0, opacity: 1, stagger: 0.12, ease: 'power3.out',
-                scrollTrigger: {
-                  trigger: footerInner,
-                  start: 'top 88%',
-                  end:   'top 50%',
-                  scrub: 1.3,
-                },
-              }
-            )
-          }
-
-          /* Footer CTA buttons — scale pop */
-          gsap.fromTo('.hp-footer-cta-btns > *',
-            { scale: 0.9, opacity: 0 },
-            {
-              scale: 1, opacity: 1, stagger: 0.1, ease: 'back.out(1.8)',
-              scrollTrigger: {
-                trigger: '.hp-footer-cta-btns',
-                start: 'top 88%',
-                end:   'top 60%',
-                scrub: 1,
-              },
-            }
-          )
-
-          /* ── LOGO ticker fade-in ──────────────────────────────────── */
-          gsap.fromTo('.hp-ticker-wrap',
-            { opacity: 0 },
-            {
-              opacity: 1, ease: 'none',
-              scrollTrigger: {
-                trigger: '.hp-ticker-wrap',
-                start: 'top 95%',
-                end:   'top 75%',
-                scrub: 0.8,
-              },
-            }
-          )
-
-          /* ── Section divider parallax ─────────────────────────────── */
-          document.querySelectorAll('.hp-paths, .hp-pain, .hp-footer-cta').forEach(section => {
-            gsap.fromTo(section,
-              { backgroundPositionY: '0%' },
-              {
-                backgroundPositionY: '20%', ease: 'none',
-                scrollTrigger: {
-                  trigger: section,
-                  start: 'top bottom',
-                  end:   'bottom top',
-                  scrub: 1,
-                },
-              }
-            )
-          })
-
-          /* ── App footer links ─────────────────────────────────────── */
-          fromBelow('.hp-app-footer', {
-            y: 20, start: 'top 98%', end: 'top 80%', scrub: 0.8,
-          })
-
-        }) // end gsap.context
-
-      } catch (err) {
-        /* GSAP unavailable — CSS fallback handles visibility */
+      const logoTextEl = document.querySelector('.ld-nav-logo-text')
+      if (logoTextEl) {
+        const finalText = logoTextEl.textContent
+        gsap.to(logoTextEl, {
+          delay: 0.4, duration: 1.1,
+          scrambleText: {
+            text: finalText,
+            chars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            speed: 0.45,
+            tweenLength: false,
+          },
+        })
       }
-    }
 
-    init()
-    return () => { ctx?.revert() }
+      /* ─────────────────────────────────────────────────────────────
+         2. HERO — SplitText · ScrambleText · DrawSVG · MotionPath
+      ───────────────────────────────────────────────────────────── */
+
+      /* Badge pop-in */
+      gsap.fromTo('.ld-hero-badge',
+        { opacity: 0, scale: 0.75, y: -12 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.75, ease: 'ld.back', delay: 0.12 },
+      )
+
+      /* H1 — SplitText by words, 3-D flip entrance */
+      const h1 = document.querySelector('.ld-hero-h1')
+      if (h1) {
+        const splitH1 = new SplitText(h1, { type: 'words', wordsClass: 'gsap-word' })
+        gsap.set(h1, { perspective: 800 })
+        gsap.from(splitH1.words, {
+          opacity: 0, y: '130%', rotateX: -55,
+          stagger: 0.055, duration: 0.9, ease: 'expo.out', delay: 0.22,
+          onComplete() { splitH1.revert() },
+        })
+      }
+
+      /* Sub — SplitText by lines */
+      const sub = document.querySelector('.ld-hero-sub')
+      if (sub) {
+        const splitSub = new SplitText(sub, { type: 'lines', linesClass: 'gsap-line' })
+        gsap.from(splitSub.lines, {
+          opacity: 0, y: 28, stagger: 0.1, duration: 0.65, ease: 'power3.out', delay: 0.6,
+          onComplete() { splitSub.revert() },
+        })
+      }
+
+      /* CTA buttons stagger */
+      gsap.from('.ld-hero-actions > *', {
+        opacity: 0, y: 22, scale: 0.93,
+        stagger: 0.1, duration: 0.6, ease: 'ld.back', delay: 0.85,
+      })
+
+      /* Trust items slide from left */
+      gsap.from('.ld-hero-trust-item', {
+        opacity: 0, x: -20, stagger: 0.1, duration: 0.5, ease: 'power2.out', delay: 1.05,
+      })
+
+      /* ERV card sweeps in from right */
+      gsap.fromTo('.ld-hero-right',
+        { opacity: 0, x: 56, scale: 0.94, rotate: 1 },
+        { opacity: 1, x: 0, scale: 1, rotate: 0, duration: 1.2, ease: 'expo.out', delay: 0.28 },
+      )
+
+      /* DrawSVG — hero decorative lines */
+      const heroLines = document.querySelectorAll('.gsap-deco-line')
+      if (heroLines.length) {
+        gsap.from(heroLines, {
+          drawSVG: '0%',
+          duration: 2.8, stagger: 0.35, ease: 'power2.inOut', delay: 0.5,
+        })
+      }
+
+      /* MotionPath — ERV floating micro-badges orbit gently */
+      const orbits = [
+        [{ x:0,y:0 },{ x:10,y:-16 },{ x:16,y:0 },{ x:10,y:16 },{ x:0,y:0 }],
+        [{ x:0,y:0 },{ x:-12,y:-10 },{ x:-18,y:0 },{ x:-12,y:12 },{ x:0,y:0 }],
+        [{ x:0,y:0 },{ x:8,y:-20 },{ x:14,y:0 },{ x:8,y:14 },{ x:0,y:0 }],
+      ]
+      document.querySelectorAll('.erv-float').forEach((el, i) => {
+        el.style.animation = 'none' // remove CSS float animation
+        gsap.to(el, {
+          motionPath: { path: orbits[i % orbits.length], curviness: 1.6 },
+          duration: 4.8 + i * 0.9,
+          repeat: -1,
+          ease: 'none',
+          delay: i * 0.8,
+        })
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         3. DRAGGABLE — ERV card snaps back after drag
+      ───────────────────────────────────────────────────────────── */
+      const ervCard = document.querySelector('.erv-card')
+      if (ervCard) {
+        Draggable.create(ervCard, {
+          type: 'x,y',
+          edgeResistance: 0.7,
+          bounds: '.erv-wrap',
+          cursor: 'grab',
+          activeCursor: 'grabbing',
+          onDragStart() {
+            gsap.to(ervCard, {
+              scale: 1.04, rotate: 0.8,
+              boxShadow: '0 32px 80px rgba(14,165,233,0.22)',
+              duration: 0.2,
+            })
+          },
+          onDragEnd() {
+            gsap.to(ervCard, {
+              x: 0, y: 0, scale: 1, rotate: 0,
+              boxShadow: '',
+              duration: 0.9,
+              ease: 'elastic.out(1, 0.4)',
+            })
+          },
+        })
+      }
+
+      /* ─────────────────────────────────────────────────────────────
+         4. PARALLAX SCRUB — hero content + floats
+      ───────────────────────────────────────────────────────────── */
+      gsap.to('.ld-hero-left', {
+        y: -70, ease: 'none',
+        scrollTrigger: {
+          trigger: '.ld-hero', start: 'top top', end: 'bottom top', scrub: 0.6,
+        },
+      })
+      const floatParallax = ['-48', '44', '-30']
+      document.querySelectorAll('.erv-float').forEach((el, i) => {
+        gsap.to(el, {
+          y: floatParallax[i] ?? '-30', ease: 'none',
+          scrollTrigger: {
+            trigger: '.ld-hero', start: 'top top', end: 'bottom top', scrub: 1,
+          },
+        })
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         5. LOGO TICKER
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-logos', {
+        opacity: 0, y: 32, duration: 0.8, ease: 'power2.out',
+        scrollTrigger: { trigger: '.ld-logos', start: 'top 92%' },
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         6. STATS — ScrambleText numbers on enter
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-stat-cell', {
+        opacity: 0, y: 40, scale: 0.9,
+        stagger: 0.1, duration: 0.8, ease: 'expo.out',
+        scrollTrigger: { trigger: '.ld-stats-inner', start: 'top 86%' },
+      })
+      document.querySelectorAll('.ld-stat-num').forEach((el) => {
+        const finalText = el.textContent.trim()
+        ScrollTrigger.create({
+          trigger: el,
+          start: 'top 86%',
+          once: true,
+          onEnter() {
+            gsap.to(el, {
+              duration: 1.3,
+              scrambleText: { text: finalText, chars: '0123456789+s', speed: 0.55 },
+            })
+          },
+        })
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         7. SECTION HEADINGS — SplitText by words
+      ───────────────────────────────────────────────────────────── */
+      document.querySelectorAll('.ld-section-h2').forEach((heading) => {
+        const split = new SplitText(heading, { type: 'words' })
+        gsap.set(heading, { perspective: 700 })
+        gsap.from(split.words, {
+          opacity: 0, y: 52, rotateX: -30,
+          stagger: 0.065, duration: 0.95, ease: 'expo.out',
+          scrollTrigger: {
+            trigger: heading, start: 'top 88%',
+            toggleActions: 'play none none reverse',
+          },
+          onComplete() { split.revert() },
+        })
+      })
+
+      /* Eyebrows slide from left */
+      document.querySelectorAll('.ld-section-eyebrow').forEach((el) => {
+        gsap.from(el, {
+          opacity: 0, x: -28, duration: 0.65, ease: 'power3.out',
+          scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none reverse' },
+        })
+      })
+
+      /* Sub paragraphs fade up */
+      document.querySelectorAll('.ld-section-sub').forEach((el) => {
+        gsap.from(el, {
+          opacity: 0, y: 22, duration: 0.7, ease: 'power2.out',
+          scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none reverse' },
+        })
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         8. HOW IT WORKS — 3-D step cards + icon bounce
+      ───────────────────────────────────────────────────────────── */
+      const steps = document.querySelectorAll('.ld-step')
+      if (steps.length) {
+        gsap.set('.ld-steps', { perspective: 1000 })
+        gsap.from(steps, {
+          opacity: 0, y: 64, rotateY: -12, transformOrigin: 'left center',
+          stagger: 0.15, duration: 1, ease: 'expo.out',
+          scrollTrigger: { trigger: '.ld-steps', start: 'top 82%', toggleActions: 'play none none reverse' },
+        })
+        gsap.from('.ld-step-icon', {
+          scale: 0, rotation: -24,
+          stagger: 0.15, duration: 0.7, ease: 'back.out(2.2)',
+          scrollTrigger: { trigger: '.ld-steps', start: 'top 82%', toggleActions: 'play none none reverse' },
+        })
+        gsap.from('.ld-step-num', {
+          opacity: 0, x: -18,
+          stagger: 0.15, duration: 0.55, ease: 'power2.out',
+          scrollTrigger: { trigger: '.ld-steps', start: 'top 82%', toggleActions: 'play none none reverse' },
+        })
+        document.querySelectorAll('.ld-step-h3').forEach((el) => {
+          const split = new SplitText(el, { type: 'words' })
+          gsap.from(split.words, {
+            opacity: 0, y: 22, stagger: 0.06, duration: 0.65, ease: 'power2.out',
+            scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none reverse' },
+            onComplete() { split.revert() },
+          })
+        })
+        document.querySelectorAll('.ld-step-points').forEach((list) => {
+          gsap.from(list.querySelectorAll('.ld-step-point'), {
+            opacity: 0, x: -18, stagger: 0.08, duration: 0.5, ease: 'power2.out',
+            scrollTrigger: { trigger: list, start: 'top 88%', toggleActions: 'play none none reverse' },
+          })
+        })
+      }
+
+      /* ─────────────────────────────────────────────────────────────
+         9. PATH CARDS — Flip-based hover + entrance
+      ───────────────────────────────────────────────────────────── */
+      document.querySelectorAll('.ld-path-card').forEach((card, i) => {
+        /* Entrance from bottom, staggered */
+        gsap.from(card, {
+          opacity: 0, y: 60, scale: 0.95, duration: 0.9, ease: 'expo.out',
+          delay: i * 0.1,
+          scrollTrigger: { trigger: '.ld-path-grid', start: 'top 84%', toggleActions: 'play none none reverse' },
+        })
+
+        /* Flip-based hover — CSS class changes layout, Flip animates between states */
+        const onEnter = () => {
+          const state = Flip.getState(card)
+          card.classList.add('ld-path-card--active')
+          Flip.from(state, { duration: 0.32, ease: 'power2.out', absolute: true })
+        }
+        const onLeave = () => {
+          const state = Flip.getState(card)
+          card.classList.remove('ld-path-card--active')
+          Flip.from(state, { duration: 0.45, ease: 'elastic.out(1, 0.5)', absolute: true })
+        }
+        card.addEventListener('mouseenter', onEnter)
+        card.addEventListener('mouseleave', onLeave)
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         10. SOCIAL PROOF — quote cards cascade + SplitText
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-quote-card', {
+        opacity: 0, y: 55, scale: 0.95,
+        stagger: { amount: 0.4, grid: [2, 2] },
+        duration: 0.8, ease: 'expo.out',
+        scrollTrigger: { trigger: '.ld-proof-grid', start: 'top 84%', toggleActions: 'play none none reverse' },
+      })
+      gsap.from('.ld-quote-mark', {
+        scale: 0, opacity: 0, rotation: -40,
+        stagger: 0.1, duration: 0.6, ease: 'back.out(3)',
+        scrollTrigger: { trigger: '.ld-proof-grid', start: 'top 84%', toggleActions: 'play none none reverse' },
+      })
+      document.querySelectorAll('.ld-quote-text').forEach((el) => {
+        const split = new SplitText(el, { type: 'lines' })
+        gsap.from(split.lines, {
+          opacity: 0, y: 16, stagger: 0.08, duration: 0.55, ease: 'power2.out',
+          scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none reverse' },
+          onComplete() { split.revert() },
+        })
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         11. FORM SECTION
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-form-header > *', {
+        opacity: 0, y: 28, stagger: 0.12, duration: 0.75, ease: 'expo.out',
+        scrollTrigger: { trigger: '.ld-form-header', start: 'top 86%', toggleActions: 'play none none reverse' },
+      })
+      gsap.from('.ld-form-card', {
+        opacity: 0, y: 48, scale: 0.97, duration: 0.9, ease: 'expo.out',
+        scrollTrigger: { trigger: '.ld-form-card', start: 'top 85%', toggleActions: 'play none none reverse' },
+      })
+      gsap.from('.ld-form-trust-item', {
+        opacity: 0, y: 16, stagger: 0.1, duration: 0.5, ease: 'power2.out',
+        scrollTrigger: { trigger: '.ld-form-trust-row', start: 'top 92%', toggleActions: 'play none none reverse' },
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         12. FOOTER CTA — SplitText H2 + ScrambleText sub
+      ───────────────────────────────────────────────────────────── */
+      const ctaH2 = document.querySelector('.ld-footer-cta-h2')
+      if (ctaH2) {
+        const split = new SplitText(ctaH2, { type: 'words' })
+        gsap.set(ctaH2, { perspective: 700 })
+        gsap.from(split.words, {
+          opacity: 0, y: 50, rotateX: -30,
+          stagger: 0.07, duration: 0.95, ease: 'expo.out',
+          scrollTrigger: { trigger: ctaH2, start: 'top 86%', toggleActions: 'play none none reverse' },
+          onComplete() { split.revert() },
+        })
+      }
+      const ctaSub = document.querySelector('.ld-footer-cta-sub')
+      if (ctaSub) {
+        const finalSub = ctaSub.textContent
+        ScrollTrigger.create({
+          trigger: ctaSub, start: 'top 88%', once: true,
+          onEnter() {
+            gsap.to(ctaSub, {
+              duration: 1.1,
+              scrambleText: { text: finalSub, chars: 'lowercase', speed: 0.4 },
+            })
+          },
+        })
+      }
+      gsap.from('.ld-footer-cta-btns > *', {
+        opacity: 0, y: 22, scale: 0.92,
+        stagger: 0.12, duration: 0.65, ease: 'ld.back',
+        scrollTrigger: { trigger: '.ld-footer-cta-btns', start: 'top 92%', toggleActions: 'play none none reverse' },
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         13. FOOTER
+      ───────────────────────────────────────────────────────────── */
+      gsap.from('.ld-footer-inner > *', {
+        opacity: 0, y: 18, stagger: 0.08, duration: 0.55, ease: 'power2.out',
+        scrollTrigger: { trigger: '.ld-footer', start: 'top 96%' },
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         14. NAV SCROLL STATE — Flip captures logo size change
+      ───────────────────────────────────────────────────────────── */
+      ScrollTrigger.create({
+        trigger: 'body', start: 'top -20px',
+        onEnter() {
+          const state = Flip.getState('.ld-nav-logo')
+          document.querySelector('.ld-nav')?.classList.add('scrolled')
+          Flip.from(state, { duration: 0.3, ease: 'power2.out' })
+        },
+        onLeaveBack() {
+          const state = Flip.getState('.ld-nav')
+          document.querySelector('.ld-nav')?.classList.remove('scrolled')
+          Flip.from(state, { duration: 0.3, ease: 'power2.out' })
+        },
+      })
+
+      /* ─────────────────────────────────────────────────────────────
+         15. BUTTON MAGNETIC EFFECT on primary CTAs
+      ───────────────────────────────────────────────────────────── */
+      document.querySelectorAll('.ld-btn-primary, .ld-nav-cta').forEach((btn) => {
+        btn.addEventListener('mousemove', (e) => {
+          const r = btn.getBoundingClientRect()
+          const x = e.clientX - r.left - r.width / 2
+          const y = e.clientY - r.top - r.height / 2
+          gsap.to(btn, { x: x * 0.18, y: y * 0.18, duration: 0.3, ease: 'power2.out' })
+        })
+        btn.addEventListener('mouseleave', () => {
+          gsap.to(btn, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.5)' })
+        })
+      })
+
+    }) // end ctx
+
+    return () => ctx.revert()
   }, [])
 
-  return null // render-nothing component
+  return null
 }
