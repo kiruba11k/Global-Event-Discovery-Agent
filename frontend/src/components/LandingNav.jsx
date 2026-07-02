@@ -51,14 +51,14 @@ export default function LandingNav({ onScrollToForm }) {
           </div>
 
           <div className="ld-nav-right">
-            <a
+            {/* <a
               className="ld-nav-signin"
               href="https://leadstrategus.com/contact/"
               target="_blank"
               rel="noopener noreferrer"
             >
               Sign in
-            </a>
+            </a> */}
             <button className="ld-nav-cta" onClick={handleScrollToForm}>
               Get free intel
             </button>
@@ -91,7 +91,7 @@ export default function LandingNav({ onScrollToForm }) {
             Services
           </a>
           <button className="ld-nav-mobile-cta" onClick={handleScrollToForm}>
-            Get free intel — it's free
+            Get free intel - it's free
           </button>
         </div>
       )}
