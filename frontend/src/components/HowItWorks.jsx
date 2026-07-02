@@ -5,7 +5,7 @@ const STEPS = [
   {
     icon: Search,
     title: 'Tell us your ICP',
-    desc: 'Describe who you sell to — industry, buyer persona, geography, and deal size. Takes 90 seconds.',
+    desc: 'Describe who you sell to - industry, buyer persona, geography, and deal size. Takes 90 seconds.',
     points: ['Company type & size', 'Buyer titles', 'Target regions'],
   },
   {
@@ -17,7 +17,7 @@ const STEPS = [
   {
     icon: BarChart3,
     title: 'Get your ranked shortlist',
-    desc: 'Receive a prioritised list of events sorted by number of attendees matching your ICP — with cost, timing, and prospect previews.',
+    desc: 'Receive a prioritised list of events sorted by number of attendees matching your ICP - with cost, timing, and prospect previews.',
     points: ['Match percentage score', 'Buyer count estimate', 'ROI forecast'],
   },
 ]
