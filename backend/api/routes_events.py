@@ -702,6 +702,22 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             "price_description": ev.price_description or "",
         })
 
+    # ── Never-empty guarantee ─────────────────────────────────────
+    # The frontend hides SKIP verdicts. If every event ended up SKIP
+    # (strict rule thresholds + LLM ranker unavailable), the user would
+    # get a blank screen after a 60s wait. Promote the closest matches
+    # to CONSIDER instead, honestly labelled.
+    if ranked and not any(r.fit_verdict in ("GO", "CONSIDER") for r in ranked):
+        logger.warning("All final events SKIP — promoting closest matches to CONSIDER")
+        for r in sorted(ranked, key=lambda r: r.relevance_score or 0, reverse=True)[:6]:
+            r.fit_verdict = "CONSIDER"
+            note = (r.verdict_notes or "").strip()
+            r.verdict_notes = (
+                "Closest match by rule-based scoring — no strong ICP fit found "
+                "in this geography/date window, so treat as a starting point. "
+                + note
+            ).strip()
+
     go_n  = sum(1 for r in ranked if r.fit_verdict == "GO")
     con_n = sum(1 for r in ranked if r.fit_verdict == "CONSIDER")
     srcs  = {getattr(r, "source_platform", "?") for r in ranked}
