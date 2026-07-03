@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { CheckCircle, AlertCircle } from 'lucide-react'
 import ICPForm from './ICPForm'
 import '../landing.css'
@@ -6,17 +7,30 @@ export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats
   return (
     <section className="ld-form-sect" id="icp-form" aria-labelledby="form-heading">
       <div className="ld-form-wrap">
-        <div className="ld-form-header">
-          <div className="ld-section-eyebrow">Get Started Free</div>
-          <h2 className="ld-section-h2" id="form-heading">
-            Rank your trade shows in 90 seconds.
+        <motion.div
+          className="ld-form-header"
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="ds-eyebrow">Start here — free</span>
+          <h2 className="ds-h2" id="form-heading">
+            Describe your buyer. <em>Get your show list.</em>
           </h2>
-          <p className="ld-section-sub" style={{ margin: '0 auto' }}>
-            Tell us who you sell to. We'll tell you which events are worth the flight.
+          <p className="ds-sub" style={{ margin: '0 auto' }}>
+            Six inputs, 90 seconds. We'll rank the tradeshows where your ICP will
+            actually be — the meetings and talking points come next.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="ld-form-card">
+        <motion.div
+          className="ld-form-card"
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.65, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        >
           {stats?.resend_enabled === false && (
             <div className="ld-form-notice">
               <AlertCircle size={13} aria-hidden="true" />
@@ -29,7 +43,7 @@ export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats
             onDeeperAnalysis={onDeeperAnalysis}
             heroMode={true}
           />
-        </div>
+        </motion.div>
 
         <div className="ld-form-trust-row">
           {['Free to use', 'No credit card', 'No sales call'].map(item => (

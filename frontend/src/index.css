@@ -4,19 +4,39 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--paper, #FBF7F0);
+    color: var(--ink, #1E2B33);
+    font-family: var(--font-body, 'Inter', system-ui, -apple-system, sans-serif);
+    -webkit-font-smoothing: antialiased;
   }
 }
 
 @layer utilities {
   .verdict-go {
-    @apply bg-green-100 text-green-800 border border-green-300 font-bold px-2 py-1 rounded text-xs;
+    background: var(--c-find-soft, #DCF2EC);
+    color: var(--c-find, #0E7C6B);
+    border: 1px solid var(--c-find, #0E7C6B);
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
   }
   .verdict-consider {
-    @apply bg-amber-100 text-amber-800 border border-amber-300 font-bold px-2 py-1 rounded text-xs;
+    background: var(--c-talk-soft, #FCF0D4);
+    color: #9A6700;
+    border: 1px solid var(--c-talk, #D99000);
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
   }
   .verdict-skip {
-    @apply bg-red-100 text-red-800 border border-red-300 font-bold px-2 py-1 rounded text-xs;
+    background: var(--c-meet-soft, #FCE7DF);
+    color: var(--bad, #C93A2B);
+    border: 1px solid var(--bad, #C93A2B);
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
   }
 }

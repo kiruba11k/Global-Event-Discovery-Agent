@@ -49,8 +49,8 @@ export default function EmailReportModal({
     <>
       <div
         style={{
-          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)',
-          zIndex: 1000, backdropFilter: 'blur(4px)',
+          position: 'fixed', inset: 0, background: 'rgba(30,43,51,0.35)',
+          zIndex: 1000,
           animation: 'modalBgIn 0.2s ease both',
         }}
         onClick={handleClose}
@@ -62,20 +62,20 @@ export default function EmailReportModal({
         animation: 'modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
       }}>
         <div style={{
-          background: 'var(--bg-card)', borderRadius: 'var(--radius)',
-          boxShadow: '0 24px 80px rgba(15,23,42,0.25)',
-          border: '1px solid var(--border)', overflow: 'hidden',
+          background: '#FFFFFF', borderRadius: 'var(--r-lg, 22px)',
+          boxShadow: 'var(--shadow-pop, 0 2px 4px rgba(30,43,51,.08), 0 16px 40px -16px rgba(30,43,51,.22))',
+          border: '1px solid var(--line, #E4DCCD)', overflow: 'hidden',
         }}>
           {/* Header */}
           <div style={{
-            background: 'linear-gradient(135deg,#06b6d4,#3b82f6)',
-            padding: '22px 24px', color: '#fff',
+            background: 'var(--ink, #1E2B33)',
+            padding: '22px 24px', color: 'var(--paper, #FBF7F0)',
             display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
           }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <Mail size={18} />
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600 }}>
                   Email PDF Report
                 </span>
               </div>
@@ -84,9 +84,9 @@ export default function EmailReportModal({
               </div>
             </div>
             <button onClick={handleClose} style={{
-              background: 'rgba(255,255,255,0.15)', border: 'none',
+              background: 'rgba(251,247,240,0.15)', border: 'none',
               borderRadius: 6, padding: 6, cursor: 'pointer',
-              color: '#fff', display: 'flex', alignItems: 'center',
+              color: 'var(--paper, #FBF7F0)', display: 'flex', alignItems: 'center',
             }}>
               <X size={16} />
             </button>
@@ -99,7 +99,7 @@ export default function EmailReportModal({
                 <div style={{ marginBottom: 12 }}>
                   <CheckCircle size={48} style={{ color: 'var(--go)' }} />
                 </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 600, marginBottom: 6 }}>
                   Report Sent!
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>
@@ -110,10 +110,10 @@ export default function EmailReportModal({
                   Check your inbox (and spam folder, just in case).
                 </div>
                 <button onClick={handleClose} style={{
-                  marginTop: 20, background: 'var(--accent)', color: '#fff',
-                  border: 'none', borderRadius: 'var(--radius-sm)',
-                  padding: '10px 24px', fontFamily: 'var(--font-display)',
-                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  marginTop: 20, background: 'var(--ink, #1E2B33)', color: 'var(--paper, #FBF7F0)',
+                  border: '2px solid var(--ink, #1E2B33)', borderRadius: 999,
+                  padding: '10px 24px', fontFamily: 'var(--font-body)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 }}>
                   Close
                 </button>
@@ -129,9 +129,9 @@ export default function EmailReportModal({
                   </div>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    background: 'var(--bg-input)',
-                    border: `1.5px solid ${errMsg ? 'var(--skip)' : 'var(--border)'}`,
-                    borderRadius: 'var(--radius-sm)', padding: '11px 14px',
+                    background: '#FFFFFF',
+                    border: `1.5px solid ${errMsg ? 'var(--bad, #C93A2B)' : 'var(--line, #E4DCCD)'}`,
+                    borderRadius: 'var(--r-sm, 8px)', padding: '11px 14px',
                   }}>
                     <Mail size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
                     <input
@@ -157,7 +157,7 @@ export default function EmailReportModal({
 
                 {/* What's in the PDF */}
                 <div style={{
-                  background: 'var(--bg-card-2)', border: '1px solid var(--border)',
+                  background: 'var(--paper, #FBF7F0)', border: '1px solid var(--line, #E4DCCD)',
                   borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 20,
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -186,14 +186,15 @@ export default function EmailReportModal({
                   disabled={status === 'sending' || !email}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    background: status === 'sending' ? 'var(--border)' : 'linear-gradient(135deg,var(--accent),var(--accent-2))',
-                    color: status === 'sending' ? 'var(--text-dim)' : '#fff',
-                    border: 'none', borderRadius: 'var(--radius-sm)',
-                    padding: '13px 24px', fontFamily: 'var(--font-display)',
-                    fontSize: 14, fontWeight: 700,
+                    background: status === 'sending' ? 'var(--line, #E4DCCD)' : 'var(--ink, #1E2B33)',
+                    color: status === 'sending' ? 'var(--ink-faint, #8A959C)' : 'var(--paper, #FBF7F0)',
+                    border: `2px solid ${status === 'sending' ? 'var(--line, #E4DCCD)' : 'var(--ink, #1E2B33)'}`,
+                    borderRadius: 999,
+                    padding: '13px 24px', fontFamily: 'var(--font-body)',
+                    fontSize: 14, fontWeight: 600,
                     cursor: status === 'sending' || !email ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s',
-                    boxShadow: status === 'sending' ? 'none' : '0 4px 16px rgba(6,182,212,0.3)',
+                    boxShadow: 'none',
                   }}
                 >
                   {status === 'sending'

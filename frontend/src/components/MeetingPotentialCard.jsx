@@ -13,13 +13,13 @@
 import '../meeting-potential.css'
 
 const TIER_COLOURS = {
-  strong:   { bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.3)',  text: '#10b981' },
-  moderate: { bg: 'rgba(6,182,212,.1)',   border: 'rgba(6,182,212,.3)',   text: 'var(--accent)' },
-  early:    { bg: 'rgba(245,158,11,.1)',  border: 'rgba(245,158,11,.3)',  text: '#f59e0b' },
-  needs_work:{ bg: 'rgba(244,63,94,.08)', border: 'rgba(244,63,94,.25)',  text: '#f43f5e' },
-  weak:     { bg: 'rgba(244,63,94,.08)',  border: 'rgba(244,63,94,.25)',  text: '#f43f5e' },
-  limited:  { bg: 'rgba(148,163,184,.08)',border: 'rgba(148,163,184,.2)', text: 'var(--text-dim)' },
-  low:      { bg: 'rgba(148,163,184,.08)',border: 'rgba(148,163,184,.2)', text: 'var(--text-dim)' },
+  strong:   { bg: 'var(--c-find-soft)',  border: 'rgba(14,124,107,.35)', text: 'var(--c-find)' },
+  moderate: { bg: 'var(--info-soft)',    border: 'rgba(46,94,170,.35)',  text: 'var(--info)' },
+  early:    { bg: 'var(--c-talk-soft)',  border: 'rgba(217,144,0,.4)',   text: '#9A6700' },
+  needs_work:{ bg: '#FBE5E2',            border: 'rgba(201,58,43,.35)',  text: 'var(--bad)' },
+  weak:     { bg: '#FBE5E2',             border: 'rgba(201,58,43,.35)',  text: 'var(--bad)' },
+  limited:  { bg: 'var(--paper-deep)',   border: 'var(--line)',          text: 'var(--ink-faint)' },
+  low:      { bg: 'var(--paper-deep)',   border: 'var(--line)',          text: 'var(--ink-faint)' },
 }
 
 function tierStyle(tier) {
@@ -90,7 +90,7 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
           <div className="mp-title">
             {meeting_estimate?.mid !== null && meeting_estimate?.mid !== undefined
               ? <>{meeting_estimate.display} <span className="mp-title-sub">estimated</span></>
-              : <span style={{color:'var(--text-dim)'}}>Attendee data not yet published</span>
+              : <span style={{color:'var(--ink-faint)'}}>Attendee data not yet published</span>
             }
           </div>
           {meeting_estimate?.conversion_pct && (

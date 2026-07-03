@@ -150,21 +150,15 @@ export default function LoadingOverlay({ profile }) {
   }, [])
 
   const isHighProb = prob >= 75
-  const ringColor  = prob >= 80 ? '#06b6d4' : prob >= 65 ? '#6366f1' : '#f59e0b'
-  const ringGlow   = prob >= 80
-    ? '0 0 32px rgba(6,182,212,0.22)'
-    : prob >= 65
-    ? '0 0 32px rgba(99,102,241,0.22)'
-    : '0 0 24px rgba(245,158,11,0.18)'
+  const ringColor  = prob >= 80 ? '#0E7C6B' : prob >= 65 ? '#2E5EAA' : '#D99000'
 
   return (
     <div style={{
       position:       'fixed',
       inset:          0,
       zIndex:         9999,
-      /* Match the app's light hero gradient exactly */
-      background:     'linear-gradient(160deg, #ffffff 0%, #eef6ff 55%, #f0f9ff 100%)',
-      backdropFilter: 'blur(2px)',
+      /* Solid warm-paper scrim — no blur, no glass */
+      background:     'rgba(251,247,240,.92)',
       display:        'flex',
       alignItems:     'center',
       justifyContent: 'center',
@@ -172,47 +166,26 @@ export default function LoadingOverlay({ profile }) {
       overflow:       'hidden',
     }}>
 
-      {/* Orb blobs — identical radii/colours to OrbBackground in App.jsx */}
-      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <div style={{
-          position: 'absolute', top: '-15%', right: '-5%',
-          width: 640, height: 640, borderRadius: '50%',
-          background: 'radial-gradient(circle,#06b6d4,transparent)',
-          filter: 'blur(90px)', opacity: 0.12,
-        }} />
-        <div style={{
-          position: 'absolute', bottom: '-5%', left: '-5%',
-          width: 520, height: 520, borderRadius: '50%',
-          background: 'radial-gradient(circle,#3b82f6,transparent)',
-          filter: 'blur(90px)', opacity: 0.12,
-        }} />
-        <div style={{
-          position: 'absolute', top: '40%', left: '42%',
-          width: 380, height: 380, borderRadius: '50%',
-          background: 'radial-gradient(circle,#8b5cf6,transparent)',
-          filter: 'blur(90px)', opacity: 0.07,
-        }} />
-        {/* Subtle grid overlay — same as homepage */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'linear-gradient(#1e3a5f0a 1px,transparent 1px),linear-gradient(90deg,#1e3a5f0a 1px,transparent 1px)',
-          backgroundSize: '52px 52px',
-        }} />
-      </div>
+      {/* Subtle grid texture on warm paper */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: 'linear-gradient(rgba(30,43,51,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(30,43,51,0.035) 1px,transparent 1px)',
+        backgroundSize: '56px 56px',
+      }} />
 
-      {/* Main card — white card matching app .card style */}
+      {/* Main card — solid white editorial card */}
       <div style={{
         position:     'relative',
-        background:   '#ffffff',
-        border:       '1px solid rgba(6,182,212,0.18)',
-        borderRadius: 20,
+        background:   '#FFFFFF',
+        border:       '1px solid #E4DCCD',
+        borderRadius: 22,
         padding:      '40px 36px',
         maxWidth:     420,
         width:        '100%',
         display:      'flex',
         flexDirection:'column',
         alignItems:   'center',
-        boxShadow:    '0 8px 40px rgba(6,182,212,0.10), 0 2px 8px rgba(0,0,0,0.06)',
+        boxShadow:    '0 2px 4px rgba(30,43,51,.08), 0 16px 40px -16px rgba(30,43,51,.22)',
       }}>
 
         {/* LeadStrategus badge */}
@@ -222,16 +195,15 @@ export default function LoadingOverlay({ profile }) {
           gap:          6,
           marginBottom: 28,
           padding:      '4px 12px',
-          background:   'rgba(6,182,212,0.07)',
-          border:       '1px solid rgba(6,182,212,0.18)',
-          borderRadius: 20,
+          background:   '#DCF2EC',
+          border:       '1.5px solid #0E7C6B',
+          borderRadius: 999,
         }}>
           <div style={{
             width: 6, height: 6, borderRadius: '50%',
-            background: '#06b6d4',
-            boxShadow:  '0 0 6px rgba(6,182,212,0.6)',
+            background: '#0E7C6B',
           }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', letterSpacing: '0.05em' }}>
+          <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600, color: '#0E7C6B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             LeadStrategus  ·  Ranking your shows
           </span>
         </div>
@@ -240,10 +212,10 @@ export default function LoadingOverlay({ profile }) {
         <div style={{ position: 'relative', marginBottom: 22 }}>
           <svg
             width="144" height="144" viewBox="0 0 144 144"
-            style={{ transform: 'rotate(-90deg)', filter: `drop-shadow(${ringGlow})` }}
+            style={{ transform: 'rotate(-90deg)' }}
           >
-            <circle cx="72" cy="72" r="60" fill="none" stroke="rgba(6,182,212,0.1)" strokeWidth="8" />
-            <circle cx="72" cy="72" r="52" fill="none" stroke="rgba(6,182,212,0.04)" strokeWidth="1" />
+            <circle cx="72" cy="72" r="60" fill="none" stroke="#F4EDE1" strokeWidth="8" />
+            <circle cx="72" cy="72" r="52" fill="none" stroke="#E4DCCD" strokeWidth="1" />
             <circle
               cx="72" cy="72" r="60"
               fill="none"
@@ -260,27 +232,27 @@ export default function LoadingOverlay({ profile }) {
             display:        'flex', flexDirection: 'column',
             alignItems:     'center', justifyContent: 'center',
           }}>
-            <div style={{ fontSize: 34, fontWeight: 800, color: '#0f172a', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 700, color: '#1E2B33', lineHeight: 1, letterSpacing: '-0.02em' }}>
               <ProbCounter target={prob} />%
             </div>
-            <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, textAlign: 'center', maxWidth: 70, lineHeight: 1.3 }}>
+            <div style={{ fontSize: 10, color: '#8A959C', marginTop: 4, textAlign: 'center', maxWidth: 70, lineHeight: 1.3 }}>
               meeting success chance
             </div>
           </div>
         </div>
 
         {/* Headline */}
-        <div style={{ fontSize: 19, fontWeight: 700, color: '#0f172a', textAlign: 'center', marginBottom: 4, letterSpacing: '-0.01em' }}>
+        <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 600, color: '#1E2B33', textAlign: 'center', marginBottom: 4, letterSpacing: '-0.01em' }}>
           {isHighProb ? 'Strong ICP — high meeting potential' : 'Analysing your show matches'}
         </div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 22, textAlign: 'center' }}>
+        <div style={{ fontSize: 13, color: '#4C5A63', marginBottom: 22, textAlign: 'center' }}>
           Scanning 50,000+ events{dots}
         </div>
 
         {/* Rotating tip card */}
         <div style={{
-          background:   'rgba(6,182,212,0.04)',
-          border:       '1px solid rgba(6,182,212,0.12)',
+          background:   '#FBF7F0',
+          border:       '1px solid #E4DCCD',
           borderRadius: 12,
           padding:      '12px 14px',
           width:        '100%',
@@ -292,16 +264,16 @@ export default function LoadingOverlay({ profile }) {
         }}>
           <div style={{
             width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-            background: 'rgba(6,182,212,0.1)',
-            border:     '1px solid rgba(6,182,212,0.2)',
+            background: '#DCF2EC',
+            border:     '1px solid #0E7C6B',
             display:    'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0E7C6B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           </div>
           <p style={{
-            fontSize: 12.5, color: '#334155', margin: 0,
+            fontSize: 12.5, color: '#4C5A63', margin: 0,
             lineHeight: 1.5,
             transition: 'opacity 0.35s ease',
             opacity:    tipFading ? 0 : 1,
@@ -313,17 +285,17 @@ export default function LoadingOverlay({ profile }) {
         {/* CTA for high-probability profiles */}
         {isHighProb && (
           <div style={{
-            background:   'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(99,102,241,0.06))',
-            border:       '1px solid rgba(6,182,212,0.18)',
+            background:   '#DCF2EC',
+            border:       '1px solid #0E7C6B',
             borderRadius: 12,
             padding:      '14px 16px',
             width:        '100%',
             textAlign:    'center',
           }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#06b6d4', marginBottom: 4 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#0E7C6B', marginBottom: 4 }}>
               Your profile qualifies for guaranteed meetings
             </div>
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11.5, color: '#4C5A63', marginBottom: 12, lineHeight: 1.5 }}>
               Based on your ICP, deal size and differentiator - we can pre-book meetings at your top event.
             </div>
             <a
@@ -334,9 +306,9 @@ export default function LoadingOverlay({ profile }) {
                 display:        'inline-flex',
                 alignItems:     'center',
                 gap:            5,
-                background:     'linear-gradient(90deg, #06b6d4, #6366f1)',
-                color:          '#fff',
-                borderRadius:   8,
+                background:     '#1E2B33',
+                color:          '#FBF7F0',
+                borderRadius:   999,
                 padding:        '7px 16px',
                 fontSize:       12,
                 fontWeight:     600,

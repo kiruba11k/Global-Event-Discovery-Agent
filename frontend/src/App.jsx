@@ -20,12 +20,20 @@ import StatsRow          from './components/StatsRow'
 import SocialProof       from './components/SocialProof'
 import FormSection       from './components/FormSection'
 import { api }           from './api/client'
-import { ChevronRight, AlertCircle } from 'lucide-react'
+import { motion }        from 'framer-motion'
+import { ArrowRight }    from 'lucide-react'
 import './App.css'
-import './homepage.css'
-import './micro-animations.css'
 import './landing.css'
-import ScrollAnimations  from './components/ScrollAnimations'
+
+const TOAST_STYLE = {
+  style: {
+    background: '#FFFFFF',
+    color: '#1E2B33',
+    border: '1px solid #E4DCCD',
+    boxShadow: '0 8px 24px -12px rgba(30,43,51,.18)',
+    fontFamily: "'Inter', sans-serif",
+  },
+}
 
 /* ── Static data ───────────────────────────────────────────────── */
 const LOGOS = [
@@ -51,43 +59,52 @@ function LogoTicker() {
 
 /* ── Path Cards ─────────────────────────────────────────────────── */
 function PathCards({ onScrollToForm }) {
+  const paths = [
+    {
+      cls: 'ld-path-attend',
+      chip: 'find',
+      tag: 'Attending · hunting meetings',
+      h3: 'Sales, BD, founders — book your ICP before you fly out.',
+      desc: 'Walk in with a calendar, not a hope. We tell you how many of your buyers attend each show, book the meetings, and brief you for each one.',
+      cta: 'Find my shows',
+    },
+    {
+      cls: 'ld-path-exhibit',
+      chip: 'meet',
+      tag: 'Exhibiting · need booth traffic',
+      h3: 'Get 5× the qualified meetings around your booth.',
+      desc: 'Stop waiting for walk-ups. We pre-book your target buyers into slots before the floor opens — so day one starts full.',
+      cta: 'Boost my booth',
+    },
+  ]
   return (
     <section className="ld-paths" aria-label="How we help">
       <div className="ld-paths-inner">
-        <div className="ld-section-eyebrow" data-reveal-ld>Two ways to win a show</div>
-        <h2 className="ld-section-h2" data-reveal-ld data-delay="1">
-          Whether you're walking the floor or holding a booth.
-        </h2>
-        <p className="ld-section-sub" data-reveal-ld data-delay="2">
-          The room is the same. What you do with it isn't. We forecast the buyers either way.
-        </p>
+        <div className="ld-paths-header">
+          <span className="ds-eyebrow">Two ways to win a show</span>
+          <h2 className="ds-h2">Walking the floor <em>or holding a booth.</em></h2>
+          <p className="ds-sub" style={{ margin: '0 auto' }}>
+            The room is the same. What you do with it isn't. We forecast the buyers either way.
+          </p>
+        </div>
         <div className="ld-path-grid">
-          <div className="ld-path-card ld-path-attend">
-            <div className="ld-path-accent" aria-hidden="true" />
-          
-            <div className="ld-path-tag">Attending · hunting meetings</div>
-            <h3 className="ld-path-h3">Sales, BD, founders — book your ICP before you fly out.</h3>
-            <p className="ld-path-desc">
-              Walk in with a calendar, not a hope. We tell you how many of your buyers attend
-              each show and hand you the prospect list to work it yourself.
-            </p>
-            <button className="ld-path-cta" onClick={onScrollToForm}>
-              Find my shows →
-            </button>
-          </div>
-          <div className="ld-path-card ld-path-exhibit">
-            <div className="ld-path-accent" aria-hidden="true" />
-          
-            <div className="ld-path-tag">Exhibiting · need booth traffic</div>
-            <h3 className="ld-path-h3">Get 5× the qualified meetings around your booth.</h3>
-            <p className="ld-path-desc">
-              Stop waiting for walk-ups. We pre-book your target buyers into slots before
-              the floor opens — so day one starts full.
-            </p>
-            <button className="ld-path-cta" onClick={onScrollToForm}>
-              Boost my booth →
-            </button>
-          </div>
+          {paths.map((p, i) => (
+            <motion.div
+              key={p.cls}
+              className={`ld-path-card ${p.cls}`}
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ delay: i * 0.12, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <span className={`ds-chip ${p.chip}`}>{p.tag}</span>
+              <h3 className="ld-path-h3">{p.h3}</h3>
+              <p className="ld-path-desc">{p.desc}</p>
+              <button className="ld-path-cta" onClick={onScrollToForm}>
+                {p.cta} <ArrowRight size={15} aria-hidden="true" />
+              </button>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>
@@ -98,20 +115,27 @@ function PathCards({ onScrollToForm }) {
 function FooterCTA({ onScrollToForm }) {
   return (
     <section className="ld-footer-cta" aria-label="Get started">
-      <div className="ld-footer-cta-inner">
-        <div className="ld-section-eyebrow" data-reveal-ld>Ready to stop guessing?</div>
-        <h2 className="ld-footer-cta-h2" data-reveal-ld data-delay="1">
-          Rank your shows in 2 minutes.
+      <motion.div
+        className="ld-footer-cta-inner"
+        initial={{ opacity: 0, y: 28 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <span className="ds-eyebrow ld-footer-cta-eyebrow">Ready to stop guessing?</span>
+        <h2 className="ld-footer-cta-h2">
+          The right show. The right people.<br />The right words.
         </h2>
-        <p className="ld-footer-cta-sub" data-reveal-ld data-delay="2">
-          Tell us your ICP and where you'll travel. We'll tell you which events are worth the flight.
+        <p className="ld-footer-cta-sub">
+          Tell us your ICP and where you'll travel. We'll tell you which events are worth
+          the flight — and what to say when you get there.
         </p>
-        <div className="ld-footer-cta-btns" data-reveal-ld data-delay="3">
-          <button className="ld-btn-primary" onClick={onScrollToForm}>
-            Rank my shows — it's free
+        <div className="ld-footer-cta-btns">
+          <button className="ds-btn-primary ld-cta-invert" onClick={onScrollToForm}>
+            Rank my shows — it's free <ArrowRight size={17} aria-hidden="true" />
           </button>
           <a
-            className="ld-btn-outline"
+            className="ds-btn-outline ld-cta-invert-outline"
             href="https://leadstrategus.com/contact/"
             target="_blank"
             rel="noopener noreferrer"
@@ -119,7 +143,7 @@ function FooterCTA({ onScrollToForm }) {
             Book a demo
           </a>
         </div>
-      </div>
+      </motion.div>
     </section>
   )
 }
@@ -145,7 +169,7 @@ function LandingFooter() {
           rel="noopener noreferrer"
           className="ld-footer-copy"
         >
-          © 2025 LeadStrategus
+          © 2026 LeadStrategus
         </a>
       </div>
     </footer>
@@ -294,7 +318,7 @@ export default function App() {
   if (screen === 'ranking') {
     return (
       <div className="app">
-        <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
+        <Toaster position="top-right" toastOptions={TOAST_STYLE} />
         {loading && <LoadingOverlay profile={loadingProfile} />}
         <ShowRankingPage
           events={allDisplay}
@@ -346,7 +370,7 @@ export default function App() {
   if (screen === 'deepdive') {
     return (
       <div className="app">
-        <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' } }} />
+        <Toaster position="top-right" toastOptions={TOAST_STYLE} />
         <ShowDeepDivePage
           event={deepDiveEvent}
           profile={lastProfile}
@@ -365,12 +389,11 @@ export default function App() {
       <Toaster
         position="top-right"
         toastOptions={{
-          style:   { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
-          success: { iconTheme: { primary: '#0ea5e9', secondary: '#1e293b' } },
-          error:   { iconTheme: { primary: '#f43f5e', secondary: '#1e293b' } },
+          ...TOAST_STYLE,
+          success: { iconTheme: { primary: '#0E7C6B', secondary: '#FFFFFF' } },
+          error:   { iconTheme: { primary: '#C93A2B', secondary: '#FFFFFF' } },
         }}
       />
-      <ScrollAnimations />
 
       <LandingNav onScrollToForm={scrollToForm} />
       <HeroSection onScrollToForm={scrollToForm} />
