@@ -28,7 +28,13 @@ except ImportError:
     _SERPAPI_OK = False
 
 from ingestion.icp_query_builder import SerpAPIQuery
+from ingestion.source_health import source_health
 from models.event import EventCreate
+
+SOURCE = "SerpAPI"
+PER_QUERY_TIMEOUT = 12.0   # seconds — each query bounded independently
+
+_HARD_STATUS_RE = re.compile(r"\b(401|402|403|404|410|429)\b")
 
 _MONTHS = {
     "jan": "01", "january": "01", "feb": "02", "february": "02",
@@ -293,23 +299,47 @@ async def run_serpapi_queries(
     events_for_tagging: list[dict] = []
 
     ok = 0; fail = 0
+    hard_failed = False   # set on 401/402/403/404/410/429 — remaining queries skipped
 
-    for qobj in queries:
+    async def _run_one(qobj: SerpAPIQuery) -> tuple[SerpAPIQuery, list]:
+        """One SerpAPI query with its own timeout. Returns (qobj, events)."""
+        nonlocal ok, fail, hard_failed
+        if hard_failed:
+            return qobj, []
         params = _build_google_events_params(qobj)
         try:
-            client   = _serpapi.Client(api_key=serpapi_key)
-            raw      = await asyncio.to_thread(client.search, params)
-            ev_list  = raw.get("events_results", []) or []
-            ok      += 1
-        except Exception as exc:
-            logger.debug(
-                f"SerpAPI google_events '{qobj.q}' @ '{qobj.location}' "
-                f"with params={params}: {_redact_api_key_from_error(exc)}"
+            client  = _serpapi.Client(api_key=serpapi_key)
+            raw     = await asyncio.wait_for(
+                asyncio.to_thread(client.search, params),
+                timeout=PER_QUERY_TIMEOUT,
             )
+            ev_list = raw.get("events_results", []) or []
+            ok += 1
+            source_health.record_success(SOURCE)
+            return qobj, ev_list
+        except asyncio.TimeoutError:
             fail += 1
-            await asyncio.sleep(0.3)
-            continue
+            logger.warning(f"SerpAPI '{qobj.q}': timed out after {PER_QUERY_TIMEOUT:.0f}s")
+            source_health.record_failure(SOURCE, kind="transient", detail="query timeout")
+            return qobj, []
+        except Exception as exc:
+            fail += 1
+            msg = _redact_api_key_from_error(exc)
+            logger.debug(f"SerpAPI google_events '{qobj.q}' @ '{qobj.location}': {msg}")
+            m = _HARD_STATUS_RE.search(msg)
+            if m:
+                source_health.record_failure(SOURCE, status=int(m.group(1)), detail=msg[:80])
+                hard_failed = True   # stop dispatching remaining queries
+            else:
+                source_health.record_failure(SOURCE, kind="transient", detail=msg[:80])
+            return qobj, []
 
+    # Run all queries concurrently — a slow/timed-out query no longer drops
+    # the whole batch; partial results are kept. No extra queries are added
+    # (free tier = 100 searches/month).
+    pairs = await asyncio.gather(*(_run_one(q) for q in queries))
+
+    for qobj, ev_list in pairs:
         for ev in ev_list:
             try:
                 temp_id = str(uuid.uuid4())
@@ -333,8 +363,6 @@ async def run_serpapi_queries(
                     })
             except Exception as exc2:
                 logger.debug(f"SerpAPI parse error: {exc2}")
-
-        await asyncio.sleep(0.4)
 
     logger.info(
         f"SerpAPI google_events: {len(raw_events)} raw events "

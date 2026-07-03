@@ -25,18 +25,17 @@ After SerpAPI enrichment, event dicts sent to the LLM include:
 from __future__ import annotations
 
 import json
-import asyncio
 import re
 from typing import Dict, List, Optional
 from urllib.parse import quote_plus
 
-from groq import Groq
 from loguru import logger
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, field_validator
 
 from config import get_settings
 from models.event import EventORM, RankedEvent
 from models.icp_profile import CompanyContext, ICPProfile
+from relevance.llm_client import llm, estimate_tokens
 from relevance.scorer import build_fallback_rationale
 
 settings = get_settings()
@@ -45,8 +44,8 @@ settings = get_settings()
 
 class GroqEventResult(BaseModel):
     id:             str
-    fit_verdict:    str
-    verdict_notes:  str
+    fit_verdict:    str = "CONSIDER"
+    verdict_notes:  str = ""
     key_numbers:    str = ""
     what_its_about: str = ""
     buyer_persona:  str = ""
@@ -57,42 +56,55 @@ class GroqEventResult(BaseModel):
 
     model_config = {"extra": "ignore"}  # ignore event_link if LLM still returns it
 
-    @field_validator("fit_verdict")
+    @field_validator("fit_verdict", mode="before")
     @classmethod
-    def _check(cls, v: str) -> str:
-        v = v.strip().upper()
+    def _check(cls, v) -> str:
+        # Forgiving: never reject the whole event for a fixable verdict.
+        v = str(v or "").strip().upper()
         if v not in {"GO", "CONSIDER", "SKIP"}:
-            raise ValueError(f"bad verdict: {v}")
+            for known in ("GO", "SKIP", "CONSIDER"):
+                if known in v:
+                    return known
+            return "CONSIDER"
         return v
+
+    @field_validator("est_attendees", mode="before")
+    @classmethod
+    def _coerce_attendees(cls, v) -> int:
+        # "12,000", "5000+", 5000.0, None, "unknown" → safe int
+        if v is None or isinstance(v, bool):
+            return 0
+        if isinstance(v, (int, float)):
+            return max(0, int(v))
+        m = re.search(r"\d[\d,\.]*", str(v))
+        if not m:
+            return 0
+        try:
+            return max(0, int(float(m.group(0).replace(",", ""))))
+        except ValueError:
+            return 0
 
 
 class GroqRankingResponse(BaseModel):
-    ranked_events: List[GroqEventResult]
+    ranked_events: List[GroqEventResult] = []
+
+    model_config = {"extra": "ignore"}
 
 
 class ValidationResult(BaseModel):
     id:                 str
-    verdict_ok:         bool
+    verdict_ok:         bool = True
     corrected_verdict:  Optional[str] = None
     hallucination_flag: bool = False
     issue:              Optional[str] = None
 
+    model_config = {"extra": "ignore"}
+
 
 class ValidationResponse(BaseModel):
-    validations: List[ValidationResult]
+    validations: List[ValidationResult] = []
 
-
-# ── Groq client singleton ──────────────────────────────────────────
-
-_groq_client: Optional[Groq] = None
-
-def _groq() -> Optional[Groq]:
-    global _groq_client
-    if not settings.groq_api_key:
-        return None
-    if _groq_client is None:
-        _groq_client = Groq(api_key=settings.groq_api_key)
-    return _groq_client
+    model_config = {"extra": "ignore"}
 
 
 # ── Field accessors with correct fallback order ────────────────────
@@ -569,36 +581,54 @@ Return JSON:
 }}"""
 
 
-# ── LLM call ───────────────────────────────────────────────────────
+# ── Token-budgeted chunking ────────────────────────────────────────
 
-async def _call_groq(
-    client: Groq,
-    system: str,
-    user:   str,
-    timeout: int,
-    label:  str = "groq",
-) -> Optional[str]:
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.chat.completions.create,
-                model           = settings.groq_model,
-                messages        = [
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": user},
-                ],
-                temperature     = settings.groq_temperature,
-                max_tokens      = settings.groq_max_tokens,
-                response_format = {"type": "json_object"},
-            ),
-            timeout=timeout,
-        )
-        return resp.choices[0].message.content
-    except asyncio.TimeoutError:
-        logger.error(f"[{label}] timed out after {timeout}s")
-    except Exception as exc:
-        logger.error(f"[{label}] error: {exc}")
-    return None
+# Completion budget per event in a ranking response (~7 short fields).
+_COMPLETION_TOKENS_PER_EVENT = 180
+_COMPLETION_TOKENS_MIN       = 600
+
+
+def _completion_budget(n_events: int) -> int:
+    return min(settings.groq_max_tokens,
+               max(_COMPLETION_TOKENS_MIN, n_events * _COMPLETION_TOKENS_PER_EVENT))
+
+
+def _chunk_events_by_budget(events_dicts: list, system: str, profile_dict: dict) -> list[list]:
+    """
+    Greedily pack event dicts into chunks whose full prompt (system +
+    scaffold + events JSON + completion budget) fits under the TPM limit.
+    Guarantees we never send a request we know will 413.
+    """
+    # Fixed part of every request: system prompt + ranking prompt with no events.
+    scaffold = _ranking_prompt([], profile_dict)
+    fixed_tokens = estimate_tokens(system) + estimate_tokens(scaffold)
+
+    chunks: list[list] = []
+    current: list = []
+    current_tokens = 0
+
+    for ev in events_dicts:
+        ev_tokens = estimate_tokens(json.dumps(ev, indent=2))
+        # A single oversized event (huge serpapi payload) must still fit:
+        # slim its enrichment bulk rather than guarantee a 413.
+        if fixed_tokens + ev_tokens + _completion_budget(1) > settings.groq_tpm_limit * 0.9:
+            ev = dict(ev)
+            ev.pop("serpapi_results", None)
+            ev["serpapi_text"] = (ev.get("serpapi_text") or "")[:600]
+            ev["description"]  = (ev.get("description") or "")[:200]
+            ev_tokens = estimate_tokens(json.dumps(ev, indent=2))
+        # Would adding this event still fit (incl. per-event completion budget)?
+        prospective = fixed_tokens + current_tokens + ev_tokens \
+            + _completion_budget(len(current) + 1)
+        if current and prospective > settings.groq_tpm_limit * 0.9:
+            chunks.append(current)
+            current, current_tokens = [], 0
+        current.append(ev)
+        current_tokens += ev_tokens
+
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 # ── Hallucination guard ────────────────────────────────────────────
@@ -661,11 +691,10 @@ async def rank_with_groq(
 ) -> List[RankedEvent]:
 
     enrichments  = enrichments or {}
-    client       = _groq()
     groq_results: Dict[str, GroqEventResult] = {}
     hallucinated: set[str] = set()
 
-    if client and events:
+    if events:
         events_dicts = [
             _event_dict(
                 e,
@@ -677,25 +706,43 @@ async def rank_with_groq(
             for e in events
         ]
 
-        # Agent 1 — ranker
-        raw = await _call_groq(
-            client,
-            _system_prompt(profile, company_ctx),
-            _ranking_prompt(events_dicts, _profile_dict(profile)),
-            timeout=settings.groq_timeout_seconds,
-            label="ranker",
-        )
-        if raw:
-            try:
-                parsed = GroqRankingResponse.model_validate_json(raw)
-                groq_results = {r.id: r for r in parsed.ranked_events}
-                logger.info(f"Ranker: {len(groq_results)} events ranked")
-            except ValidationError as ve:
-                logger.error(f"Ranker schema error: {ve}")
+        system       = _system_prompt(profile, company_ctx)
+        profile_dict = _profile_dict(profile)
 
-        # Agent 2 — validator
-        # Slim event data for validator: only fields needed to check hallucinations.
-        # Strips serpapi_text/serpapi_results to stay well under 12k TPM limit.
+        # Agent 1 — ranker, token-budgeted chunking.
+        # If the full prompt won't fit under the free-tier TPM ceiling,
+        # split events into chunks that each fit and merge the results.
+        full_prompt = _ranking_prompt(events_dicts, profile_dict)
+        if llm.fits_budget(system, full_prompt,
+                           completion_tokens=_completion_budget(len(events_dicts))):
+            chunks = [events_dicts]
+        else:
+            chunks = _chunk_events_by_budget(events_dicts, system, profile_dict)
+            logger.info(
+                f"Ranker: {len(events_dicts)} events exceed TPM budget — "
+                f"split into {len(chunks)} chunks"
+            )
+
+        for ci, chunk in enumerate(chunks):
+            parsed = await llm.chat_json(
+                system,
+                _ranking_prompt(chunk, profile_dict),
+                label=f"ranker[{ci + 1}/{len(chunks)}]",
+                schema=GroqRankingResponse,
+                max_completion_tokens=_completion_budget(len(chunk)),
+                timeout=settings.groq_timeout_seconds,
+            )
+            if parsed is None:
+                logger.warning(f"Ranker chunk {ci + 1}/{len(chunks)} failed — "
+                               "events fall back to rule-based tier")
+                continue
+            groq_results.update({r.id: r for r in parsed.ranked_events})
+        logger.info(f"Ranker: {len(groq_results)}/{len(events_dicts)} events ranked")
+
+        # Agent 2 — validator (hallucination check).
+        # Cheap and non-blocking: slim payload, short hard timeout. If it
+        # fails or times out we just log and proceed — the local
+        # _is_hallucinated heuristic still runs on every result.
         if len(groq_results) >= 3:
             slim_events = [
                 {
@@ -713,34 +760,44 @@ async def rank_with_groq(
                  "verdict_notes": r.verdict_notes[:300], "key_numbers": r.key_numbers}
                 for r in groq_results.values()
             ]
-            val_raw = await _call_groq(
-                client,
-                VALIDATION_SYS,
-                (f"SOURCE DATA:\n{json.dumps(slim_events, indent=2)}\n\n"
-                 f"VERDICTS:\n{json.dumps(primary_list, indent=2)}"),
-                timeout=settings.groq_timeout_seconds,
-                label="validator",
-            )
-            if val_raw:
-                try:
-                    val = ValidationResponse.model_validate_json(val_raw)
-                    corrections = 0
-                    for v in val.validations:
-                        if v.hallucination_flag:
-                            hallucinated.add(v.id)
-                            logger.warning(f"Validator flagged: {v.id} — {v.issue}")
-                        if not v.verdict_ok and v.corrected_verdict and v.id in groq_results:
-                            old = groq_results[v.id].fit_verdict
-                            groq_results[v.id] = groq_results[v.id].model_copy(
-                                update={"fit_verdict": v.corrected_verdict}
-                            )
-                            corrections += 1
-                            logger.info(f"Corrected {v.id}: {old}→{v.corrected_verdict}")
-                    logger.info(
-                        f"Validation: {corrections} corrected, {len(hallucinated)} flagged"
-                    )
-                except Exception as exc:
-                    logger.warning(f"Validator parse error: {exc}")
+            val_user = (f"SOURCE DATA:\n{json.dumps(slim_events, indent=2)}\n\n"
+                        f"VERDICTS:\n{json.dumps(primary_list, indent=2)}")
+            val_completion = min(1200, 60 * len(primary_list) + 200)
+            val = None
+            if llm.fits_budget(VALIDATION_SYS, val_user,
+                               completion_tokens=val_completion):
+                val = await llm.chat_json(
+                    VALIDATION_SYS,
+                    val_user,
+                    label="validator",
+                    schema=ValidationResponse,
+                    max_completion_tokens=val_completion,
+                    timeout=20,           # hard cap — never 45s of dead time
+                )
+            else:
+                logger.warning("Validator payload over TPM budget — skipping "
+                               "(local hallucination heuristic still applies)")
+            if val is None:
+                logger.warning("Validator unavailable/failed — proceeding with "
+                               "ranker results")
+            else:
+                corrections = 0
+                for v in val.validations:
+                    if v.hallucination_flag:
+                        hallucinated.add(v.id)
+                        logger.warning(f"Validator flagged: {v.id} — {v.issue}")
+                    cv = (v.corrected_verdict or "").strip().upper()
+                    if (not v.verdict_ok and cv in {"GO", "CONSIDER", "SKIP"}
+                            and v.id in groq_results):
+                        old = groq_results[v.id].fit_verdict
+                        groq_results[v.id] = groq_results[v.id].model_copy(
+                            update={"fit_verdict": cv}
+                        )
+                        corrections += 1
+                        logger.info(f"Corrected {v.id}: {old}→{cv}")
+                logger.info(
+                    f"Validation: {corrections} corrected, {len(hallucinated)} flagged"
+                )
 
     # ── Build final RankedEvent list ───────────────────────────────
     ranked: List[RankedEvent] = []

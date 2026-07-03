@@ -31,6 +31,8 @@ from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, ValidationError, field_validator
 
+from relevance.llm_client import llm
+
 # ── Fixed taxonomy — LLM must pick from this list ONLY ─────────────
 # Adding, removing, or renaming categories here automatically updates
 # both the prompt and the validator.
@@ -83,11 +85,13 @@ class ICPAttributes(BaseModel):
     Used for seniority-aware scoring and per-API query specialisation.
     No hallucinations: all fields must be inferrable from the input text.
     """
-    industry:     str         # primary industry (from taxonomy)
-    persona:      str         # job title / role (e.g. "CFO", "VP Engineering")
-    seniority:    str         # c-suite | vp | director | manager | practitioner | unknown
-    company_size: str         # enterprise | mid-market | smb | startup | any
-    function:     str         # finance | technology | operations | sales | hr | marketing | other
+    industry:     str = "Business Events"   # primary industry (from taxonomy)
+    persona:      str = "Business Leader"   # job title / role (e.g. "CFO", "VP Engineering")
+    seniority:    str = "unknown"           # c-suite | vp | director | manager | practitioner | unknown
+    company_size: str = "any"               # enterprise | mid-market | smb | startup | any
+    function:     str = "other"             # finance | technology | operations | sales | hr | marketing | other
+
+    model_config = {"extra": "ignore"}
 
     @field_validator("seniority")
     @classmethod
@@ -114,11 +118,13 @@ class SearchKeywordsResponse(BaseModel):
     icp_attributes captures structured profile signals for scoring.
     reasoning must quote specific input words justifying each keyword.
     """
-    industry_keywords: list[str]    # 3–5 broad industry event terms
-    persona_keywords:  list[str]    # 2–4 persona/seniority-specific terms
-    api_keywords:      list[str]    # 2–4 short terms native to TM/PHQ APIs
-    icp_attributes:    ICPAttributes
-    reasoning:         str
+    industry_keywords: list[str] = []            # 3–5 broad industry event terms
+    persona_keywords:  list[str] = []            # 2–4 persona/seniority-specific terms
+    api_keywords:      list[str] = []            # 2–4 short terms native to TM/PHQ APIs
+    icp_attributes:    ICPAttributes = ICPAttributes()
+    reasoning:         str = ""                  # optional — never reject a payload for this
+
+    model_config = {"extra": "ignore"}
 
     @field_validator("industry_keywords", "persona_keywords", "api_keywords")
     @classmethod
@@ -149,14 +155,14 @@ class SearchKeywordsResponse(BaseModel):
 class EventTagItem(BaseModel):
     """Industry tags for a single event."""
     event_id:   str
-    tags:       list[str]  # must all be from taxonomy
-    evidence:   str        # which words in the event title/desc justify this
+    tags:       list[str] = []  # must all be from taxonomy
+    evidence:   str = ""        # which words in the event title/desc justify this
+
+    model_config = {"extra": "ignore"}
 
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, v: list[str]) -> list[str]:
-        if len(v) > 5:
-            raise ValueError(f"Too many tags: {len(v)} > 5")
         validated = []
         for tag in v:
             tag = tag.strip()
@@ -173,52 +179,9 @@ class EventTagItem(BaseModel):
 
 class EventTagsResponse(BaseModel):
     """Batch response for event tag inference."""
-    events: list[EventTagItem]
+    events: list[EventTagItem] = []
 
-
-# ── Groq client ─────────────────────────────────────────────────────
-
-def _get_groq_client():
-    """Get Groq client using settings. Returns None if no API key."""
-    try:
-        from config import get_settings
-        from groq import Groq
-        s = get_settings()
-        if not s.groq_api_key:
-            return None
-        return Groq(api_key=s.groq_api_key)
-    except Exception:
-        return None
-
-
-async def _call_groq(
-    client,
-    system_prompt: str,
-    user_prompt:   str,
-    label:         str = "groq_tagger",
-) -> Optional[str]:
-    """Call Groq with temperature=0, JSON mode, 10s timeout."""
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.chat.completions.create,
-                model           = "openai/gpt-oss-120b",
-                messages        = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_prompt},
-                ],
-                temperature     = 0,       # deterministic — no creative hallucination
-                max_tokens      = 800,
-                response_format = {"type": "json_object"},
-            ),
-            timeout=10.0,
-        )
-        return resp.choices[0].message.content
-    except asyncio.TimeoutError:
-        logger.warning(f"{label}: timed out (10s)")
-    except Exception as exc:
-        logger.warning(f"{label}: {exc}")
-    return None
+    model_config = {"extra": "ignore"}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -280,8 +243,6 @@ async def extract_search_keywords(
         ["sustainability conference", "ESG summit", "carbon trading expo",
          "cleantech conference", "CFO finance summit"]
     """
-    client = _get_groq_client()
-
     # Build the user prompt from ALL ICP form inputs
     parts = []
     if company_desc.strip():
@@ -303,26 +264,27 @@ async def extract_search_keywords(
           "where this company's target buyers attend."
     )
 
-    if not client:
-        logger.debug("extract_search_keywords: Groq not available → using fallback")
+    parsed = await llm.chat_json(
+        _KEYWORD_SYSTEM,
+        user_prompt,
+        label="keyword_extractor",
+        schema=SearchKeywordsResponse,
+        max_completion_tokens=800,
+        temperature=0,
+        timeout=15,
+        cache_ttl=3600,   # identical ICP inputs must not re-spend tokens
+    )
+    if parsed is None or not parsed.industry_keywords:
+        logger.warning("extract_search_keywords: no usable LLM response — using fallback")
         return _make_fallback_response(industries, personas, company_desc)
 
-    raw = await _call_groq(client, _KEYWORD_SYSTEM, user_prompt, label="keyword_extractor")
-    if not raw:
-        return _make_fallback_response(industries, personas, company_desc)
-
-    try:
-        parsed = SearchKeywordsResponse.model_validate_json(raw)
-        logger.info(
-            f"Groq keyword extraction: industry={parsed.industry_keywords} "
-            f"persona={parsed.persona_keywords} api={parsed.api_keywords} | "
-            f"seniority={parsed.icp_attributes.seniority} "
-            f"company_size={parsed.icp_attributes.company_size}"
-        )
-        return parsed
-    except (ValidationError, ValueError, Exception) as exc:
-        logger.warning(f"extract_search_keywords validation failed: {exc} — using fallback")
-        return _make_fallback_response(industries, personas, company_desc)
+    logger.info(
+        f"Groq keyword extraction: industry={parsed.industry_keywords} "
+        f"persona={parsed.persona_keywords} api={parsed.api_keywords} | "
+        f"seniority={parsed.icp_attributes.seniority} "
+        f"company_size={parsed.icp_attributes.company_size}"
+    )
+    return parsed
 
 
 def _fallback_keywords(industries: list[str], desc: str = "") -> list[str]:
@@ -477,21 +439,11 @@ async def infer_event_tags_batch(
     if not events:
         return {}
 
-    client = _get_groq_client()
     results: dict[str, str] = {}
 
     # Process in batches of batch_size
     for i in range(0, len(events), batch_size):
         chunk = events[i: i + batch_size]
-
-        if not client:
-            # Fallback: fast text-based inference
-            for ev in chunk:
-                results[ev["id"]] = _fallback_infer_tags(
-                    ev.get("title", "") + " " + ev.get("description", ""),
-                    ev.get("query", ""),
-                )
-            continue
 
         # Build user prompt with just enough context
         events_text = json.dumps([
@@ -509,10 +461,19 @@ async def infer_event_tags_batch(
             f"EVENTS:\n{events_text}"
         )
 
-        raw = await _call_groq(client, _TAGS_SYSTEM, user_prompt, label=f"event_tagger_batch_{i}")
+        parsed = await llm.chat_json(
+            _TAGS_SYSTEM,
+            user_prompt,
+            label=f"event_tagger_batch_{i}",
+            schema=EventTagsResponse,
+            max_completion_tokens=800,
+            temperature=0,
+            timeout=15,
+            cache_ttl=3600,
+        )
 
-        if not raw:
-            # Fallback for this chunk
+        if parsed is None:
+            # Fallback for this chunk (Groq unavailable / failed / unparseable)
             for ev in chunk:
                 results[ev["id"]] = _fallback_infer_tags(
                     ev.get("title", "") + " " + ev.get("description", ""),
@@ -520,34 +481,25 @@ async def infer_event_tags_batch(
                 )
             continue
 
-        try:
-            parsed = EventTagsResponse.model_validate_json(raw)
-            accepted = 0; dropped = 0
-            for item in parsed.events:
-                if not item.tags:
-                    # No valid taxonomy tags → use fallback for this event
-                    ev_data = next((e for e in chunk if e["id"] == item.event_id), None)
-                    if ev_data:
-                        results[item.event_id] = _fallback_infer_tags(
-                            ev_data.get("title", "") + " " + ev_data.get("description", ""),
-                            ev_data.get("query", ""),
-                        )
-                    dropped += 1
-                else:
-                    results[item.event_id] = ", ".join(item.tags)
-                    accepted += 1
-            logger.info(
-                f"Groq event tagging batch {i//batch_size + 1}: "
-                f"{accepted} tagged, {dropped} fell back, "
-                f"{len(chunk) - accepted - dropped} missing"
-            )
-        except (ValidationError, ValueError, Exception) as exc:
-            logger.warning(f"infer_event_tags_batch validation error: {exc} — fallback for chunk")
-            for ev in chunk:
-                results[ev["id"]] = _fallback_infer_tags(
-                    ev.get("title", "") + " " + ev.get("description", ""),
-                    ev.get("query", ""),
-                )
+        accepted = 0; dropped = 0
+        for item in parsed.events:
+            if not item.tags:
+                # No valid taxonomy tags → use fallback for this event
+                ev_data = next((e for e in chunk if e["id"] == item.event_id), None)
+                if ev_data:
+                    results[item.event_id] = _fallback_infer_tags(
+                        ev_data.get("title", "") + " " + ev_data.get("description", ""),
+                        ev_data.get("query", ""),
+                    )
+                dropped += 1
+            else:
+                results[item.event_id] = ", ".join(item.tags)
+                accepted += 1
+        logger.info(
+            f"Groq event tagging batch {i//batch_size + 1}: "
+            f"{accepted} tagged, {dropped} fell back, "
+            f"{len(chunk) - accepted - dropped} missing"
+        )
 
     # Fill in any events that got no result
     for ev in events:

@@ -26,6 +26,7 @@ from ingestion.serpapi_events import run_serpapi_queries
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
 from ingestion.predicthq_realtime import run_predicthq_queries
+from ingestion.source_health import source_health
 from models.event import EventORM
 from models.icp_profile import ICPProfile
 
@@ -38,16 +39,19 @@ async def _noop() -> list:
     return []
 
 
-async def _safe_run(coro, source_name: str) -> list:
+async def _safe_run(coro, source_name: str, timeout: float = 45.0) -> list:
     """
-    Runs one API coroutine with an independent 20-second timeout.
-    Returns [] on timeout or any exception — never kills the gather.
+    Runs one API coroutine with an independent outer timeout (a generous
+    backstop — connectors now bound their own per-query timeouts and return
+    partial results themselves). Returns [] on timeout or any exception —
+    never kills the gather.
     """
     try:
-        result = await asyncio.wait_for(coro, timeout=20.0)
+        result = await asyncio.wait_for(coro, timeout=timeout)
         return result or []
     except asyncio.TimeoutError:
-        logger.warning(f"{source_name}: timed out after 20s")
+        logger.warning(f"{source_name}: timed out after {timeout:.0f}s")
+        source_health.record_failure(source_name, kind="transient", detail="batch timeout")
         return []
     except Exception as exc:
         logger.warning(f"{source_name}: {exc}")
@@ -86,16 +90,22 @@ async def fetch_realtime_candidates(
         date_to      = date_to,
     )
 
-    # ── Step 2: API key status ─────────────────────────────────────
+    # ── Step 2: API key status + circuit-breaker health ────────────
     phq_key = getattr(settings, "predicthq_key", "") or ""
-    api_ok = {
+    key_ok = {
         "SerpAPI":      bool(settings.serpapi_key),
         "Ticketmaster": bool(settings.ticketmaster_key),
         "Eventbrite":   bool(settings.eventbrite_token),
         "PredictHQ":    bool(phq_key),
     }
+    # Skip sources whose circuit is open (401/402/404/429/… recently) —
+    # don't burn wall-clock or quota on sources known to be down.
+    api_ok  = {k: v and source_health.is_available(k) for k, v in key_ok.items()}
     active  = [k for k, v in api_ok.items() if v]
-    missing = [k for k, v in api_ok.items() if not v]
+    missing = [k for k, v in key_ok.items() if not v]
+    tripped = [k for k, v in key_ok.items() if v and not api_ok[k]]
+    if tripped:
+        logger.info(f"Pipeline: skipping unhealthy sources {tripped} (circuit open)")
 
     diff_s = getattr(profile, "differentiator_score", None)
     client_r = getattr(profile, "client_count_range", None)
@@ -150,6 +160,8 @@ async def fetch_realtime_candidates(
             logger.info(f"  ✓ {src}: {len(evs)} events")
         elif api_ok.get(src):
             logger.info(f"  ○ {src}: 0 events (key present but no results)")
+        elif key_ok.get(src):
+            logger.debug(f"  — {src}: skipped (circuit open)")
         else:
             logger.debug(f"  — {src}: key not configured")
 
