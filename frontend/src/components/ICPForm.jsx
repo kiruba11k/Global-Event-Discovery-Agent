@@ -57,46 +57,46 @@ const DEAL_BRACKETS = [
     label: 'Under $10K',
     sublabel: 'Trade shows unlikely to deliver ROI',
     disabled: true,
-    color: '#888780',
-    bg: 'rgba(136,135,128,0.06)',
-    border: 'rgba(136,135,128,0.2)',
+    color: '#8A959C',
+    bg: 'rgba(138,149,156,0.08)',
+    border: 'rgba(138,149,156,0.3)',
   },
   {
     value: 'medium',
     label: '$10K  -  $50K',
     sublabel: 'Mid-market · SMB SaaS',
-    color: '#0F6E56',
-    bg: 'rgba(29,158,117,0.06)',
-    border: 'rgba(29,158,117,0.25)',
-    accent: '#1D9E75',
+    color: '#0E7C6B',
+    bg: 'rgba(14,124,107,0.06)',
+    border: 'rgba(14,124,107,0.3)',
+    accent: '#0E7C6B',
   },
   {
     value: 'high',
     label: '$50K  -  $100K',
     sublabel: 'Sweet spot for trade-show ROI',
-    color: '#1D9E75',
-    bg: 'rgba(29,158,117,0.09)',
-    border: 'rgba(29,158,117,0.4)',
-    accent: '#1D9E75',
+    color: '#0E7C6B',
+    bg: 'rgba(14,124,107,0.1)',
+    border: 'rgba(14,124,107,0.45)',
+    accent: '#0E7C6B',
     badge: 'Best fit',
   },
   {
     value: 'enterprise',
     label: '$100K  -  $500K',
     sublabel: 'Enterprise · multi-stakeholder',
-    color: '#0369a1',
-    bg: 'rgba(3,105,161,0.06)',
-    border: 'rgba(3,105,161,0.25)',
-    accent: '#0369a1',
+    color: '#2E5EAA',
+    bg: 'rgba(46,94,170,0.06)',
+    border: 'rgba(46,94,170,0.3)',
+    accent: '#2E5EAA',
   },
   {
     value: 'strategic',
     label: '$500K+',
     sublabel: 'Strategic / flagship deals',
-    color: '#7c3aed',
-    bg: 'rgba(124,58,237,0.06)',
-    border: 'rgba(124,58,237,0.25)',
-    accent: '#7c3aed',
+    color: '#E85D3D',
+    bg: 'rgba(232,93,61,0.06)',
+    border: 'rgba(232,93,61,0.3)',
+    accent: '#E85D3D',
   },
 ]
 
@@ -558,7 +558,7 @@ export default function ICPForm({
             <svg
               width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-              style={{ position: 'absolute', right: 12, top: '50%', transform: `translateY(-50%) ${geoOpen ? 'rotate(180deg)' : ''}`, transition: 'transform .2s', pointerEvents: 'none', color: 'rgba(148,163,184,0.5)' }}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: `translateY(-50%) ${geoOpen ? 'rotate(180deg)' : ''}`, transition: 'transform .2s', pointerEvents: 'none', color: '#8A959C' }}
             >
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -599,17 +599,17 @@ export default function ICPForm({
             {geoHintLoad && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                background: 'rgba(6,182,212,0.04)',
-                border: '1px solid rgba(6,182,212,0.12)',
+                background: 'rgba(14,124,107,0.05)',
+                border: '1px solid rgba(14,124,107,0.18)',
                 borderRadius: 8, padding: '8px 12px',
               }}>
                 <div style={{
                   width: 14, height: 14, borderRadius: '50%',
-                  border: '2px solid rgba(6,182,212,0.3)',
-                  borderTopColor: '#06b6d4',
+                  border: '2px solid rgba(14,124,107,0.3)',
+                  borderTopColor: '#0E7C6B',
                 animation: 'icp-spin 0.8s linear infinite',
                 }} />
-                <span style={{ fontSize: 11, color: '#64748b' }}>Checking event coverage for your regions…</span>
+                <span style={{ fontSize: 11, color: '#4C5A63' }}>Checking event coverage for your regions…</span>
               </div>
             )}
             {!geoHintLoad && geos.filter(g => g !== 'Global').map(geo => {
@@ -620,18 +620,18 @@ export default function ICPForm({
               const isNone   = hint.status === 'none'
               return (
                 <div key={geo} style={{
-                  background:   isGood ? 'rgba(16,185,129,0.06)' : isNone ? 'rgba(239,68,68,0.05)' : 'rgba(245,158,11,0.06)',
-                  border:       `1px solid ${isGood ? 'rgba(16,185,129,0.20)' : isNone ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.22)'}`,
+                  background:   isGood ? '#DCF2EC' : isNone ? '#FCE7DF' : '#FCF0D4',
+                  border:       `1px solid ${isGood ? 'rgba(14,124,107,0.35)' : isNone ? 'rgba(201,58,43,0.35)' : 'rgba(217,144,0,0.35)'}`,
                   borderRadius: 8,
                   padding:      '10px 12px',
                   fontSize:     12,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (isSparse || isNone) && hint.suggestions?.length ? 10 : 0 }}>
                     <span style={{ fontSize: 14 }}>{isGood ? '✅' : isNone ? '🚫' : '⚠️'}</span>
-                    <span style={{ color: isGood ? '#059669' : isNone ? '#dc2626' : '#d97706', fontWeight: 700 }}>
+                    <span style={{ color: isGood ? '#0E7C6B' : isNone ? '#C93A2B' : '#9A6700', fontWeight: 700 }}>
                       {geo}
                     </span>
-                    <span style={{ color: '#64748b' }}>
+                    <span style={{ color: '#4C5A63' }}>
                       {isGood   && `— ${hint.count} events available in our index`}
                       {isSparse && `— only ${hint.count} event${hint.count !== 1 ? 's' : ''} found, consider a nearby hub`}
                       {isNone   && '— no events in our index for this region'}
@@ -639,7 +639,7 @@ export default function ICPForm({
                   </div>
                   {(isSparse || isNone) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                      <span style={{ fontSize: 11, color: '#4C5A63', fontWeight: 600 }}>
                         {hint.suggestions?.length > 0 ? 'Switch to:' : 'No nearby data found'}
                       </span>
                       {(hint.suggestions || []).map(s => (
@@ -651,23 +651,23 @@ export default function ICPForm({
                             display:      'inline-flex',
                             alignItems:   'center',
                             gap:          5,
-                            background:   'rgba(6,182,212,0.08)',
-                            border:       '1px solid rgba(6,182,212,0.28)',
+                            background:   '#DCF2EC',
+                            border:       '1px solid rgba(14,124,107,0.4)',
                             borderRadius: 20,
                             padding:      '4px 12px',
                             fontSize:     11.5,
-                            color:        '#0891b2',
+                            color:        '#0E7C6B',
                             cursor:       'pointer',
                             fontWeight:   600,
                           }}
                         >
                           {s.geo}
                           <span style={{
-                            background: 'rgba(6,182,212,0.12)',
+                            background: 'rgba(14,124,107,0.14)',
                             borderRadius: 4,
                             padding: '1px 5px',
                             fontSize: 10,
-                            color: '#0e7490',
+                            color: '#0A6154',
                             fontWeight: 700,
                           }}>{s.count}</span>
                         </button>
@@ -777,7 +777,7 @@ export default function ICPForm({
       {/* Client names — optional tag input */}
       <div className="icp-field-group">
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
-          Who are some of your clients? <span style={{ color: 'rgba(148,163,184,0.5)', fontWeight: 400, fontSize: 12 }}>(optional)</span>
+          Who are some of your clients? <span style={{ color: '#8A959C', fontWeight: 400, fontSize: 12 }}>(optional)</span>
         </label>
         <p className="icp-hint">Helps us identify events where similar companies buy. Add as many as you like.</p>
 
@@ -827,7 +827,7 @@ export default function ICPForm({
             Add
           </button>
         </div>
-        <p style={{ margin: '5px 0 0', fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Press Enter or comma to add · click × to remove</p>
+        <p style={{ margin: '5px 0 0', fontSize: 11, color: '#8A959C' }}>Press Enter or comma to add · click × to remove</p>
       </div>
 
       {/* Field 4: Email */}

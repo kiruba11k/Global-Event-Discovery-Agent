@@ -248,18 +248,18 @@ export default function ShowRankingPage({
       {/* ── Regional fallback notice ─────────────────────────── */}
       {regionFallbackNote && (
         <div style={{
-          background: 'linear-gradient(90deg,rgba(245,158,11,0.10),rgba(245,158,11,0.05))',
-          borderBottom: '1px solid rgba(245,158,11,0.22)',
+          background: 'var(--c-talk-soft)',
+          borderBottom: '1px solid rgba(217,144,0,0.35)',
           padding: '12px 24px',
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
         }} role="alert">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#D99000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, color: 'rgba(251,191,36,0.95)', lineHeight: 1.6, margin: '0 0 8px' }}>
+            <p style={{ fontSize: 13, color: '#7A5200', lineHeight: 1.6, margin: '0 0 8px' }}>
               {regionFallbackNote}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
@@ -269,13 +269,13 @@ export default function ShowRankingPage({
                   display:        'inline-flex',
                   alignItems:     'center',
                   gap:            5,
-                  background:     'rgba(245,158,11,0.12)',
-                  border:         '1px solid rgba(245,158,11,0.3)',
-                  borderRadius:   6,
+                  background:     '#FFFFFF',
+                  border:         '1.5px solid #D99000',
+                  borderRadius:   999,
                   padding:        '4px 12px',
                   fontSize:       12,
                   fontWeight:     600,
-                  color:          '#fbbf24',
+                  color:          '#9A6700',
                   cursor:         'pointer',
                 }}
               >
@@ -284,7 +284,7 @@ export default function ShowRankingPage({
               </button>
               {suggestedGeos.length > 0 && (
                 <>
-                  <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>Try nearby:</span>
+                  <span style={{ fontSize: 11, color: '#7A5200', fontWeight: 600 }}>Try nearby:</span>
                   {suggestedGeos.map(s => (
                     <button
                       key={s.geo}
@@ -293,13 +293,13 @@ export default function ShowRankingPage({
                         display:        'inline-flex',
                         alignItems:     'center',
                         gap:            4,
-                        background:     'rgba(6,182,212,0.10)',
-                        border:         '1px solid rgba(6,182,212,0.28)',
-                        borderRadius:   6,
+                        background:     'var(--c-find-soft)',
+                        border:         '1.5px solid rgba(14,124,107,0.4)',
+                        borderRadius:   999,
                         padding:        '4px 11px',
                         fontSize:       12,
                         fontWeight:     600,
-                        color:          '#06b6d4',
+                        color:          'var(--c-find)',
                         cursor:         'pointer',
                         whiteSpace:     'nowrap',
                       }}
@@ -307,12 +307,12 @@ export default function ShowRankingPage({
                       {s.geo}
                       {s.count > 0 && (
                         <span style={{
-                          background: 'rgba(6,182,212,0.15)',
+                          background: '#FFFFFF',
                           borderRadius: 4,
                           padding: '1px 5px',
                           fontSize: 10,
                           fontWeight: 700,
-                          color: '#0891b2',
+                          color: 'var(--c-find)',
                         }}>
                           {s.count}
                         </span>
@@ -485,7 +485,7 @@ export default function ShowRankingPage({
                         {(() => {
                           const icpData = getICPCount(event)
                           if (!icpData) return (
-                            <span className="rk-meta-item" style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                            <span className="rk-meta-item" style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}>
                               Attendee data pending
                             </span>
                           )

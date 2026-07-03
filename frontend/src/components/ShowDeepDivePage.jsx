@@ -310,7 +310,7 @@ export default function ShowDeepDivePage({
                 const icpData = getICPData(event, profile)
                 if (!icpData) return (
                   <>
-                    <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22, color: 'var(--text-dim)' }}>—</div>
+                    <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22, color: 'var(--ink-faint)' }}>—</div>
                     <div className="ddv-stat-label">Attendee data not yet published</div>
                     <div className="ddv-stat-note">ICP count will appear once organiser publishes figures</div>
                   </>

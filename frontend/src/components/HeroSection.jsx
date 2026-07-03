@@ -1,114 +1,86 @@
 /*
-  HeroSection.jsx — Split hero with GSAP DrawSVG decorative lines
+  HeroSection.jsx — split hero built around the three-pillar promise:
+  1 find the right shows · 2 meet the right ICPs · 3 tailored talking points.
+  Left: serif headline + pillar chips. Right: 3D globe of tradeshow cities.
 */
-import { CheckCircle } from 'lucide-react'
-import EventRankViz from './EventRankViz'
+import { lazy, Suspense } from 'react'
+import { motion } from 'framer-motion'
+import { ArrowRight, MapPin, CalendarCheck, MessageSquareText } from 'lucide-react'
 import '../landing.css'
+
+const HeroGlobe = lazy(() => import('./HeroGlobe'))
+
+const rise = {
+  hidden: { opacity: 0, y: 26 },
+  show: (i) => ({
+    opacity: 1, y: 0,
+    transition: { delay: 0.08 * i, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
+  }),
+}
+
+const PILLARS = [
+  { icon: MapPin,            cls: 'find', label: '01 · Find the right shows' },
+  { icon: CalendarCheck,     cls: 'meet', label: '02 · Meet the right ICPs' },
+  { icon: MessageSquareText, cls: 'talk', label: '03 · Tailored talking points' },
+]
 
 export default function HeroSection({ onScrollToForm }) {
   return (
     <section className="ld-hero" aria-label="Find your shows">
-
-      {/* DrawSVG decorative lines — animated by GSAPAnimations */}
-      <svg
-        className="ld-hero-deco"
-        viewBox="0 0 1200 600"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-        preserveAspectRatio="xMidYMid slice"
-      >
-        <defs>
-          <linearGradient id="deco-g1" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35"/>
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.12"/>
-          </linearGradient>
-          <linearGradient id="deco-g2" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.22"/>
-            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.08"/>
-          </linearGradient>
-          <linearGradient id="deco-g3" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.15"/>
-            <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <path
-          className="gsap-deco-line"
-          d="M-100 420 C180 300 320 520 560 400 S820 220 1100 340 1300 380 1400 360"
-          stroke="url(#deco-g1)"
-          strokeWidth="1.8"
-        />
-        <path
-          className="gsap-deco-line"
-          d="M-80 180 C100 140 240 280 420 200 S680 80 900 160 1100 220 1300 180"
-          stroke="url(#deco-g2)"
-          strokeWidth="1.2"
-        />
-        <circle
-          className="gsap-deco-line"
-          cx="1050" cy="90" r="200"
-          stroke="#0ea5e9" strokeWidth="0.9" strokeDasharray="5 10"
-        />
-        <circle
-          className="gsap-deco-line"
-          cx="160" cy="480" r="80"
-          stroke="url(#deco-g3)" strokeWidth="1" strokeDasharray="3 6"
-        />
-        <line
-          className="gsap-deco-line"
-          x1="600" y1="0" x2="600" y2="600"
-          stroke="#0ea5e9" strokeWidth="0.6" strokeOpacity="0.08"
-        />
-      </svg>
-
       <div className="ld-hero-inner">
-        {/* Left column */}
         <div className="ld-hero-left">
-          <div className="ld-hero-badge">
+          <motion.div className="ld-hero-badge" variants={rise} custom={0} initial="hidden" animate="show">
             <span className="ld-hero-badge-dot" aria-hidden="true" />
-            AI-Powered Event Intelligence
-          </div>
+            Trade-show intelligence for B2B teams
+          </motion.div>
 
-          <h1 className="ld-hero-h1">
-            Find the exact trade shows{' '}
-            <em>where your buyers are.</em>
-          </h1>
+          <motion.h1 className="ld-hero-h1" variants={rise} custom={1} initial="hidden" animate="show">
+            Your buyers are already at a show.
+            <em> We tell you which one — and what to say.</em>
+          </motion.h1>
 
-          <p className="ld-hero-sub">
-            We rank 10,000+ B2B events by how many of your ideal customers attend —
-            with buyer counts, cost forecasts, and prospect lists.
-            Six inputs. Done in 90 seconds.
-          </p>
+          <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">
+            Describe your ideal customer once. We rank 10,000+ tradeshows by where they
+            actually hang out, line up meetings with the right attendees, and hand you
+            tailored talking points for each one.
+          </motion.p>
 
-          <div className="ld-hero-actions">
-            <button className="ld-btn-primary" onClick={onScrollToForm}>
-              Rank my shows — it's free
+          <motion.div className="ld-hero-pillars" variants={rise} custom={3} initial="hidden" animate="show" aria-label="What you get">
+            {PILLARS.map(p => {
+              const Icon = p.icon
+              return (
+                <span key={p.cls} className={`ds-chip ${p.cls}`}>
+                  <Icon size={13} aria-hidden="true" /> {p.label}
+                </span>
+              )
+            })}
+          </motion.div>
+
+          <motion.div className="ld-hero-actions" variants={rise} custom={4} initial="hidden" animate="show">
+            <button className="ds-btn-primary" onClick={onScrollToForm}>
+              Rank my shows — it's free <ArrowRight size={17} aria-hidden="true" />
             </button>
-            <a className="ld-btn-outline" href="#how">
-              See how it works
-            </a>
-          </div>
+            <a className="ds-btn-outline" href="#how">See how it works</a>
+          </motion.div>
 
-          <div className="ld-hero-trust">
-            <div className="ld-hero-trust-item">
-              <CheckCircle size={13} aria-hidden="true" />
-              50,000+ events indexed
-            </div>
-            <div className="ld-hero-trust-item">
-              <CheckCircle size={13} aria-hidden="true" />
-              20+ countries
-            </div>
-            <div className="ld-hero-trust-item">
-              <CheckCircle size={13} aria-hidden="true" />
-              Always free for top 6
-            </div>
-          </div>
+          <motion.div className="ld-hero-trust" variants={rise} custom={5} initial="hidden" animate="show">
+            10,000+ events indexed · 20+ countries · top 6 shows always free
+          </motion.div>
         </div>
 
-        {/* Right column */}
-        <div className="ld-hero-right">
-          <EventRankViz />
-        </div>
+        <motion.div
+          className="ld-hero-right"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.25, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Suspense fallback={<div className="hero-globe" />}>
+            <HeroGlobe />
+          </Suspense>
+          <div className="ld-hero-globe-caption" aria-hidden="true">
+            Live map of the global tradeshow circuit
+          </div>
+        </motion.div>
       </div>
     </section>
   )

@@ -71,19 +71,19 @@ const INCLUSIONS = [
 
 function WhatIsIncluded() {
   return (
-    <div style={{ background: '#f8faff', border: '1px solid #dce6f3', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+    <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
         What's included in every package
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {INCLUSIONS.map(({ icon: Icon, title, desc }) => (
           <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg,var(--accent-glow),var(--accent-glow2))', border: '1px solid rgba(6,182,212,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Icon size={13} style={{ color: 'var(--accent)' }} />
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--c-find-soft)', border: '1px solid rgba(14,124,107,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon size={13} style={{ color: 'var(--c-find)' }} />
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{title}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.55 }}>{desc}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{title}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-soft)', lineHeight: 1.55 }}>{desc}</div>
             </div>
           </div>
         ))}
@@ -95,11 +95,11 @@ function WhatIsIncluded() {
 function PricingDisclaimer({ dealSizeCategory }) {
   const label = DEAL_LABELS[dealSizeCategory] || DEAL_LABELS.medium
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#fffbeb', border: '1.5px solid rgba(245,158,11,0.4)', borderRadius: 8, padding: '12px 14px', marginTop: 14 }}>
-      <AlertTriangle size={15} style={{ color: 'var(--consider)', flexShrink: 0, marginTop: 1 }} />
-      <div style={{ fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--c-talk-soft)', border: '1.5px solid rgba(217,144,0,0.4)', borderRadius: 8, padding: '12px 14px', marginTop: 14 }}>
+      <AlertTriangle size={15} style={{ color: 'var(--c-talk)', flexShrink: 0, marginTop: 1 }} />
+      <div style={{ fontSize: 11, color: '#7A5200', lineHeight: 1.6 }}>
         <strong>Pricing shown is an estimate.</strong> Actual engagement fee may vary by event complexity, geography, and GTM motion. Pipeline projections assume 40% qualification and 25% close rate on your stated deal size ({label}).{' '}
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: '#92400e', fontWeight: 700 }}>Request a formal quote</a> for binding pricing.
+        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: '#7A5200', fontWeight: 700 }}>Request a formal quote</a> for binding pricing.
       </div>
     </div>
   )
@@ -129,16 +129,16 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
           <span>{tierInfo.tag}</span>
           <span>LeadStrategus Meeting Packages - {tierInfo.tier}</span>
         </div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-dim)', background: 'rgba(255,255,255,0.7)', border: '1px solid var(--border)', padding: '4px 10px', borderRadius: 100 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--ink-soft)', background: 'var(--surface)', border: '1px solid var(--line)', padding: '4px 10px', borderRadius: 100 }}>
           Pricing in USD · {DEAL_LABELS[category]}
         </div>
       </div>
 
       {/* Notice when attendees unknown - info, not a blocker */}
       {unknownAttendees && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(6,182,212,0.05)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 2, fontSize: 11, color: 'var(--text-sub)' }}>
-          <Info size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
-          Attendee count not yet available for this event. Showing our starter package - <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--c-find-soft)', border: '1px solid rgba(14,124,107,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 2, fontSize: 11, color: 'var(--ink-soft)' }}>
+          <Info size={13} style={{ color: 'var(--c-find)', flexShrink: 0, marginTop: 1 }} />
+          Attendee count not yet available for this event. Showing our starter package - <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-find)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
         </div>
       )}
 
@@ -210,7 +210,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
         <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta">
           <Phone size={11} /> Get a Free Quote
         </a>
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--accent-2)', color: 'var(--accent-2)', borderRadius: 'var(--radius-sm)', padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
           Book a Demo
         </a>
       </div>
@@ -272,7 +272,7 @@ function isBadUrl(url) {
 function ELink({ href, text }) {
   if (isBadUrl(href)) {
     return (
-      <span style={{ color: 'var(--text-dim)', fontSize: 11, fontStyle: 'italic' }}>
+      <span style={{ color: 'var(--ink-faint)', fontSize: 11, fontStyle: 'italic' }}>
         Link not available
       </span>
     )
@@ -308,7 +308,7 @@ function EventRow({ event, index, dealSizeCategory }) {
   return (
     <>
       <tr className={open ? 'expanded' : ''} onClick={() => setOpen(o => !o)} style={{ animationDelay: `${index * 30}ms` }}>
-        <td style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, fontFamily: 'monospace' }}>
+        <td style={{ textAlign: 'center', color: 'var(--ink-faint)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
           {index + 1}
         </td>
         <td>
@@ -335,7 +335,7 @@ function EventRow({ event, index, dealSizeCategory }) {
           }
         </td>
         {/* FIXED: Always show package price - never show "-" */}
-        <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--accent-2)' }}>
+        <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--c-meet)', fontFamily: 'var(--font-mono)' }}>
           {pkgs.length > 1
             ? `${fmt(prices[pkgs[0]])} – ${fmt(prices[pkgs[pkgs.length - 1]])}`
             : fmt(prices[5])
@@ -359,7 +359,7 @@ function EventRow({ event, index, dealSizeCategory }) {
                 </div>
                 <div>
                   <div className="expand-block-label">Key Numbers</div>
-                  <div className="expand-block-text" style={{ color: 'var(--accent)' }}>
+                  <div className="expand-block-text" style={{ color: 'var(--c-find)' }}>
                     {event.key_numbers || '-'}
                   </div>
                 </div>
@@ -369,7 +369,7 @@ function EventRow({ event, index, dealSizeCategory }) {
                     ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {personas.map((p, i) => <span key={i} className="persona-chip">{p.trim()}</span>)}
                       </div>
-                    : <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>-</span>
+                    : <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>-</span>
                   }
                 </div>
                 <div>
@@ -384,7 +384,7 @@ function EventRow({ event, index, dealSizeCategory }) {
                     {event.agenda_link   && <ELink href={event.agenda_link}   text="Agenda"   />}
                   </div>
                   {event.sponsors && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ink-soft)' }}>
                       <span style={{ fontWeight: 600 }}>Sponsors: </span>{event.sponsors}
                     </div>
                   )}
@@ -461,11 +461,11 @@ export default function EventTable({ events, dealSizeCategory }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {dealSizeCategory && (
-            <span style={{ fontSize: 10, background: 'var(--accent-glow)', border: '1px solid rgba(6,182,212,0.3)', color: 'var(--accent)', padding: '3px 10px', borderRadius: 100, fontWeight: 700 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, background: 'var(--c-find-soft)', border: '1px solid rgba(14,124,107,0.3)', color: 'var(--c-find)', padding: '3px 10px', borderRadius: 100, fontWeight: 600 }}>
               {DEAL_LABELS[dealSizeCategory]}
             </span>
           )}
-          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+          <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
             Expand any row for package details &amp; AI analysis
           </div>
         </div>
@@ -499,13 +499,13 @@ export default function EventTable({ events, dealSizeCategory }) {
       </div>
 
       {displayEvents.length > 0 && (
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, background: 'linear-gradient(135deg,#f7fbff,#f0f4ff)' }}>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, background: 'var(--paper-deep)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
               <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
               {counts.GO} strong matches · All package pricing in USD
             </div>
-            <div style={{ fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 10px', borderRadius: 100, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 10, color: '#7A5200', background: 'var(--c-talk-soft)', border: '1px solid rgba(217,144,0,0.4)', padding: '3px 10px', borderRadius: 100, display: 'flex', alignItems: 'center', gap: 4 }}>
               <AlertTriangle size={9} />
               Prices are estimates - request a quote for firm fees
             </div>
@@ -514,7 +514,7 @@ export default function EventTable({ events, dealSizeCategory }) {
             <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" style={{ fontSize: 11 }}>
               <Phone size={10} /> Get a Free Quote
             </a>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--accent-2)', color: 'var(--accent-2)', borderRadius: 'var(--radius-sm)', padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
               Book a Demo
             </a>
           </div>
