@@ -7,6 +7,7 @@
 */
 import { motion } from 'framer-motion'
 import { MapPin, CalendarCheck, MessageSquareText, ArrowRight } from 'lucide-react'
+import { fmtCountPlus } from '../lib/format'
 import '../landing.css'
 
 const view = { once: true, margin: '-80px' }
@@ -136,14 +137,14 @@ function TalkDiagram() {
   )
 }
 
-/* ── Pillar copy ─────────────────────────────────────────────── */
-const PILLARS = [
+/* ── Pillar copy (events figure comes live from /api/stats) ───── */
+const buildPillars = (events) => [
   {
     id: 'find',
     icon: MapPin,
     chip: 'Step 01 · Find',
     title: 'Find the tradeshows where your ICP actually hangs out.',
-    desc: 'Stop picking shows off a competitor\'s booth list. We scan 10,000+ B2B events and rank every one by how many of your ideal customers will be in the room — with buyer counts, costs and dates.',
+    desc: 'Stop picking shows off a competitor\'s booth list. We scan ' + events + ' B2B events and rank every one by how many of your ideal customers will be in the room — with buyer counts, costs and dates.',
     points: ['ICP-density score per show', 'Cost & travel forecast', 'Ranked shortlist in 90 seconds'],
     Diagram: FindDiagram,
   },
@@ -167,7 +168,9 @@ const PILLARS = [
   },
 ]
 
-export default function HowItWorks() {
+export default function HowItWorks({ stats }) {
+  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
+  const PILLARS = buildPillars(events)
   return (
     <section className="ld-how" id="how" aria-labelledby="how-heading">
       <div className="ld-how-inner">

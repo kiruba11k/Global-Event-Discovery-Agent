@@ -21,7 +21,10 @@ class Settings(BaseSettings):
 
     # Free-tier LLM gateway (relevance/llm_client.py)
     # Comma-separated fallback chain tried when the primary model 413s/429s.
-    groq_fallback_models: str = "llama-3.3-70b-versatile,llama-3.1-8b-instant"
+    # NOTE: this is only a hint — llm_client validates the chain against
+    # Groq's live /models endpoint at runtime and drops decommissioned ids,
+    # auto-picking replacements from whatever Groq actually serves.
+    groq_fallback_models: str = "openai/gpt-oss-20b"
     # Groq on-demand tokens-per-minute ceiling for the org (free tier = 8000).
     # Used both as the per-request size guard and the sliding-window budget.
     groq_tpm_limit: int = 8000

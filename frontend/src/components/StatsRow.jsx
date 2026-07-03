@@ -1,22 +1,30 @@
 /*
-  StatsRow.jsx — animated counters (react-countup) on an ink band
+  StatsRow.jsx — animated counters (react-countup) on an ink band.
+  Figures come live from /api/stats; static values are only the
+  in-flight fallback and two product constants (time-to-list, free tier).
 */
 import CountUp from 'react-countup'
 import { motion } from 'framer-motion'
 import '../landing.css'
 
-const STATS = [
-  { end: 10000, suffix: '+', label: 'B2B tradeshows indexed' },
-  { end: 20,    suffix: '+', label: 'countries covered' },
-  { end: 90,    suffix: 's', label: 'to your ranked shortlist' },
-  { end: 6,     suffix: '',  label: 'shows ranked free, always' },
-]
+export default function StatsRow({ stats }) {
+  const totalEvents = stats?.total_events_in_db > 0 ? stats.total_events_in_db : null
+  const countries   = stats?.countries_covered  > 0 ? stats.countries_covered  : null
+  const sources     = stats?.events_by_source
+    ? Object.keys(stats.events_by_source).length
+    : null
 
-export default function StatsRow() {
+  const CELLS = [
+    { end: totalEvents ?? 10000, suffix: totalEvents ? '' : '+', label: 'B2B tradeshows indexed', live: !!totalEvents },
+    { end: countries ?? 20,      suffix: countries ? '' : '+',   label: 'countries covered',      live: !!countries },
+    { end: sources ?? 12,        suffix: '',                     label: 'live data sources',      live: !!sources },
+    { end: 90,                   suffix: 's',                    label: 'to your ranked shortlist', live: true },
+  ]
+
   return (
     <section className="ld-stats" aria-label="Platform statistics">
       <div className="ld-stats-inner">
-        {STATS.map((s, i) => (
+        {CELLS.map((s, i) => (
           <motion.div
             key={s.label}
             className="ld-stat-cell"

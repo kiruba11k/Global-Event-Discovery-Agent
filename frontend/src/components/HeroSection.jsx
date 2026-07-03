@@ -6,6 +6,7 @@
 import { lazy, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, MapPin, CalendarCheck, MessageSquareText } from 'lucide-react'
+import { fmtCountPlus } from '../lib/format'
 import '../landing.css'
 
 const HeroGlobe = lazy(() => import('./HeroGlobe'))
@@ -24,7 +25,9 @@ const PILLARS = [
   { icon: MessageSquareText, cls: 'talk', label: '03 · Tailored talking points' },
 ]
 
-export default function HeroSection({ onScrollToForm }) {
+export default function HeroSection({ onScrollToForm, stats }) {
+  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
+  const countries = fmtCountPlus(stats?.countries_covered, '20+')
   return (
     <section className="ld-hero" aria-label="Find your shows">
       <div className="ld-hero-inner">
@@ -40,7 +43,7 @@ export default function HeroSection({ onScrollToForm }) {
           </motion.h1>
 
           <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">
-            Describe your ideal customer once. We rank 10,000+ tradeshows by where they
+            Describe your ideal customer once. We rank {events} tradeshows by where they
             actually hang out, line up meetings with the right attendees, and hand you
             tailored talking points for each one.
           </motion.p>
@@ -64,7 +67,7 @@ export default function HeroSection({ onScrollToForm }) {
           </motion.div>
 
           <motion.div className="ld-hero-trust" variants={rise} custom={5} initial="hidden" animate="show">
-            10,000+ events indexed · 20+ countries · top 6 shows always free
+            {events} events indexed · {countries} countries · top 6 shows always free
           </motion.div>
         </div>
 

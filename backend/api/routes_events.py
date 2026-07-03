@@ -1099,9 +1099,33 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         except Exception:
             pass
 
+    # Live homepage figures — distinct countries and the biggest upcoming
+    # shows by attendee count (feeds the landing ticker; nothing hardcoded).
+    countries_covered = 0
+    top_event_names: list = []
+    try:
+        from sqlalchemy import select, func, distinct
+        from db.models import EventORM
+        countries_covered = (await db.execute(
+            select(func.count(distinct(EventORM.country)))
+            .where(EventORM.country != "")
+        )).scalar() or 0
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        rows = (await db.execute(
+            select(EventORM.name)
+            .where(EventORM.start_date >= today, EventORM.name != "")
+            .order_by(EventORM.est_attendees.desc())
+            .limit(12)
+        )).scalars().all()
+        top_event_names = list(dict.fromkeys(rows))
+    except Exception as exc:
+        logger.debug(f"stats extras failed: {exc}")
+
     phq_key = getattr(settings, "predicthq_key", "")
     return {
         "total_events_in_db": total,
+        "countries_covered":  countries_covered,
+        "top_event_names":    top_event_names,
         "events_by_source":   by_source,
         "faiss_vectors":      index_size,
         "groq_enabled":       bool(settings.groq_api_key),
