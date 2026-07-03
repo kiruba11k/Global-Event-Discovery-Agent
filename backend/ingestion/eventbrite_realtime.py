@@ -17,7 +17,10 @@ import httpx
 from loguru import logger
 
 from ingestion.icp_query_builder import EventbriteQuery
+from ingestion.source_health import source_health
 from models.event import EventCreate
+
+SOURCE = "Eventbrite"
 
 BASE = "https://www.eventbriteapi.com/v3/events/search/"
 
@@ -113,20 +116,32 @@ async def run_eventbrite_queries(
                     "sort_by":                "date",
                 })
 
-                if r.status_code == 404:
-                    logger.debug("Eventbrite: endpoint 404 — stopping")
+                if r.status_code in (404, 410):
+                    logger.warning("Eventbrite: search endpoint retired (404) — stopping")
+                    source_health.record_failure(SOURCE, status=r.status_code,
+                                                 detail="public search API retired")
                     endpoint_dead = True
                     break
-                if r.status_code == 401:
-                    logger.warning("Eventbrite: invalid token")
+                if r.status_code in (401, 402, 403):
+                    logger.warning(f"Eventbrite: HTTP {r.status_code} — stopping")
+                    source_health.record_failure(SOURCE, status=r.status_code,
+                                                 detail="invalid token / plan issue")
+                    break
+                if r.status_code == 429:
+                    logger.warning("Eventbrite: rate limited — stopping")
+                    source_health.record_failure(SOURCE, status=429, detail="rate limited")
                     break
                 if not r.is_success:
                     logger.debug(f"Eventbrite '{q.keyword}': HTTP {r.status_code}")
+                    if r.status_code >= 500:
+                        source_health.record_failure(SOURCE, kind="transient",
+                                                     detail=f"HTTP {r.status_code}")
                     await asyncio.sleep(0.3)
                     continue
 
                 raw = r.json().get("events", []) or []
                 ok += 1
+                source_health.record_success(SOURCE)
                 for ev in raw:
                     try:
                         ec = _to_event_create(ev, q.keyword)
@@ -144,12 +159,16 @@ async def run_eventbrite_queries(
 
             except httpx.HTTPStatusError as exc:
                 if "404" in str(exc):
+                    source_health.record_failure(SOURCE, status=404,
+                                                 detail="public search API retired")
                     endpoint_dead = True
                     break
             except httpx.TimeoutException:
                 logger.debug(f"Eventbrite timeout '{q.keyword}'")
+                source_health.record_failure(SOURCE, kind="transient", detail="timeout")
             except Exception as exc:
                 logger.debug(f"Eventbrite error '{q.keyword}': {exc}")
+                source_health.record_failure(SOURCE, kind="transient", detail=str(exc)[:80])
 
     logger.info(f"Eventbrite: {len(all_events)} events ({ok} ok queries)")
     return all_events

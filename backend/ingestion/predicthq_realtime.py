@@ -66,6 +66,9 @@ from loguru import logger
 
 from ingestion.icp_query_builder import PredictHQQuery
 from ingestion.platform_normaliser import normalise
+from ingestion.source_health import source_health
+
+SOURCE = "PredictHQ"
 
 BASE_URL = "https://api.predicthq.com/v1/events/"
 
@@ -368,21 +371,34 @@ def _parse_event(ev: dict, keyword: str) -> Optional[dict]:
 async def _check_error(resp: httpx.Response, ctx: str) -> Optional[str]:
     """Returns "fatal", "skip", or None (success)."""
     c = resp.status_code
-    if c == 200:   return None
+    if c == 200:
+        source_health.record_success(SOURCE)
+        return None
     if c == 400:
         logger.debug(f"PHQ 400 {ctx}: {resp.text[:100]}")
         return "skip"
     if c == 401:
         logger.error("PredictHQ 401 — check PREDICTHQ_KEY")
+        source_health.record_failure(SOURCE, status=401, detail="check PREDICTHQ_KEY")
+        return "fatal"
+    if c == 402:
+        logger.warning("PredictHQ 402 — payment required / plan exhausted")
+        source_health.record_failure(SOURCE, status=402, detail="payment required")
         return "fatal"
     if c == 403:
         logger.warning("PredictHQ 403 — quota exceeded or plan limit")
+        source_health.record_failure(SOURCE, status=403, detail="quota/plan limit")
+        return "fatal"
+    if c in (404, 410):
+        logger.warning(f"PredictHQ {c} — endpoint gone")
+        source_health.record_failure(SOURCE, status=c, detail="endpoint gone")
         return "fatal"
     if c == 429:
-        wait = int(resp.headers.get("Retry-After", "3"))
-        logger.warning(f"PredictHQ rate-limited — sleeping {wait}s")
-        await asyncio.sleep(wait)
-        return "skip"
+        source_health.record_failure(SOURCE, status=429, detail="rate limited")
+        logger.warning("PredictHQ 429 rate-limited — stopping remaining queries")
+        return "fatal"
+    if c >= 500:
+        source_health.record_failure(SOURCE, kind="transient", detail=f"HTTP {c}")
     logger.debug(f"PHQ HTTP {c} {ctx}")
     return "skip"
 
@@ -448,9 +464,11 @@ async def _fetch_page(
 
     except httpx.TimeoutException:
         logger.debug(f"PHQ timeout '{q}/{country_code}'")
+        source_health.record_failure(SOURCE, kind="transient", detail="timeout")
         return [], 0, "", False
     except Exception as exc:
         logger.debug(f"PHQ search error '{q}': {exc}")
+        source_health.record_failure(SOURCE, kind="transient", detail=str(exc)[:80])
         return [], 0, "", False
 
 

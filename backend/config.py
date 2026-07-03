@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     groq_max_tokens: int = 4096
     groq_timeout_seconds: int = 45   # validator needs full time; was 25 which caused timeouts
 
+    # Free-tier LLM gateway (relevance/llm_client.py)
+    # Comma-separated fallback chain tried when the primary model 413s/429s.
+    groq_fallback_models: str = "llama-3.3-70b-versatile,llama-3.1-8b-instant"
+    # Groq on-demand tokens-per-minute ceiling for the org (free tier = 8000).
+    # Used both as the per-request size guard and the sliding-window budget.
+    groq_tpm_limit: int = 8000
+    # Longest we'll queue a call waiting for TPM headroom before falling back.
+    groq_tpm_max_wait_seconds: float = 10.0
+
     # ── Embedding model ───────────────────────────
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dim: int = 384

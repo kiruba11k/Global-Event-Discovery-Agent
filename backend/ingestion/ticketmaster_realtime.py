@@ -49,6 +49,9 @@ from loguru import logger
 
 from ingestion.icp_query_builder import TicketmasterQuery
 from ingestion.platform_normaliser import normalise
+from ingestion.source_health import source_health
+
+SOURCE = "Ticketmaster"
 
 SEARCH_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
 DETAIL_URL = "https://app.ticketmaster.com/discovery/v2/events/{tm_id}"
@@ -194,25 +197,39 @@ async def _check_error(resp: httpx.Response, ctx: str) -> Optional[str]:
       None     → success, caller processes body
     """
     c = resp.status_code
-    if c == 200:                     return None
+    if c == 200:
+        source_health.record_success(SOURCE)
+        return None
     if c == 204:                     return "skip"   # empty result set
     if c == 400:
         logger.debug(f"TM 400 {ctx}: {resp.text[:80]}")
         return "skip"
     if c == 401:
         logger.error("TM 401 — TM_API_KEY invalid or missing")
+        source_health.record_failure(SOURCE, status=401, detail="TM_API_KEY invalid")
+        return "fatal"
+    if c == 402:
+        logger.warning("TM 402 — payment required")
+        source_health.record_failure(SOURCE, status=402, detail="payment required")
         return "fatal"
     if c == 403:
         logger.warning("TM 403 — daily quota exceeded")
+        source_health.record_failure(SOURCE, status=403, detail="daily quota exceeded")
         return "fatal"
-    if c == 404:
-        logger.debug(f"TM 404 {ctx}")
+    if c in (404, 410):
+        # Detail 404s are per-event, not endpoint death — only trip on search endpoint
+        if ctx.startswith("search"):
+            source_health.record_failure(SOURCE, status=c, detail="search endpoint gone")
+            logger.warning(f"TM {c} {ctx} — endpoint gone")
+            return "fatal"
+        logger.debug(f"TM {c} {ctx}")
         return "skip"
     if c == 429:
-        wait = int(resp.headers.get("Retry-After", "5"))
-        logger.warning(f"TM rate-limited — sleeping {wait}s")
-        await asyncio.sleep(wait)
-        return "skip"
+        source_health.record_failure(SOURCE, status=429, detail="rate limited")
+        logger.warning("TM 429 rate-limited — stopping remaining queries")
+        return "fatal"
+    if c >= 500:
+        source_health.record_failure(SOURCE, kind="transient", detail=f"HTTP {c}")
     logger.debug(f"TM HTTP {c} {ctx}")
     return "skip"
 
@@ -255,9 +272,11 @@ async def _fetch_page(client: httpx.AsyncClient, api_key: str,
 
     except httpx.TimeoutException:
         logger.debug(f"TM timeout search '{keyword}/{country_code}' p{page}")
+        source_health.record_failure(SOURCE, kind="transient", detail="timeout")
         return [], False, False
     except Exception as exc:
         logger.debug(f"TM search error: {exc}")
+        source_health.record_failure(SOURCE, kind="transient", detail=str(exc)[:80])
         return [], False, False
 
 

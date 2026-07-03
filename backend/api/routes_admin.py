@@ -769,6 +769,16 @@ async def profile_store_cleanup(
     return {"deleted_rows": deleted, "keep_days": keep_days}
 
 
+@router.get("/health/sources", summary="LLM gateway stats + ingestion source health")
+async def health_sources(_auth: None = Depends(_check_admin)):
+    from dataclasses import asdict
+
+    from ingestion.source_health import source_health
+    from relevance.llm_client import llm
+
+    return {"llm": asdict(llm.stats), "sources": source_health.snapshot()}
+
+
 @router.get("/db/count", summary="Event counts in DB")
 async def db_count(db: AsyncSession = Depends(get_db), _auth: None = Depends(_check_admin)):
     total_r    = await db.execute(select(func.count()).select_from(EventORM))

@@ -79,27 +79,9 @@ except ImportError:
 
 # ── API-based connectors — all optional ───────────────────────────
 
-try:
-    from ingestion.ticketmaster import TicketmasterConnector
-    _HAS_TM = True
-except ImportError:
-    logger.warning(
-        "ingestion_manager: ingestion/ticketmaster.py not found — "
-        "background Ticketmaster seeding skipped. "
-        "Real-time search still uses ticketmaster_realtime.py."
-    )
-    _HAS_TM = False
-
-try:
-    from ingestion.eventbrite import EventbriteConnector
-    _HAS_EB = True
-except ImportError:
-    logger.warning(
-        "ingestion_manager: ingestion/eventbrite.py not found — "
-        "background Eventbrite seeding skipped. "
-        "Real-time search still uses eventbrite_realtime.py."
-    )
-    _HAS_EB = False
+# NOTE: ingestion/ticketmaster.py and ingestion/eventbrite.py were removed —
+# real-time search uses ticketmaster_realtime.py / eventbrite_realtime.py.
+# Their dead optional-import blocks (startup warnings) are gone.
 
 try:
     from ingestion.meetup import MeetupConnector
@@ -127,8 +109,6 @@ def _build_connectors() -> list:
     if _HAS_ALL:        c.extend([ScraperAllConferences, ScraperConfex])
     if _HAS_TC:         c.append(ScraperTechCrunch)
     if _HAS_SACEOS:     c.extend([ScraperSACEOS, ScraperMyCEB])
-    if _HAS_TM:         c.append(TicketmasterConnector)
-    if _HAS_EB:         c.append(EventbriteConnector)
     if _HAS_MEETUP:     c.append(MeetupConnector)
     if _HAS_LUMA:       c.append(LumaConnector)
     return c

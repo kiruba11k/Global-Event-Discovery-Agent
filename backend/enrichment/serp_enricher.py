@@ -24,6 +24,8 @@ from typing import Optional
 from urllib.parse import urlparse
 from loguru import logger
 
+from relevance.llm_client import llm
+
 try:
     import serpapi as _serpapi
     _SERPAPI_OK = True
@@ -461,29 +463,20 @@ async def _groq_validate_enrichment(
     )
 
     try:
-        import json
-        from groq import AsyncGroq as _AsyncGroq
-        import os
-
-        client = groq_client if hasattr(groq_client, 'chat') else _AsyncGroq(
-            api_key=os.environ.get('GROQ_API_KEY', '')
+        # Route through the shared LLM gateway: token budgeting, TPM limiting,
+        # model fallback and robust JSON repair (fences, trailing commas,
+        # truncation) — a repairable response is never discarded.
+        parsed = await llm.chat_json(
+            _GROQ_EXTRACTION_SYSTEM,
+            user_prompt,
+            label="serp_validate",
+            temperature=0.0,          # deterministic — no creativity
+            max_completion_tokens=600,
+            timeout=15,
+            cache_ttl=300,
         )
-
-        completion = await client.chat.completions.create(
-            model       = "llama-3.3-70b-versatile",
-            temperature = 0.0,    # deterministic — no creativity
-            max_tokens  = 512,
-            messages    = [
-                {"role": "system", "content": _GROQ_EXTRACTION_SYSTEM},
-                {"role": "user",   "content": user_prompt},
-            ],
-        )
-
-        raw = (completion.choices[0].message.content or "").strip()
-        # Strip any markdown fences Groq might add despite instructions
-        raw = raw.replace("```json", "").replace("```", "").strip()
-
-        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
 
         # Validate: reject if confidence is low and we have no evidence
         confidence = str(parsed.get("confidence", "low")).lower()
@@ -503,7 +496,6 @@ async def _groq_validate_enrichment(
         reg = parsed.get("registration_url") or ""
         if reg and isinstance(reg, str) and reg.startswith("http"):
             # Extra guard: reject Google, social, venue URLs
-            from enrichment.serp_enricher import _is_venue_url, _is_homepage_url
             if not _is_venue_url(reg) and not _is_homepage_url(reg) and "google.com" not in reg:
                 result["registration_url"] = reg
                 result["website"]          = reg
@@ -523,8 +515,8 @@ async def _groq_validate_enrichment(
             if raw_date and isinstance(raw_date, str) and raw_date.lower() != "null":
                 raw_date = raw_date.strip()
                 if re.match(r"^\d{4}-\d{2}-\d{2}$", raw_date):
-                    year = int(raw_date[:4])
-                    if year >= 2025:
+                    date_year = int(raw_date[:4])
+                    if date_year >= 2025:
                         result[field] = raw_date
                         logger.debug(f"Groq {field} '{event_name[:40]}': {raw_date}")
 
@@ -814,25 +806,18 @@ RULES:
    Maximum 20 companies. Empty array if none found."""
 
     try:
-        import json
-        from groq import AsyncGroq as _AG
-        import os
-        _gc = groq_client if hasattr(groq_client, "chat") else _AG(
-            api_key=os.environ.get("GROQ_API_KEY", "")
+        parsed = await llm.chat_json(
+            SPONSOR_SYSTEM,
+            f"EVENT: {event_name} {year}\n\nSOURCE_TEXT:\n{full_text[:2000]}",
+            label="serp_sponsors",
+            temperature=0.0,
+            max_completion_tokens=300,
+            timeout=15,
+            cache_ttl=300,
         )
-        completion = await _gc.chat.completions.create(
-            model       = "llama-3.3-70b-versatile",
-            temperature = 0.0,
-            max_tokens  = 300,
-            messages    = [
-                {"role": "system", "content": SPONSOR_SYSTEM},
-                {"role": "user", "content":
-                 f"EVENT: {event_name} {year}\n\nSOURCE_TEXT:\n{full_text[:2000]}"},
-            ],
-        )
-        raw_json = (completion.choices[0].message.content or "").strip()
-        raw_json = raw_json.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(raw_json)
+        if not isinstance(parsed, dict):
+            _cache[cache_key] = {"sponsors": ""}
+            return ""
         companies = parsed.get("companies", [])
         if not isinstance(companies, list):
             companies = []
