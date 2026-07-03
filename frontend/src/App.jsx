@@ -62,7 +62,9 @@ function PathCards({ onScrollToForm }) {
           The room is the same. What you do with it isn't. We forecast the buyers either way.
         </p>
         <div className="ld-path-grid">
-          <div className="ld-path-card ld-path-attend" data-reveal-ld data-delay="1">
+          <div className="ld-path-card ld-path-attend">
+            <div className="ld-path-accent" aria-hidden="true" />
+          
             <div className="ld-path-tag">Attending · hunting meetings</div>
             <h3 className="ld-path-h3">Sales, BD, founders — book your ICP before you fly out.</h3>
             <p className="ld-path-desc">
@@ -73,7 +75,9 @@ function PathCards({ onScrollToForm }) {
               Find my shows →
             </button>
           </div>
-          <div className="ld-path-card ld-path-exhibit" data-reveal-ld data-delay="2">
+          <div className="ld-path-card ld-path-exhibit">
+            <div className="ld-path-accent" aria-hidden="true" />
+          
             <div className="ld-path-tag">Exhibiting · need booth traffic</div>
             <h3 className="ld-path-h3">Get 5× the qualified meetings around your booth.</h3>
             <p className="ld-path-desc">
