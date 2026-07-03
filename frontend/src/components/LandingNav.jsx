@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react'
-import { Zap, Menu, X } from 'lucide-react'
+import { useState } from 'react'
+import { Menu, X } from 'lucide-react'
 import '../landing.css'
 
 export default function LandingNav({ onScrollToForm }) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // Use useEffect-free passive scroll listener pattern
+  if (typeof window !== 'undefined' && !LandingNav._scrollBound) {
+    LandingNav._scrollBound = true
+  }
+
+  // Re-declare with useEffect properly
+  const { useEffect } = require('react')
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', fn, { passive: true })
@@ -26,14 +33,19 @@ export default function LandingNav({ onScrollToForm }) {
     <>
       <nav className={`ld-nav${scrolled ? ' scrolled' : ''}`} aria-label="Main navigation">
         <div className="ld-nav-inner">
+          {/* Logo */}
           <div className="ld-nav-logo">
-            <div className="ld-nav-logo-mark" aria-hidden="true">
-              <Zap size={14} strokeWidth={2.5} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="LeadStrategus shield"
+              className="ld-nav-logo-img"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
             <span className="ld-nav-logo-text">LeadStrategus</span>
           </div>
 
-          <div className="ld-nav-links" aria-hidden="false">
+          {/* Center links (desktop) */}
+          <div className="ld-nav-links">
             <button className="ld-nav-link" onClick={handleScrollToForm}>
               Find your shows
             </button>
@@ -50,15 +62,8 @@ export default function LandingNav({ onScrollToForm }) {
             </a>
           </div>
 
+          {/* Right: CTA + hamburger */}
           <div className="ld-nav-right">
-            {/* <a
-              className="ld-nav-signin"
-              href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Sign in
-            </a> */}
             <button className="ld-nav-cta" onClick={handleScrollToForm}>
               Get free intel
             </button>
@@ -73,6 +78,7 @@ export default function LandingNav({ onScrollToForm }) {
         </div>
       </nav>
 
+      {/* Mobile menu */}
       {mobileOpen && (
         <div className="ld-nav-mobile-menu" role="dialog" aria-label="Navigation menu">
           <button className="ld-nav-mobile-link" onClick={handleScrollToForm}>
@@ -91,7 +97,7 @@ export default function LandingNav({ onScrollToForm }) {
             Services
           </a>
           <button className="ld-nav-mobile-cta" onClick={handleScrollToForm}>
-            Get free intel - it's free
+            Get free intel — it's free
           </button>
         </div>
       )}
