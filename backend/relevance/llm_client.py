@@ -379,33 +379,62 @@ class LLMClient:
         logger.error(f"[{label}] all models failed: {chain}")
         return None
 
+    @staticmethod
+    def _is_reasoning_model(model: str) -> bool:
+        """Reasoning models (gpt-oss, qwen3, deepseek-r1) spend completion
+        tokens thinking before emitting JSON — they need extra headroom and
+        low reasoning effort, or strict json_object mode 400s with
+        'max completion tokens reached before generating a valid document'."""
+        m = model.lower()
+        return "gpt-oss" in m or "qwen3" in m or "r1" in m
+
     async def _request(
         self, client, model, system, user, max_out, temperature, tout, label,
     ) -> Optional[str]:
-        try:
-            resp = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.chat.completions.create,
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    temperature=settings.groq_temperature if temperature is None else temperature,
-                    max_tokens=max_out,
-                    response_format={"type": "json_object"},
-                ),
-                timeout=tout,
-            )
-            return resp.choices[0].message.content
-        except asyncio.TimeoutError:
-            logger.warning(f"[{label}] {model} timed out after {tout}s")
-        except Exception as exc:
-            msg = str(exc)
-            if "413" in msg or "rate_limit" in msg or "429" in msg:
-                logger.warning(f"[{label}] {model} rate/size limited — falling back")
-            else:
-                logger.error(f"[{label}] {model} error: {exc}")
+        kwargs = dict(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=settings.groq_temperature if temperature is None else temperature,
+            max_tokens=max_out,
+            response_format={"type": "json_object"},
+        )
+        if self._is_reasoning_model(model):
+            # keep thinking short and give the JSON room to finish
+            kwargs["reasoning_effort"] = "low"
+            kwargs["max_tokens"] = max(max_out, settings.groq_min_reasoning_tokens)
+
+        for attempt in ("json_mode", "plain"):
+            try:
+                resp = await asyncio.wait_for(
+                    asyncio.to_thread(client.chat.completions.create, **kwargs),
+                    timeout=tout,
+                )
+                return resp.choices[0].message.content
+            except asyncio.TimeoutError:
+                logger.warning(f"[{label}] {model} timed out after {tout}s")
+                return None
+            except TypeError:
+                # SDK/model rejects reasoning_effort — retry without it
+                kwargs.pop("reasoning_effort", None)
+                continue
+            except Exception as exc:
+                msg = str(exc)
+                if "json_validate_failed" in msg and attempt == "json_mode":
+                    # Groq's strict JSON mode discards the whole completion on a
+                    # formatting slip. Retry unconstrained — extract_json() can
+                    # repair fences/trailing junk that strict mode cannot.
+                    logger.warning(f"[{label}] {model} strict JSON mode failed — retrying without response_format")
+                    kwargs.pop("response_format", None)
+                    kwargs["max_tokens"] = max(kwargs["max_tokens"], settings.groq_min_reasoning_tokens)
+                    continue
+                if "413" in msg or "rate_limit" in msg or "429" in msg:
+                    logger.warning(f"[{label}] {model} rate/size limited — falling back")
+                else:
+                    logger.error(f"[{label}] {model} error: {exc}")
+                return None
         return None
 
 

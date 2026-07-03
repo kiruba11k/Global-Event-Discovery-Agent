@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     # Used both as the per-request size guard and the sliding-window budget.
     groq_tpm_limit: int = 8000
     # Longest we'll queue a call waiting for TPM headroom before falling back.
-    groq_tpm_max_wait_seconds: float = 10.0
+    # Must survive most of the 60s sliding window or chunked ranker calls
+    # after a busy stretch fail instantly instead of queueing.
+    groq_tpm_max_wait_seconds: float = 45.0
+    # Reasoning models (gpt-oss/qwen3) think before emitting JSON — never give
+    # them less completion room than this or they 400 with json_validate_failed.
+    groq_min_reasoning_tokens: int = 1536
 
     # ── Embedding model ───────────────────────────
     embedding_model: str = "all-MiniLM-L6-v2"
