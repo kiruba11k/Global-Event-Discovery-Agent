@@ -127,6 +127,14 @@
   cursor: default;
   user-select: none;
 }
+/* Real logo image replaces the icon mark */
+.ld-nav-logo-img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
 .ld-nav-logo-mark {
   width: 28px;
   height: 28px;
@@ -139,6 +147,9 @@
   color: #fff;
   font-size: 13px;
   font-weight: 700;
+}
+@media (max-width: 768px) {
+  .ld-nav-logo-img { width: 32px; height: 32px; }
 }
 .ld-nav-links {
   display: flex;
@@ -848,7 +859,17 @@
 }
 
 @media (max-width: 700px) {
-  .ld-steps { grid-template-columns: 1fr; }
+  /* Single column, no 3D overflow clipping */
+  .ld-steps {
+    grid-template-columns: 1fr;
+    overflow: visible;
+    perspective: none !important;
+    transform-style: flat;
+  }
+  .ld-step {
+    transform: none !important;
+    /* Ensure visibility on mobile — GSAP matchMedia handles animation */
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -874,20 +895,25 @@
   padding: 28px;
   background: var(--ld-bg);
   position: relative;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    /* transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; */
   overflow: hidden;
 }
-.ld-path-card::before {
-  content: '';
+.ld-path-accent {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 3px;
+  transform-origin: left center;
+  transform: scaleX(0);
 }
-.ld-path-attend::before {
+.ld-path-attend .ld-path-accent {
   background: linear-gradient(90deg, var(--ld-blue), var(--ld-blue-dk));
 }
-.ld-path-exhibit::before {
+.ld-path-exhibit .ld-path-accent {
   background: linear-gradient(90deg, var(--ld-indigo), #4f46e5);
+}
+.ld-path-card:hover {
+    box-shadow: var(--ld-shadow-lg);
+  border-color: var(--ld-line-2);
 }
 .ld-path-card:hover {
   transform: translateY(-3px);
