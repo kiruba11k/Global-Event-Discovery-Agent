@@ -8,6 +8,7 @@
 */
 
 import { useState, useEffect, useRef } from 'react'
+import { fmtCountPlus } from '../lib/format'
 
 // ── Probability formula ─────────────────────────────────────────────
 // Derived entirely from ICP form inputs - no API call needed.
@@ -51,9 +52,9 @@ function calcProbability(profile) {
 }
 
 // ── Generate ICP-personalised tips ─────────────────────────────────
-function buildTips(profile) {
+function buildTips(profile, eventsLabel) {
   if (!profile) return [
-    'Matching your ICP against 50,000+ global trade events…',
+    `Matching your ICP against ${eventsLabel} global trade events…`,
     'Scoring industry and buyer-persona alignment…',
     'Running two-agent AI validation to remove hallucinations…',
     'Verifying dates and attendee counts via live web search…',
@@ -123,9 +124,10 @@ function ProbCounter({ target }) {
 }
 
 // ── Main component ──────────────────────────────────────────────────
-export default function LoadingOverlay({ profile }) {
+export default function LoadingOverlay({ profile, stats }) {
+  const eventsLabel = fmtCountPlus(stats?.total_events_in_db, '50,000+')
   const prob = calcProbability(profile)
-  const tips = buildTips(profile)
+  const tips = buildTips(profile, eventsLabel)
 
   const [tipIdx,    setTipIdx]    = useState(0)
   const [tipFading, setTipFading] = useState(false)
@@ -246,7 +248,7 @@ export default function LoadingOverlay({ profile }) {
           {isHighProb ? 'Strong ICP — high meeting potential' : 'Analysing your show matches'}
         </div>
         <div style={{ fontSize: 13, color: '#4C5A63', marginBottom: 22, textAlign: 'center' }}>
-          Scanning 50,000+ events{dots}
+          Scanning {eventsLabel} events{dots}
         </div>
 
         {/* Rotating tip card */}

@@ -189,11 +189,17 @@ class LLMStats:
 
 
 class LLMClient:
+    # substrings identifying non-chat models we must never route JSON to
+    _NON_CHAT = ("whisper", "tts", "guard", "embed", "moderation", "vision-preview")
+
     def __init__(self) -> None:
         self._client: Optional["Groq"] = None
         self._windows: dict[str, _TPMWindow] = {}
         self._cache = _TTLCache()
         self.stats = LLMStats()
+        self._available_models: Optional[set[str]] = None
+        self._models_fetched_at: float = 0.0
+        self._resolved_chain: Optional[list[str]] = None
 
     # -- infra ------------------------------------------------------
     def _groq(self) -> Optional["Groq"]:
@@ -202,12 +208,75 @@ class LLMClient:
         return self._client
 
     @property
-    def model_chain(self) -> list[str]:
+    def _configured_chain(self) -> list[str]:
         chain = [settings.groq_model] + [
             m.strip() for m in settings.groq_fallback_models.split(",") if m.strip()
         ]
         seen: set[str] = set()
         return [m for m in chain if not (m in seen or seen.add(m))]
+
+    async def _fetch_available_models(self) -> Optional[set[str]]:
+        """Live model list from Groq's /models endpoint, cached for 1h.
+
+        Models get decommissioned on free tiers without notice; asking the
+        API is the only future-proof source of truth.
+        """
+        now = time.monotonic()
+        if self._available_models is not None and now - self._models_fetched_at < 3600:
+            return self._available_models
+        client = self._groq()
+        if client is None:
+            return None
+        try:
+            resp = await asyncio.wait_for(asyncio.to_thread(client.models.list), timeout=10)
+            ids = {
+                m.id for m in resp.data
+                if getattr(m, "active", True)
+                and not any(s in m.id.lower() for s in self._NON_CHAT)
+            }
+            if ids:
+                self._available_models = ids
+                self._models_fetched_at = now
+                self._resolved_chain = None          # re-resolve against fresh list
+                return ids
+        except Exception as exc:
+            logger.warning(f"llm_client: could not list Groq models ({exc}) — using configured chain")
+        return self._available_models
+
+    async def resolve_model_chain(self) -> list[str]:
+        """Configured chain filtered to models that actually exist right now,
+        padded with live models when everything configured is decommissioned."""
+        if self._resolved_chain is not None:
+            return self._resolved_chain
+
+        configured = self._configured_chain
+        available = await self._fetch_available_models()
+        if not available:                            # can't verify — trust config
+            return configured
+
+        chain = [m for m in configured if m in available]
+        dropped = [m for m in configured if m not in available]
+        if dropped:
+            logger.warning(f"llm_client: dropping decommissioned model(s) {dropped}")
+
+        if len(chain) < 2:
+            # auto-pick fallbacks from what Groq actually serves, small-first
+            def _pref(mid: str) -> int:
+                m = mid.lower()
+                if "gpt-oss-20b" in m: return 0
+                if "gpt-oss" in m:     return 1
+                if "qwen" in m:        return 2
+                if "llama" in m:       return 3
+                return 4
+            for mid in sorted(available, key=_pref):
+                if mid not in chain:
+                    chain.append(mid)
+                if len(chain) >= 3:
+                    break
+            logger.info(f"llm_client: auto-resolved model chain → {chain}")
+
+        self._resolved_chain = chain
+        return chain
 
     def _window(self, model: str) -> _TPMWindow:
         return self._windows.setdefault(model, _TPMWindow())
@@ -267,7 +336,8 @@ class LLMClient:
             )
             return None
 
-        for i, model in enumerate(self.model_chain):
+        chain = await self.resolve_model_chain()
+        for i, model in enumerate(chain):
             ok = await self._window(model).reserve(
                 prompt_tokens + max_out,
                 settings.groq_tpm_limit,
@@ -306,7 +376,7 @@ class LLMClient:
             return parsed
 
         self.stats.failures += 1
-        logger.error(f"[{label}] all models failed: {self.model_chain}")
+        logger.error(f"[{label}] all models failed: {chain}")
         return None
 
     async def _request(

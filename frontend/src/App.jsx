@@ -35,18 +35,22 @@ const TOAST_STYLE = {
   },
 }
 
-/* ── Static data ───────────────────────────────────────────────── */
-const LOGOS = [
+/* ── Logo Ticker ───────────────────────────────────────────────── */
+/* Names come live from /api/stats (biggest upcoming shows in the DB);
+   the static list only renders while stats load or if the API is down. */
+const FALLBACK_LOGOS = [
   'Dreamforce','Medica','Gartner Symposium','BSMA','CES',
   'Money20/20','Web Summit','AWS re:Invent','HIMSS','Salesforce World Tour',
 ]
 
-/* ── Logo Ticker ───────────────────────────────────────────────── */
-function LogoTicker() {
+function LogoTicker({ stats }) {
+  const names = stats?.top_event_names?.length >= 6
+    ? stats.top_event_names
+    : FALLBACK_LOGOS
   return (
     <div className="ld-logos" aria-label="Events we cover">
       <div className="ld-logos-inner" aria-hidden="true">
-        {[...LOGOS, ...LOGOS].map((name, i) => (
+        {[...names, ...names].map((name, i) => (
           <span key={i} className="ld-logos-item">
             {name}
             <span className="ld-logos-dot" />
@@ -319,7 +323,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
-        {loading && <LoadingOverlay profile={loadingProfile} />}
+        {loading && <LoadingOverlay profile={loadingProfile} stats={stats} />}
         <ShowRankingPage
           events={allDisplay}
           allRelevantEvents={allRelevantEvents}
@@ -396,10 +400,10 @@ export default function App() {
       />
 
       <LandingNav onScrollToForm={scrollToForm} />
-      <HeroSection onScrollToForm={scrollToForm} />
-      <LogoTicker />
-      <StatsRow />
-      <HowItWorks />
+      <HeroSection onScrollToForm={scrollToForm} stats={stats} />
+      <LogoTicker stats={stats} />
+      <StatsRow stats={stats} />
+      <HowItWorks stats={stats} />
       <PathCards onScrollToForm={scrollToForm} />
       <SocialProof />
       <FormSection
@@ -410,7 +414,7 @@ export default function App() {
       />
       <FooterCTA onScrollToForm={scrollToForm} />
       <LandingFooter />
-      {loading && <LoadingOverlay profile={loadingProfile} />}
+      {loading && <LoadingOverlay profile={loadingProfile} stats={stats} />}
     </div>
   )
 }
