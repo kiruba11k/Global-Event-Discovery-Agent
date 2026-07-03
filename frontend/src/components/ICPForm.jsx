@@ -16,6 +16,7 @@
 */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import toast from 'react-hot-toast'
 import { api } from '../api/client'
 import '../icp-form.css'
 
@@ -449,7 +450,17 @@ export default function ICPForm({
   }
 
   const handleSubmit = () => {
-    if (!validate()) return
+    if (!validate()) {
+      // The submit button sits below a long form — without this, a failed
+      // validation is invisible and the click looks like a dead button.
+      toast.error('Almost there — a couple of fields need attention.')
+      requestAnimationFrame(() => {
+        document
+          .querySelector('.icp-input--error, .icp-error')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      return
+    }
     const { industries, personas } = parseBuyerText(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
     const profile = {
