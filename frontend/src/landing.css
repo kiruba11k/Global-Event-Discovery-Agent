@@ -1445,3 +1445,102 @@
 @media (prefers-reduced-motion: reduce) {
   .ef-scene:hover .ef-scene3d { transform: rotateX(13deg) rotateY(-13deg); }
 }
+
+/* ── real 3D parcel boxes (reference: soft-3D e-commerce cubes) ── */
+.ef-chip { transform: translateZ(6px) !important; width: 92px; height: 58px; }
+.ef-box {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+}
+/* faces share the stage timeline via color keyframes */
+.ef-box-front, .ef-box-side, .ef-box-top {
+  position: absolute;
+  animation-duration: var(--cycle);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: var(--d);
+}
+.ef-box-front {
+  inset: 0;
+  transform: translateZ(23px);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.ef-box-side {
+  width: 46px; height: 58px;
+  top: 0; left: 23px;
+  transform: rotateY(90deg) translateZ(46px);
+  border-radius: 0 7px 7px 0;
+  animation-name: ef-face-side;
+}
+.ef-box-top {
+  width: 92px; height: 46px;
+  top: 6px; left: 0;
+  transform: rotateX(90deg) translateZ(29px);
+  border-radius: 7px;
+  animation-name: ef-face-top;
+  /* taped flaps like a parcel */
+  background-image:
+    linear-gradient(180deg, transparent 46%, rgba(30,43,51,.22) 46%, rgba(30,43,51,.22) 54%, transparent 54%),
+    linear-gradient(90deg, transparent 44%, rgba(255,255,255,.5) 44%, rgba(255,255,255,.5) 56%, transparent 56%);
+}
+@keyframes ef-face-top {
+  0%    { background-color: #F0E7D2; }
+  29%   { background-color: #F0E7D2; }
+  33.5% { background-color: #D6EFE8; }
+  51.5% { background-color: #D6EFE8; }
+  56%   { background-color: #FBDDD2; }
+  73.5% { background-color: #FBDDD2; }
+  78%   { background-color: #3A4A54; }
+  100%  { background-color: #3A4A54; }
+}
+@keyframes ef-face-side {
+  0%    { background-color: #CDBFA0; }
+  29%   { background-color: #CDBFA0; }
+  33.5% { background-color: #8FC7BB; }
+  51.5% { background-color: #8FC7BB; }
+  56%   { background-color: #E7A28D; }
+  73.5% { background-color: #E7A28D; }
+  78%   { background-color: #141F26; }
+  100%  { background-color: #141F26; }
+}
+/* stage cards now live on the front face — fill it fully */
+.ef-box-front .ef-card { inset: 0; border-radius: 0; box-shadow: none; border-width: 0 0 0 0; }
+.ef-box-front .ef-card-raw   { border: none; background: #EDE4CE; }
+.ef-box-front .ef-card-scan  { border: none; background: #FDFDFB; box-shadow: inset 0 0 0 3px var(--c-find); }
+.ef-box-front .ef-card-match { border: none; background: #FDFDFB; box-shadow: inset 0 0 0 3px var(--c-meet); }
+.ef-box-front .ef-card-done  { border: none; }
+/* contact shadow under the cube */
+.ef-box-shadow {
+  position: absolute;
+  left: -8px; right: -8px; bottom: -10px;
+  height: 12px;
+  background: radial-gradient(ellipse at center, rgba(30,43,51,.4), transparent 68%);
+  transform: translateZ(-20px);
+  filter: blur(3px);
+}
+
+/* ── belt as a raised platform (thicker, cream, soft) ── */
+.ef-belt { height: 40px; }
+.ef-belt-surface {
+  background:
+    repeating-linear-gradient(90deg, rgba(30,43,51,.08) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #F2EADA 0%, #DED2BA 100%);
+  background-size: 44px 100%, 100% 100%;
+  border-radius: 12px;
+  box-shadow: 0 16px 22px -10px rgba(30,43,51,.35), inset 0 -8px 10px rgba(30,43,51,.12);
+}
+.ef-belt::before {
+  height: 34px;
+  background:
+    repeating-linear-gradient(90deg, rgba(30,43,51,.10) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #FAF4E8, #EFE6D2);
+  background-size: 44px 100%, 100% 100%;
+  border-radius: 12px;
+  border-color: var(--ink);
+}
+.ef-wheel {
+  background: #CBBC9E;
+  bottom: -12px;
+}
+.ef-wheel::after { border-color: rgba(30,43,51,.4); }

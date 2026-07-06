@@ -38,25 +38,32 @@ function Chip({ index }) {
   const style = { '--d': `${index * SPACING}s`, '--cycle': `${CYCLE}s` }
   return (
     <div className="ef-chip" style={style}>
-      <div className="ef-card ef-card-raw ef-stage0">
-        <span className="ef-card-tag">raw event</span>
-        <span className="ef-card-line w70" />
-        <span className="ef-card-line w45" />
-      </div>
-      <div className="ef-card ef-card-scan ef-stage1">
-        <span className="ef-card-tag">icp fit</span>
-        <span className="ef-score-bar"><span className="ef-score-fill" /></span>
-        <span className="ef-score-num">87%</span>
-      </div>
-      <div className="ef-card ef-card-match ef-stage2">
-        <span className="ef-card-tag">meetings</span>
-        <span className="ef-avatars"><i /><i /><i /></span>
-        <span className="ef-tick">✓</span>
-      </div>
-      <div className="ef-card ef-card-done ef-stage3">
-        <span className="ef-ribbon" />
-        <span className="ef-grade">A+</span>
-        <span className="ef-card-tag dark">show + brief</span>
+      <div className="ef-box">
+        <div className="ef-box-top" />
+        <div className="ef-box-side" />
+        <div className="ef-box-front">
+          <div className="ef-card ef-card-raw ef-stage0">
+            <span className="ef-card-tag">raw event</span>
+            <span className="ef-card-line w70" />
+            <span className="ef-card-line w45" />
+          </div>
+          <div className="ef-card ef-card-scan ef-stage1">
+            <span className="ef-card-tag">icp fit</span>
+            <span className="ef-score-bar"><span className="ef-score-fill" /></span>
+            <span className="ef-score-num">87%</span>
+          </div>
+          <div className="ef-card ef-card-match ef-stage2">
+            <span className="ef-card-tag">meetings</span>
+            <span className="ef-avatars"><i /><i /><i /></span>
+            <span className="ef-tick">✓</span>
+          </div>
+          <div className="ef-card ef-card-done ef-stage3">
+            <span className="ef-ribbon" />
+            <span className="ef-grade">A+</span>
+            <span className="ef-card-tag dark">show + brief</span>
+          </div>
+        </div>
+        <div className="ef-box-shadow" />
       </div>
     </div>
   )
