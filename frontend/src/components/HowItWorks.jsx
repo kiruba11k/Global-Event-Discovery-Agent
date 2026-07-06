@@ -143,9 +143,9 @@ const buildPillars = (events) => [
     id: 'find',
     icon: MapPin,
     chip: 'Step 01 · Find',
-    title: 'Find the tradeshows where your ICP actually hangs out.',
+    title: 'Find the tradeshows where your ICP actually hangs out — free.',
     desc: 'Stop picking shows off a competitor\'s booth list. We scan ' + events + ' B2B events and rank every one by how many of your ideal customers will be in the room — with buyer counts, costs and dates.',
-    points: ['ICP-density score per show', 'Cost & travel forecast', 'Ranked shortlist in 90 seconds'],
+    points: ['ICP-density score per show', 'Why each show fits — explained', 'Ranked shortlist in 90 seconds'],
     Diagram: FindDiagram,
   },
   {
@@ -153,8 +153,8 @@ const buildPillars = (events) => [
     icon: CalendarCheck,
     chip: 'Step 02 · Meet',
     title: 'Get meetings with the right ICPs attending — before you fly.',
-    desc: 'The show starts weeks before the doors open. We identify the exact attendees who match your ICP and get your calendar booked, so day one starts with meetings, not badge-scanning.',
-    points: ['Attendee-level ICP matching', 'Pre-show outreach & booking', 'Walk in with a full calendar'],
+    desc: 'The show starts weeks before the doors open. Once you engage us, our team identifies the exact attendees who match your ICP and books your calendar — so day one starts with meetings, not badge-scanning.',
+    points: ['Attendee-level ICP matching', 'Outreach & booking done for you', 'Walk in with a full calendar'],
     Diagram: MeetDiagram,
   },
   {
@@ -162,8 +162,8 @@ const buildPillars = (events) => [
     icon: MessageSquareText,
     chip: 'Step 03 · Talk',
     title: 'Walk into every meeting with tailored talking points.',
-    desc: 'No two buyers get the same pitch. For every booked meeting we hand you a brief: what they care about right now, why your offer fits, and the opener that earns the second meeting.',
-    points: ['Per-meeting conversation brief', 'Built from their news & signals', 'Openers, objections, next steps'],
+    desc: 'No two buyers get the same pitch. For every meeting we book, our team hands you a brief: what they care about right now, why your offer fits, and the opener that earns the second meeting.',
+    points: ['Per-meeting conversation brief', 'Built from their news & signals', 'Delivered by our team, per meeting'],
     Diagram: TalkDiagram,
   },
 ]
@@ -183,6 +183,11 @@ export default function HowItWorks({ stats }) {
             Three steps between your ICP description and a tradeshow calendar full of
             qualified meetings.
           </p>
+        </div>
+
+        <div className="hiw-service-note">
+          <strong>Step 01 is free and instant.</strong> Steps 02–03 are done for you
+          by our team — see your ranked list first, then get in touch.
         </div>
 
         {PILLARS.map((p, i) => {

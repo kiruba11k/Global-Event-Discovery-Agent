@@ -117,8 +117,8 @@ export default function PipelineMachine({ stats }) {
             {events} events go in. <em>Six shows come out.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
-            Every search runs the full factory — scan the global event universe,
-            match the attendees to your ICP, and brief you for each meeting.
+            The ranking — and why each show fits — is free and instant. The meetings
+            and per-meeting talking points are the part our team does for you.
           </p>
         </div>
 
@@ -138,8 +138,8 @@ export default function PipelineMachine({ stats }) {
 
           {/* machines (behind the chips, over the belt) */}
           <Machine i={0} kind="scan"  title="Scan"  sub="ICP-density scored" />
-          <Machine i={1} kind="match" title="Match" sub="attendees booked" />
-          <Machine i={2} kind="brief" title="Brief" sub="talking points added" />
+          <Machine i={1} kind="match" title="Match" sub="meetings booked by us" />
+          <Machine i={2} kind="brief" title="Brief" sub="briefed by our team" />
 
           {/* conveyor */}
           <div className="ef-belt">

@@ -43,9 +43,9 @@ export default function HeroSection({ onScrollToForm, stats }) {
           </motion.h1>
 
           <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">
-            Describe your ideal customer once. We rank {events} tradeshows by where they
-            actually hang out, line up meetings with the right attendees, and hand you
-            tailored talking points for each one.
+            Describe your ideal customer once and we'll rank {events} tradeshows by
+            where they actually hang out — free, with the reasoning behind every pick.
+            Then our team gets you the meetings and preps your talking points.
           </motion.p>
 
           <motion.div className="ld-hero-pillars" variants={rise} custom={3} initial="hidden" animate="show" aria-label="What you get">

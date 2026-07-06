@@ -20,7 +20,8 @@ export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
             Six inputs, 90 seconds. We'll rank the tradeshows where your ICP will
-            actually be — the meetings and talking points come next.
+            actually be — and show you exactly why each one fits. The meetings and
+            talking points? That's what our team delivers when you get in touch.
           </p>
         </motion.div>
 
