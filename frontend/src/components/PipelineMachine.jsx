@@ -130,6 +130,7 @@ export default function PipelineMachine({ stats }) {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
+          <div className="ef-scene3d">
           {/* intake hopper */}
           <div className="ef-hopper">
             <div className="ef-hopper-mouth" />
@@ -159,6 +160,7 @@ export default function PipelineMachine({ stats }) {
             </div>
             <div className="ef-tray-box" />
             <span className="ef-tray-label">your top 6</span>
+          </div>
           </div>
         </motion.div>
       </div>

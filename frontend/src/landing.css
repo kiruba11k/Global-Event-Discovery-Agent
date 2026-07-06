@@ -1328,3 +1328,120 @@
   padding: 12px 22px;
 }
 .hiw-service-note strong { color: var(--ink); }
+
+/* ── 3D-realistic scene: camera tilt, extrusions, floor ── */
+.ef-scene {
+  perspective: 1500px;
+  perspective-origin: 50% 30%;
+}
+.ef-scene3d {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(13deg) rotateY(-13deg);
+  transition: transform .8s var(--ease-out);
+}
+.ef-scene:hover .ef-scene3d {
+  transform: rotateX(9deg) rotateY(-7deg);
+}
+.ef-scene3d > * { transform-style: preserve-3d; }
+
+/* floor: soft contact shadow under the whole line */
+.ef-scene3d::before {
+  content: '';
+  position: absolute;
+  left: -2%; right: -2%;
+  bottom: 26px;
+  height: 90px;
+  background: radial-gradient(ellipse 60% 100% at 50% 40%, rgba(30,43,51,.20), transparent 70%);
+  transform: rotateX(78deg);
+  transform-origin: bottom;
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+/* machines: extruded right-side face + roof + contact shadow */
+.ef-machine { transform-style: preserve-3d; }
+.ef-machine::after {              /* side face */
+  content: '';
+  position: absolute;
+  top: 26px;                       /* below the duct */
+  right: 0;
+  width: 30px;
+  height: 128px;
+  border-radius: 0 16px 6px 0;
+  transform: rotateY(90deg) translateZ(0px);
+  transform-origin: right center;
+  filter: brightness(.62) saturate(1.1);
+}
+.ef-machine-scan::after  { background: linear-gradient(180deg, #0E7C6B, #085D50); }
+.ef-machine-match::after { background: linear-gradient(180deg, #E85D3D, #BC3F23); }
+.ef-machine-brief::after { background: linear-gradient(180deg, #D99000, #A96F00); }
+.ef-machine::before {             /* roof face */
+  content: '';
+  position: absolute;
+  top: 26px;
+  left: 0; right: 0;
+  height: 30px;
+  border-radius: 16px 16px 0 0;
+  transform: rotateX(-90deg);
+  transform-origin: center top;
+  filter: brightness(1.22);
+  z-index: 1;
+}
+.ef-machine-scan::before  { background: #35B39C; }
+.ef-machine-match::before { background: #FF8A66; }
+.ef-machine-brief::before { background: #F7BC3D; }
+.ef-body { position: relative; z-index: 2; }
+.ef-legs i { box-shadow: 0 16px 10px -6px rgba(30,43,51,.35); }
+
+/* belt: give the slab a running top surface + end caps */
+.ef-belt { transform-style: preserve-3d; }
+.ef-belt::before {                /* top running surface */
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 30px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 22px, transparent 22px 44px),
+    linear-gradient(180deg, #5C6B75, #4C5A63);
+  background-size: 44px 100%, 100% 100%;
+  border: 2px solid var(--ink);
+  border-bottom: none;
+  border-radius: 999px;
+  transform: rotateX(72deg);
+  transform-origin: center top;
+  animation: ef-belt-run 1.1s linear infinite;
+}
+.ef-belt-surface { transform: translateZ(-2px); }
+
+/* chips stand up on the belt, facing the camera */
+.ef-chip {
+  transform: translateZ(26px) rotateY(9deg);
+  transform-style: preserve-3d;
+}
+.ef-chip .ef-card {
+  box-shadow:
+    0 10px 16px -6px rgba(30,43,51,.5),
+    -14px 22px 18px -10px rgba(30,43,51,.28);
+}
+
+/* hopper + tray get depth too */
+.ef-hopper-mouth {
+  box-shadow: inset 0 -8px 12px rgba(0,0,0,.25), inset 0 4px 6px rgba(255,255,255,.18),
+    14px 18px 22px -10px rgba(30,43,51,.35);
+}
+.ef-tray { transform-style: preserve-3d; }
+.ef-tray-box {
+  box-shadow: inset 0 6px 8px rgba(0,0,0,.22), 12px 16px 20px -10px rgba(30,43,51,.4);
+}
+
+/* keep labels readable: counter-rotate them off the tilted scene */
+.ef-machine-label,
+.ef-hopper-label,
+.ef-tray-label {
+  transform-style: flat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ef-scene:hover .ef-scene3d { transform: rotateX(13deg) rotateY(-13deg); }
+}
