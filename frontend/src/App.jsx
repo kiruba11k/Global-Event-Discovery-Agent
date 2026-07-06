@@ -70,7 +70,7 @@ function PathCards({ onScrollToForm }) {
       chip: 'find',
       tag: 'Attending · hunting meetings',
       h3: 'Sales, BD, founders — book your ICP before you fly out.',
-      desc: 'Walk in with a calendar, not a hope. We tell you how many of your buyers attend each show, book the meetings, and brief you for each one.',
+      desc: 'Walk in with a calendar, not a hope. We show you how many of your buyers attend each show and why it fits — then our team books the meetings and briefs you for each one.',
       cta: 'Find my shows',
     },
     {

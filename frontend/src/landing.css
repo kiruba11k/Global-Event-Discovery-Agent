@@ -1313,3 +1313,18 @@
   92%  { transform: translateY(0) rotate(0); opacity: 1; }
   100% { transform: translateY(0) rotate(0); opacity: 0; }
 }
+
+/* service-boundary note under the how-it-works header */
+.hiw-service-note {
+  max-width: 620px;
+  margin: -40px auto 30px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  background: var(--c-talk-soft);
+  border: 1px solid var(--c-talk);
+  border-radius: var(--r-md);
+  padding: 12px 22px;
+}
+.hiw-service-note strong { color: var(--ink); }
