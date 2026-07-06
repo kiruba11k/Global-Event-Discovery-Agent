@@ -1,42 +1,107 @@
 /*
-  PipelineMachine.jsx — 3D skeuomorphic pipeline: an isometric conveyor
-  that turns the raw event universe into a ranked shortlist. Pure CSS 3D
-  (perspective + preserve-3d slabs) with framer-motion driving the event
-  chips along the belt. Live figures come from /api/stats.
+  PipelineMachine.jsx — "The event factory": a side-view production line.
+  Raw event tickets ride a conveyor through three working machines
+  (SCAN → MATCH → BRIEF), visibly transforming at each stage, and drop
+  out as a packaged, graded show card. Pure CSS machines + framer-motion
+  chips; live figures come from /api/stats.
+
+  Timing model: each chip travels the belt in CYCLE seconds (linear),
+  entering at -8% and leaving at 104%. Machines sit at 27% / 52% / 77%,
+  so a chip is "inside" machine i at travel fraction Fi. Chips are
+  staggered CYCLE/3 apart, which means every machine processes a chip
+  each CYCLE/3 seconds — the pistons/beams loop on that period, phase-
+  shifted so they fire exactly when a chip is underneath.
 */
 import { motion } from 'framer-motion'
-import { Radar, UserCheck, MessageSquareText, Trophy } from 'lucide-react'
 import { fmtCountPlus } from '../lib/format'
 import '../landing.css'
 
-const STATIONS = [
-  { key: 'scan',  icon: Radar,             title: 'Scan',  sub: 'events matched to your ICP',   c: 'var(--c-find)', soft: 'var(--c-find-soft)' },
-  { key: 'match', icon: UserCheck,         title: 'Match', sub: 'attendees identified & booked', c: 'var(--c-meet)', soft: 'var(--c-meet-soft)' },
-  { key: 'brief', icon: MessageSquareText, title: 'Brief', sub: 'talking points per meeting',    c: 'var(--c-talk)', soft: 'var(--c-talk-soft)' },
-  { key: 'win',   icon: Trophy,            title: 'Win',   sub: 'your ranked shortlist',         c: 'var(--ink)',    soft: 'var(--surface)' },
-]
+const CYCLE = 9                       // seconds for one chip to cross
+const N_CHIPS = 3
+const SPACING = CYCLE / N_CHIPS       // a chip hits each machine this often
+const X_ENTER = -8, X_EXIT = 104      // belt travel in %
+const MACHINES = [27, 52, 77]         // machine center positions in %
 
-/* one chip travelling the belt — colour shifts as it passes stations */
-function Chip({ delay, label }) {
+const frac = (x) => (x - X_ENTER) / (X_EXIT - X_ENTER)
+const F = MACHINES.map(frac)          // travel fraction at each machine
+const E = 0.025                       // crossfade width around a machine
+
+/* stamp/beam should hit mid-loop (at 50% of its own animation) */
+const machineDelay = (i) =>
+  -(((SPACING * 0.5) - ((F[i] * CYCLE) % SPACING)) % SPACING)
+
+/* ── the travelling chip: 4 stacked stages, CSS-timeline driven ──
+   framer-motion left-keyframe loops proved unreliable across repeats,
+   so travel + stage crossfades are plain CSS animations sharing one
+   duration/delay — they can never drift apart or stall. */
+function Chip({ index }) {
+  const style = { '--d': `${index * SPACING}s`, '--cycle': `${CYCLE}s` }
   return (
-    <motion.div
-      className="pm-chip"
-      initial={false}
-      animate={{
-        left: ['-6%', '22%', '22%', '50%', '50%', '78%', '78%', '106%'],
-        backgroundColor: ['#8A959C', '#0E7C6B', '#0E7C6B', '#E85D3D', '#E85D3D', '#D99000', '#D99000', '#1E2B33'],
-        scale: [0.85, 1, 1.18, 1, 1.18, 1, 1.18, 0.9],
-      }}
-      transition={{
-        duration: 9,
-        times: [0, 0.2, 0.26, 0.45, 0.51, 0.7, 0.76, 1],
-        repeat: Infinity,
-        delay,
-        ease: 'linear',
-      }}
-    >
-      {label}
-    </motion.div>
+    <div className="ef-chip" style={style}>
+      <div className="ef-card ef-card-raw ef-stage0">
+        <span className="ef-card-tag">raw event</span>
+        <span className="ef-card-line w70" />
+        <span className="ef-card-line w45" />
+      </div>
+      <div className="ef-card ef-card-scan ef-stage1">
+        <span className="ef-card-tag">icp fit</span>
+        <span className="ef-score-bar"><span className="ef-score-fill" /></span>
+        <span className="ef-score-num">87%</span>
+      </div>
+      <div className="ef-card ef-card-match ef-stage2">
+        <span className="ef-card-tag">meetings</span>
+        <span className="ef-avatars"><i /><i /><i /></span>
+        <span className="ef-tick">✓</span>
+      </div>
+      <div className="ef-card ef-card-done ef-stage3">
+        <span className="ef-ribbon" />
+        <span className="ef-grade">A+</span>
+        <span className="ef-card-tag dark">show + brief</span>
+      </div>
+    </div>
+  )
+}
+
+/* ── a working machine: housing, window, moving part, LEDs, steam ── */
+function Machine({ i, kind, title, sub }) {
+  const delay = machineDelay(i)
+  return (
+    <div className={`ef-machine ef-machine-${kind}`} style={{ left: `${MACHINES[i]}%` }}>
+      <div className="ef-steam" aria-hidden="true">
+        <i style={{ animationDelay: `${delay}s` }} />
+        <i style={{ animationDelay: `${delay + 0.5}s` }} />
+        <i style={{ animationDelay: `${delay + 1}s` }} />
+      </div>
+      <div className="ef-duct" />
+      <div className="ef-body">
+        <div className="ef-leds">
+          <i /><i style={{ animationDelay: '.4s' }} /><i style={{ animationDelay: '.8s' }} />
+        </div>
+        <div className="ef-window">
+          {kind === 'scan' && (
+            <div className="ef-beam" style={{ animationDuration: `${SPACING}s`, animationDelay: `${delay}s` }} />
+          )}
+          {kind === 'match' && (
+            <div className="ef-piston" style={{ animationDuration: `${SPACING}s`, animationDelay: `${delay}s` }}>
+              <div className="ef-piston-head">✓</div>
+            </div>
+          )}
+          {kind === 'brief' && (
+            <div className="ef-printer" style={{ animationDuration: `${SPACING}s`, animationDelay: `${delay}s` }}>
+              <div className="ef-paper" />
+            </div>
+          )}
+        </div>
+        <div className="ef-gauge">
+          <i style={{ animationDuration: `${SPACING}s`, animationDelay: `${delay}s` }} />
+        </div>
+      </div>
+      <div className="ef-legs"><i /><i /></div>
+      <div className="ef-machine-label">
+        <span className="ef-machine-title">{`0${i + 1}`} {title}</span>
+        <span className="ef-machine-sub">{sub}</span>
+      </div>
+    </div>
   )
 }
 
@@ -52,57 +117,48 @@ export default function PipelineMachine({ stats }) {
             {events} events go in. <em>Six shows come out.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
-            Every search runs the full pipeline — scan the global event universe,
+            Every search runs the full factory — scan the global event universe,
             match the attendees to your ICP, and brief you for each meeting.
           </p>
         </div>
 
         <motion.div
-          className="pm-stage"
+          className="ef-scene"
           aria-hidden="true"
-          initial={{ opacity: 0, y: 50 }}
+          initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="pm-plane">
-            {/* conveyor track */}
-            <div className="pm-track">
-              <div className="pm-track-dashes" />
-              <Chip delay={0}   label="expo" />
-              <Chip delay={3}   label="summit" />
-              <Chip delay={6}   label="fair" />
-            </div>
+          {/* intake hopper */}
+          <div className="ef-hopper">
+            <div className="ef-hopper-mouth" />
+            <span className="ef-hopper-label">{events} events</span>
+          </div>
 
-            {/* stations as extruded slabs */}
-            {STATIONS.map((s, i) => {
-              const Icon = s.icon
-              return (
-                <motion.div
-                  key={s.key}
-                  className={`pm-station pm-station-${i}`}
-                  initial={{ opacity: 0, y: 40 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-60px' }}
-                  transition={{ delay: 0.15 + i * 0.15, duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
-                >
-                  <div className="pm-slab" style={{ '--slab-c': s.c, '--slab-soft': s.soft }}>
-                    <div className="pm-slab-top">
-                      <Icon size={22} strokeWidth={1.8} style={{ color: s.c }} />
-                    </div>
-                    <div className="pm-slab-front" />
-                    <div className="pm-slab-side" />
-                    <div className="pm-scanner" />
-                  </div>
-                  <div className="pm-station-label">
-                    <span className="pm-station-title" style={{ color: s.c === 'var(--ink)' ? 'var(--ink)' : s.c }}>
-                      {String(i + 1).padStart(2, '0')} {s.title}
-                    </span>
-                    <span className="pm-station-sub">{s.sub}</span>
-                  </div>
-                </motion.div>
-              )
-            })}
+          {/* machines (behind the chips, over the belt) */}
+          <Machine i={0} kind="scan"  title="Scan"  sub="ICP-density scored" />
+          <Machine i={1} kind="match" title="Match" sub="attendees booked" />
+          <Machine i={2} kind="brief" title="Brief" sub="talking points added" />
+
+          {/* conveyor */}
+          <div className="ef-belt">
+            <div className="ef-belt-surface" />
+            {Array.from({ length: N_CHIPS }, (_, i) => <Chip key={i} index={i} />)}
+            <div className="ef-wheel" style={{ left: '1.5%' }} />
+            <div className="ef-wheel" style={{ left: '25%' }} />
+            <div className="ef-wheel" style={{ left: '50%' }} />
+            <div className="ef-wheel" style={{ left: '74%' }} />
+            <div className="ef-wheel" style={{ right: '1.5%' }} />
+          </div>
+
+          {/* output tray */}
+          <div className="ef-tray">
+            <div className="ef-tray-card" style={{ '--period': `${SPACING}s` }}>
+              <span className="ef-grade">A+</span>
+            </div>
+            <div className="ef-tray-box" />
+            <span className="ef-tray-label">your top 6</span>
           </div>
         </motion.div>
       </div>
