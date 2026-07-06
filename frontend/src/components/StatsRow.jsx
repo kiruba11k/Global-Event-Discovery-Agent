@@ -10,9 +10,9 @@ import '../landing.css'
 export default function StatsRow({ stats }) {
   const totalEvents = stats?.total_events_in_db > 0 ? stats.total_events_in_db : null
   const countries   = stats?.countries_covered  > 0 ? stats.countries_covered  : null
-  const sources     = stats?.events_by_source
-    ? Object.keys(stats.events_by_source).length
-    : null
+  // live_sources is normalized server-side (connector families, not raw
+  // scraper-run labels) — never count events_by_source keys, they're noisy
+  const sources     = stats?.live_sources > 0 ? stats.live_sources : null
 
   const CELLS = [
     { end: totalEvents ?? 10000, suffix: totalEvents ? '' : '+', label: 'B2B tradeshows indexed', live: !!totalEvents },
