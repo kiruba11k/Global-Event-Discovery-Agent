@@ -1117,15 +1117,20 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
     # Live homepage figures — distinct countries and the biggest upcoming
     # shows by attendee count (feeds the landing ticker; nothing hardcoded).
+    # Raw country values are scraper dialects (codes, aliases, "City, Country",
+    # junk) — normalise before counting or the number is fiction.
     countries_covered = 0
+    live_sources = 0
     top_event_names: list = []
     try:
-        from sqlalchemy import select, func, distinct
+        from sqlalchemy import select, distinct
         from db.models import EventORM
-        countries_covered = (await db.execute(
-            select(func.count(distinct(EventORM.country)))
-            .where(EventORM.country != "")
-        )).scalar() or 0
+        from ingestion.geo_normaliser import count_countries, count_source_families
+        raw_countries = (await db.execute(
+            select(distinct(EventORM.country)).where(EventORM.country != "")
+        )).scalars().all()
+        countries_covered = count_countries(raw_countries)
+        live_sources = count_source_families(by_source.keys())
         today = datetime.utcnow().strftime("%Y-%m-%d")
         rows = (await db.execute(
             select(EventORM.name)
@@ -1141,6 +1146,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     return {
         "total_events_in_db": total,
         "countries_covered":  countries_covered,
+        "live_sources":       live_sources,
         "top_event_names":    top_event_names,
         "events_by_source":   by_source,
         "faiss_vectors":      index_size,
