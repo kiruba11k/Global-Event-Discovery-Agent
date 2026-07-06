@@ -78,10 +78,10 @@ export default function HeroSection({ onScrollToForm, stats }) {
           transition={{ delay: 0.25, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
           <Suspense fallback={<div className="hero-globe" />}>
-            <HeroGlobe />
+            <HeroGlobe locations={stats?.top_locations} />
           </Suspense>
           <div className="ld-hero-globe-caption" aria-hidden="true">
-            Live map of the global tradeshow circuit
+            Live map — real upcoming shows from our index
           </div>
         </motion.div>
       </div>

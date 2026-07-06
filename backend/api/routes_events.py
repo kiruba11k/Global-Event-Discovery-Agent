@@ -1122,6 +1122,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     countries_covered = 0
     live_sources = 0
     top_event_names: list = []
+    top_locations: list = []
     try:
         from sqlalchemy import select, distinct
         from db.models import EventORM
@@ -1132,13 +1133,26 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         countries_covered = count_countries(raw_countries)
         live_sources = count_source_families(by_source.keys())
         today = datetime.utcnow().strftime("%Y-%m-%d")
-        rows = (await db.execute(
-            select(EventORM.name)
+        loc_rows = (await db.execute(
+            select(EventORM.name, EventORM.city, EventORM.country)
             .where(EventORM.start_date >= today, EventORM.name != "")
             .order_by(EventORM.est_attendees.desc())
-            .limit(12)
-        )).scalars().all()
-        top_event_names = list(dict.fromkeys(rows))
+            .limit(40)
+        )).all()
+        top_event_names = list(dict.fromkeys(n for n, _, _ in loc_rows))[:12]
+        # biggest upcoming shows with a usable location — feeds the hero
+        # globe labels (city + normalized country, straight from the DB)
+        from ingestion.geo_normaliser import normalise_country
+        seen_cities: set = set()
+        for name, city, country in loc_rows:
+            c_norm = normalise_country(country)
+            city = (city or "").strip()
+            if not city or not c_norm or city.lower() in seen_cities:
+                continue
+            seen_cities.add(city.lower())
+            top_locations.append({"name": name, "city": city, "country": c_norm})
+            if len(top_locations) >= 10:
+                break
     except Exception as exc:
         logger.debug(f"stats extras failed: {exc}")
 
@@ -1148,6 +1162,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "countries_covered":  countries_covered,
         "live_sources":       live_sources,
         "top_event_names":    top_event_names,
+        "top_locations":      top_locations,
         "events_by_source":   by_source,
         "faiss_vectors":      index_size,
         "groq_enabled":       bool(settings.groq_api_key),
