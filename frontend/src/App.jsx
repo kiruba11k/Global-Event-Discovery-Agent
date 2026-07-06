@@ -19,6 +19,7 @@ import HowItWorks        from './components/HowItWorks'
 import StatsRow          from './components/StatsRow'
 import SocialProof       from './components/SocialProof'
 import FormSection       from './components/FormSection'
+import PipelineMachine   from './components/PipelineMachine'
 import { api }           from './api/client'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
@@ -404,6 +405,7 @@ export default function App() {
       <LogoTicker stats={stats} />
       <StatsRow stats={stats} />
       <HowItWorks stats={stats} />
+      <PipelineMachine stats={stats} />
       <PathCards onScrollToForm={scrollToForm} />
       <SocialProof />
       <FormSection
