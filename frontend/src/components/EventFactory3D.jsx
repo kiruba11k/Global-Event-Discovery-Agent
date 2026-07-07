@@ -25,9 +25,9 @@
   · Fully transparent canvas — the scene sits directly on the page.
   · The camera always frames the whole line, first to last station.
 */
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { RoundedBox, ContactShadows, Environment, Lightformer } from '@react-three/drei'
+import { RoundedBox, ContactShadows, Environment, Lightformer, Html } from '@react-three/drei'
 import { EffectComposer, Bloom, BrightnessContrast, HueSaturation } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
@@ -127,10 +127,10 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // premium frosted display glass — translucent with a glossy coat
-  color: '#B8BEC9', roughness: 0.15, metalness: 0,
-  transmission: 0.75, thickness: 0.5, ior: 1.5, transparent: true,
-  clearcoat: 1.0, clearcoatRoughness: 0.12, envMapIntensity: 1.0,
+  // high-fidelity glassmorphism panel: deep transmission, slick coat
+  color: '#C4CAD4', roughness: 0.1, metalness: 0,
+  transmission: 0.9, thickness: 1.2, ior: 1.5, transparent: true,
+  clearcoat: 1.0, clearcoatRoughness: 0.1, envMapIntensity: 1.1,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -352,49 +352,38 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
   )
 }
 
-/* ── floating stat card: appears above the active station, then fades ── */
+/* ── floating stat card: a real DOM glass badge (backdrop blur) bound
+      to the station's 3D position; fades in only while processing ── */
 function FloatingStat({ m, stats, accent, y }) {
-  const mesh = useRef()
-  const tex = useMemo(() => {
-    const c = document.createElement('canvas')
-    c.width = 512; c.height = 256
-    const g = c.getContext('2d')
-    g.beginPath(); g.roundRect(24, 24, 464, 208, 36); g.closePath()
-    g.fillStyle = 'rgba(255,255,255,0.62)'; g.fill()
-    g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,0.9)'; g.stroke()
-    // inner glass highlight
-    g.beginPath(); g.roundRect(32, 30, 448, 60, 26); g.closePath()
-    g.fillStyle = 'rgba(255,255,255,0.28)'; g.fill()
-    g.lineWidth = 2; g.strokeStyle = accent + '55'
-    g.beginPath(); g.roundRect(24, 24, 464, 208, 36); g.closePath(); g.stroke()
-    g.textAlign = 'center'
-    g.font = '700 56px "Helvetica Neue", Arial, sans-serif'
-    g.fillStyle = '#3D3A33'
-    g.fillText(stats[0], 256, 104)
-    g.font = '500 34px "Helvetica Neue", Arial, sans-serif'
-    g.fillStyle = accent
-    g.fillText(stats[1], 256, 156)
-    g.beginPath(); g.roundRect(96, 184, 320, 10, 5); g.closePath()
-    g.fillStyle = accent + '35'; g.fill()
-    g.beginPath(); g.roundRect(96, 184, 250, 10, 5); g.closePath()
-    g.fillStyle = accent; g.fill()
-    const t = new THREE.CanvasTexture(c)
-    t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace
-    return t
-  }, [stats, accent])
+  const ref = useRef()
   useFrame(({ clock }) => {
-    if (!mesh.current) return
+    if (!ref.current) return
     const { fade } = screenState(clock.elapsedTime, m)
-    mesh.current.material.opacity = fade * 0.96
-    mesh.current.position.y = y + fade * 0.18 + Math.sin(clock.elapsedTime * 0.9) * 0.02
-    mesh.current.visible = fade > 0.01
+    ref.current.style.opacity = fade
+    ref.current.style.transform = `translateY(${(1 - fade) * 10}px)`
   })
   return (
-    <mesh ref={mesh} visible={false} position={[0, y, 0.4]}>
-      <planeGeometry args={[1.7, 0.85]} />
-      <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false}
-                         depthWrite={false} />
-    </mesh>
+    <group position={[0, y, 0.4]}>
+      <Html center distanceFactor={9} zIndexRange={[10, 0]}
+            style={{ pointerEvents: 'none' }}>
+        <div ref={ref} style={{
+          opacity: 0, textAlign: 'center', whiteSpace: 'nowrap',
+          padding: '10px 22px', borderRadius: 18,
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(12px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.4)',
+          boxShadow: '0 10px 32px rgba(70, 55, 30, 0.14)',
+          fontFamily: '"Helvetica Neue", Arial, sans-serif',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#3D3A33' }}>{stats[0]}</div>
+          <div style={{ fontWeight: 600, fontSize: 11.5, color: accent, marginTop: 2 }}>{stats[1]}</div>
+          <div style={{ height: 4, borderRadius: 2, background: `${accent}40`, marginTop: 7 }}>
+            <div style={{ width: '72%', height: '100%', borderRadius: 2, background: accent }} />
+          </div>
+        </div>
+      </Html>
+    </group>
   )
 }
 
@@ -450,8 +439,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.7)}
-                              clearcoat={0.12} clearcoatRoughness={0.6}
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.85)}
                               sheen={0.7} sheenRoughness={0.45} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
@@ -993,6 +981,17 @@ const CAM_FOV = 32
 const LOOK_AT = new THREE.Vector3(0, 0.45, 0)   // between stations 2 & 3
 function ResponsiveCamera() {
   const { camera, size } = useThree()
+  // normalized cursor (-1..1), tracked on window since the canvas is
+  // pointer-events: none
+  const pointer = useRef({ x: 0, y: 0 })
+  useEffect(() => {
+    const onMove = e => {
+      pointer.current.x = (e.clientX / window.innerWidth) * 2 - 1
+      pointer.current.y = (e.clientY / window.innerHeight) * 2 - 1
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
   useFrame(({ clock }) => {
     if (camera.fov !== CAM_FOV) { camera.fov = CAM_FOV; camera.updateProjectionMatrix() }
     const aspect = size.width / Math.max(size.height, 1)
@@ -1006,10 +1005,12 @@ function ResponsiveCamera() {
     const fitH = 2.55 / Math.tan(vfov / 2)
     const targetZ = Math.max(fitW, fitH, 8.5)
     camera.position.z += (targetZ - camera.position.z) * 0.08
-    // subtle idle drift — a living frame, a pixel or two of motion
+    // idle drift + elegant cursor parallax, damped at 0.05
     const t = clock.elapsedTime
-    camera.position.x = 0.15 + Math.sin(t * 0.23) * 0.045
-    camera.position.y = 2.1 + Math.sin(t * 0.17 + 1.7) * 0.035
+    const targetX = 0.15 + Math.sin(t * 0.23) * 0.045 + pointer.current.x * 0.3
+    const targetY = 2.1 + Math.sin(t * 0.17 + 1.7) * 0.035 - pointer.current.y * 0.18
+    camera.position.x += (targetX - camera.position.x) * 0.05
+    camera.position.y += (targetY - camera.position.y) * 0.05
     camera.lookAt(LOOK_AT)
   })
   return null
