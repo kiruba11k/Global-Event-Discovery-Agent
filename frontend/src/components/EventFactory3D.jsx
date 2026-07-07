@@ -377,9 +377,10 @@ function FloatingStat({ m, stats, accent, y }) {
 
 /* ── station shell: shared chamber + slots below, a per-station head
       silhouette above. `shape` = { hw, hh, hy, r } for the head. ── */
-function Station({ m, accent, accent2, title, lines, shape, hero, stats, children }) {
+function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, walls, children }) {
   const glow = useRef()
   const bounce = useRef()
+  const headMat = useRef()
   const { hw, hh, hy, r = 0.2, sw, sx = 0, bw = 1.66 } = shape
   const top = hy + hh / 2
   useFrame(({ clock }) => {
@@ -389,6 +390,10 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, childre
       glow.current.material.opacity = a * 0.5
     }
     if (bounce.current) bounce.current.intensity = 0.08 + a * 0.5
+    // the colored body itself breathes with light while processing
+    if (headMat.current)
+      headMat.current.emissiveIntensity =
+        0.02 + a * (0.09 + Math.sin(clock.elapsedTime * 2.2) * 0.03)
   })
   return (
     <group position={[MX[m], 0, 0]}>
@@ -405,7 +410,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, childre
       {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
-          <meshPhysicalMaterial {...panelClay} />
+          <meshPhysicalMaterial {...clay(walls, 0.66)} />
         </RoundedBox>
       ))}
       <RoundedBox args={[1.1, 0.44, 0.05]} radius={0.05} position={[0, 0.92, 1.27]}>
@@ -416,9 +421,11 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, childre
       {[-0.65, -0.25].map((ox, i) => (
         <Seam key={i} args={[0.012, 0.2, 0.02]} position={[ox, 1.32, 1.27]} />
       ))}
-      {/* processing head — each station's own silhouette */}
+      {/* processing head — the station's real product color; the body
+          itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial {...powder(0.46)} />
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.55)}
+                              emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
       <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
       {/* anodized accent strip along the head's lower edge */}
@@ -891,14 +898,17 @@ function Conveyor() {
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE,
+    body: '#7290E4', walls: '#D9E1F8',     // dusty azure hardware
     shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH & SCORE', accent: ORANGE, accent2: PURPLE, hero: true,
+    body: '#E77B60', walls: '#F8DCD2',     // warm coral hero
     shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.09, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
   { title: 'BRIEF & DELIVER', accent: GOLD,
+    body: '#DCA94E', walls: '#F5E6C6',     // warm mustard gold
     shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
@@ -940,7 +950,8 @@ function FactoryScene() {
       <Conveyor />
       {STATIONS.map((st, m) => (
         <Station key={st.title} m={m} accent={st.accent} accent2={st.accent2} shape={st.shape}
-                 hero={st.hero} stats={st.stats} title={st.title} lines={st.lines}>
+                 hero={st.hero} stats={st.stats} body={st.body} walls={st.walls}
+                 title={st.title} lines={st.lines}>
           <st.Inner m={m} />
         </Station>
       ))}
