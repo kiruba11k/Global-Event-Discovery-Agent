@@ -271,6 +271,16 @@ function drawScreen(g, title, line, accent, caret, prog, accent2) {
   g.fillStyle = accent + '22'
   for (let dy = 28; dy < 216; dy += 24)
     for (let dx = 28; dx < 512; dx += 24) g.fillRect(dx, dy, 2, 2)
+  // glowing network nodes across the header
+  const nodes = [[330, 40], [368, 26], [400, 46], [432, 30]]
+  g.strokeStyle = accent + '77'; g.lineWidth = 1.5
+  g.beginPath()
+  nodes.forEach(([nx, ny], i) => (i ? g.lineTo(nx, ny) : g.moveTo(nx, ny)))
+  g.stroke()
+  nodes.forEach(([nx, ny]) => {
+    g.beginPath(); g.arc(nx, ny, 3.2, 0, Math.PI * 2)
+    g.fillStyle = accent; g.fill()
+  })
   g.lineWidth = 2; g.strokeStyle = accent + '38'; g.stroke()
   // header row
   g.textAlign = 'left'
@@ -341,9 +351,9 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
   const k = sw / 1.42   // proportional scale for narrow heads
   return (
     <group position={[sx, sy, 1.28]}>
-      {/* dark graphite bezel around the display */}
-      <RoundedBox args={[sw + 0.08, 0.62 * k + 0.08, 0.05]} radius={0.06} position={[0, 0, -0.045]}>
-        <meshPhysicalMaterial {...graphite} />
+      {/* hairline trim — near-zero bezel, edge-to-edge glass */}
+      <RoundedBox args={[sw + 0.02, 0.62 * k + 0.02, 0.04]} radius={0.07} position={[0, 0, -0.042]}>
+        <meshPhysicalMaterial {...graphite} roughness={0.3} metalness={0.6} />
       </RoundedBox>
       {/* inner holographic UI — light emits from within the shell */}
       <mesh ref={mesh} position={[0, 0, -0.034]}>
@@ -351,7 +361,7 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
         <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
       {/* deep smoked glass shell in front */}
-      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.05} position={[0, 0, -0.008]}>
+      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.08} position={[0, 0, -0.008]}>
         <meshPhysicalMaterial {...smokedGlass} />
       </RoundedBox>
     </group>
@@ -430,7 +440,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       ))}
       {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.15} position={[0, 0.92, s * 1.0]} castShadow>
+        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.2} position={[0, 0.92, s * 1.0]} castShadow>
           <meshPhysicalMaterial {...clay(walls, 0.66)} />
         </RoundedBox>
       ))}
@@ -444,6 +454,17 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
                               sheen={0.4} sheenRoughness={0.5} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
+      {/* polished suspension struts — the head floats above its base */}
+      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([fx, fz], i) => {
+        const hb = hy - hh / 2
+        return (
+          <mesh key={i} position={[fx * (hw / 2 - 0.42), (1.46 + hb) / 2, fz * 0.85]}>
+            <cylinderGeometry args={[0.024, 0.024, hb - 1.46, 12]} />
+            <meshPhysicalMaterial color="#E8EAEE" roughness={0.08} metalness={1}
+                                  envMapIntensity={1.6} />
+          </mesh>
+        )
+      })}
       {/* embedded cyber light line along the head's lower groove */}
       <mesh position={[0, hy - hh / 2 + 0.05, 1.26]}>
         <boxGeometry args={[hw - 0.16, 0.022, 0.02]} />
@@ -527,11 +548,11 @@ function ScannerGate({ m }) {
   return (
     <group>
       {/* full-width sensor rail across the low, wide gate */}
-      <RoundedBox args={[2.7, 0.12, 0.5]} radius={0.05} position={[0, 2.34, 0]} castShadow>
+      <RoundedBox args={[2.7, 0.12, 0.5]} radius={0.05} position={[0, 2.47, 0]} castShadow>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
       {[-1.0, -0.5, 0, 0.5, 1.0].map((ox, i) => (
-        <mesh key={i} position={[ox, 2.34, 0.26]}>
+        <mesh key={i} position={[ox, 2.47, 0.26]}>
           <sphereGeometry args={[0.042, 16, 16]} />
           <meshPhysicalMaterial color="#0E1524" roughness={0.1} metalness={0.4}
                                 emissive={BLUE} emissiveIntensity={0.4} />
@@ -577,7 +598,7 @@ function MatchScoreCore({ m }) {
     })
   })
   return (
-    <group position={[0, 3.0, 0]}>
+    <group position={[0, 3.13, 0]}>
       {/* angular chamfer slabs flanking the dome */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.6, 0.09, 2.0]} radius={0.035} position={[s * 0.78, 0.05, 0]}
@@ -632,23 +653,23 @@ function BriefPrinter({ m }) {
   return (
     <group>
       {/* front paper slot in the low printer face */}
-      <mesh position={[0.7, 2.05, 1.265]}>
+      <mesh position={[0.7, 2.18, 1.265]}>
         <boxGeometry args={[1.0, 0.035, 0.02]} />
         <meshStandardMaterial color="#55564F" roughness={0.9} />
       </mesh>
       {/* champagne output tray under the slot */}
-      <RoundedBox args={[1.04, 0.045, 0.5]} radius={0.02} position={[0.7, 1.98, 1.5]}
+      <RoundedBox args={[1.04, 0.045, 0.5]} radius={0.02} position={[0.7, 2.11, 1.5]}
                   rotation={[0.12, 0, 0]} castShadow>
         <meshPhysicalMaterial {...champagne} />
       </RoundedBox>
       {/* the brief gliding out of the slot */}
-      <mesh ref={paper} position={[0.7, 2.04, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
+      <mesh ref={paper} position={[0.7, 2.17, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
         <planeGeometry args={[0.84, 0.5]} />
         <meshStandardMaterial color="#FDFCF9" roughness={0.7} transparent opacity={0}
                               side={THREE.DoubleSide} />
       </mesh>
       {/* gold completion lamp on the roofline */}
-      <mesh ref={lamp} position={[0.7, 2.27, 0.9]}>
+      <mesh ref={lamp} position={[0.7, 2.4, 0.9]}>
         <sphereGeometry args={[0.05, 16, 16]} />
         <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.12} />
       </mesh>
@@ -912,17 +933,17 @@ function Conveyor() {
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE, neon: '#00F3FF',
     body: '#7C8EE8', walls: '#DCE3F8',     // soft periwinkle over pale ice blue
-    shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
+    shape: { hw: 3.0, hh: 0.78, hy: 2.02, r: 0.3, bw: 2.4, sw: 1.5 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#B98BFF', neon: '#FF007F', hero: true,
     body: '#E88170', walls: '#F7DBD3',     // warm salmon over powder pink
-    shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
+    shape: { hw: 2.9, hh: 1.5, hy: 2.38, r: 0.26, bw: 2.5, sw: 2.2 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
   { title: 'BRIEF & DELIVER', accent: GOLD, neon: '#FFC400',
     body: '#E0AC55', walls: '#F1E3C8',     // soft honey over almond cream
-    shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
+    shape: { hw: 2.9, hh: 0.72, hy: 1.99, r: 0.3, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
@@ -947,14 +968,47 @@ function FactoryScene() {
       {Array.from({ length: N_UNITS }, (_, i) => (
         <Unit key={i} index={i} />
       ))}
+      <DataCapsules />
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.5} scale={18}
-                      blur={2.8} far={3.6} resolution={1024} color="#3A3630" />
-      <ContactShadows position={[0, -0.76, 0]} opacity={0.1} scale={28}
-                      blur={7} far={5} resolution={512} color="#443C33" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.32} scale={18}
+                      blur={3.2} far={3.6} resolution={1024} color="#6B6152" />
+      <ContactShadows position={[0, -0.76, 0]} opacity={0.06} scale={28}
+                      blur={8} far={5} resolution={512} color="#6B6152" />
+    </group>
+  )
+}
+
+/* ── infinite data stream: pill capsules flow endlessly along the
+      belt beside the hero package, wrapping seamlessly at the ends ── */
+function DataCapsules() {
+  const refs = useRef([])
+  const N = 8
+  const SPAN = END_X - START_X
+  const colors = useMemo(() => [BLUE, ORANGE, GOLD, EMERALD], [])
+  useFrame(({ clock }) => {
+    refs.current.forEach((c, i) => {
+      if (!c) return
+      const x = START_X + ((clock.elapsedTime * 0.85 + i * (SPAN / N)) % SPAN)
+      c.position.x = x
+      // fade near the ends so the wrap reads as an endless stream
+      const edge = Math.min(x - START_X, END_X - x)
+      c.material.opacity = THREE.MathUtils.clamp(edge / 0.7, 0, 1) * 0.9
+    })
+  })
+  return (
+    <group>
+      {Array.from({ length: N }, (_, i) => (
+        <mesh key={i} ref={el => (refs.current[i] = el)}
+              position={[START_X, 0.42, 0.34]} rotation={[0, 0, Math.PI / 2]}>
+          <capsuleGeometry args={[0.065, 0.17, 6, 14]} />
+          <meshPhysicalMaterial color="#FFFDF6" roughness={0.35} metalness={0}
+                                emissive={colors[i % 4]} emissiveIntensity={0.4}
+                                transparent opacity={0.9} />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -963,9 +1017,9 @@ function FactoryScene() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.25 + Math.sin(clock.elapsedTime * 0.5) * 0.008
+    if (ref.current) ref.current.intensity = 0.34 + Math.sin(clock.elapsedTime * 0.5) * 0.008
   })
-  return <ambientLight ref={ref} intensity={0.25} color="#FFFDF9" />
+  return <ambientLight ref={ref} intensity={0.34} color="#FFFDF9" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
