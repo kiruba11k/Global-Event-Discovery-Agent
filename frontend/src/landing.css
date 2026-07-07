@@ -1596,3 +1596,12 @@
 .ef3d-label-meet .ef3d-label-title,
 .ef3d-label-talk .ef3d-label-title { color: #A63BD4; }
 .ef3d-endcap { color: #7A5E8C; border-color: #E7D7F2; background: #FBF7FE; }
+
+/* product-photography studio backdrop behind the 3D canvas */
+.ef3d-canvas {
+  position: relative;
+  background:
+    radial-gradient(75% 90% at 50% 42%, rgba(255,255,255,.75) 0%, rgba(255,255,255,0) 62%),
+    radial-gradient(120% 100% at 50% 50%, transparent 62%, rgba(57,48,74,.07) 100%);
+  border-radius: 24px;
+}
