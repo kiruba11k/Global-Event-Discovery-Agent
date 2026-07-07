@@ -1,75 +1,81 @@
 /*
-  EventFactory3D.jsx — the LeadStrategus workflow as a keynote-grade
-  production line (react-three-fiber + drei + postprocessing).
+  EventFactory3D.jsx — the LeadStrategus workflow as a minimal,
+  Apple-grade AI production line (react-three-fiber + drei).
 
-  Third pass: interaction design + storytelling. Five matte-white
-  machines, each with a real input slot, enclosed processing chamber
-  and output slot. Units stop at the entrance, move inside (occluded
-  by the chamber walls — no clipping), trigger that machine's
-  animation, then emerge transformed:
+  Fourth pass: clarity over density. FOUR premium stations with
+  generous spacing:
 
-    raw event → blue scan glow → emerald ICP stripe → orange match
-    badge → purple meeting card → dark briefing document w/ gold seal.
+    DISCOVER (scanner gate, blue) → MATCH (rotating AI ring, orange)
+    → MEETINGS (robotic station, purple) → BRIEF (printer, gold)
 
-  Machine bodies stay white; each function speaks only through accent
-  light — beams, displays, LEDs, acrylic windows. Camera stays fixed.
+  Storytelling rules:
+  · Screens are OFF while idle. When a unit enters, the smoked-glass
+    display powers on and types its status ("Searching…" → "53 Events
+    · 92% Fit" → "Complete ✓"), then fades out.
+  · Only the active station animates; everything else stays calm.
+  · The travelling box evolves: RAW cube → blue-scored → emerald
+    matched → premium meeting card → dark executive brief w/ gold seal,
+    each stage carrying its own printed label.
+  · Machine bodies are neutral premium greys (warm grey / stone /
+    slate / champagne); accents are light only, ~15% of each machine.
+  · Fully transparent canvas — the scene sits directly on the page.
+  · The camera always frames the whole line, first to last station.
 */
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { RoundedBox, ContactShadows, Environment, Lightformer } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
 /* ── palette ── */
-const WHITE   = '#F7F5F1'
-const WHITE_2 = '#EFECE6'
-const SEAM    = '#C9C4BB'
-const ALU     = '#D9DADF'
-const ALU_D   = '#9FA3AB'
-const RUBBER  = '#3A3A3E'
-/* accent system — light only, never painted on machine bodies */
-const BLUE    = '#3F8CFF'   // discovery
-const EMERALD = '#17C787'   // qualification
-const ORANGE  = '#FF9C3D'   // matching
-const PURPLE  = '#9D6BFF'   // AI processing / meetings
-const GOLD    = '#E7B54A'   // output / brief
+const SEAM   = '#C9C4BB'
+const ALU    = '#D9DADF'
+const ALU_D  = '#9FA3AB'
+const RUBBER = '#3A3A3E'
+/* accents — light only */
+const BLUE    = '#3F8CFF'
+const EMERALD = '#17C787'
+const ORANGE  = '#FF9C3D'
+const PURPLE  = '#9D6BFF'
+const GOLD    = '#E7B54A'
 
 /* ── materials ── */
-const plastic = (rough = 0.4, coat = 0.3) => ({
-  color: WHITE, roughness: rough, metalness: 0,
-  clearcoat: coat, clearcoatRoughness: 0.5,
-  sheen: 0.25, sheenColor: '#FFFFFF', envMapIntensity: 0.75,
+const body = (color, rough = 0.42) => ({
+  // matte powder-coated finish
+  color, roughness: rough, metalness: 0.12,
+  clearcoat: 0.2, clearcoatRoughness: 0.7,
+  sheen: 0.2, sheenColor: '#FFFFFF', envMapIntensity: 0.7,
 })
-const plastic2 = { color: WHITE_2, roughness: 0.48, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.6 }
-const brushedAlu  = { color: ALU,   roughness: 0.32, metalness: 0.9,  envMapIntensity: 1.3 }
-const anodizedAlu = { color: ALU_D, roughness: 0.42, metalness: 0.85, envMapIntensity: 1.0 }
-const rubber      = { color: RUBBER, roughness: 0.95, metalness: 0 }
+const softPlastic  = (color) => ({ color, roughness: 0.55, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.7 })
+const brushedAlu   = { color: ALU,   roughness: 0.32, metalness: 0.9,  envMapIntensity: 1.3 }
+const anodizedAlu  = { color: ALU_D, roughness: 0.42, metalness: 0.85, envMapIntensity: 1.0 }
+const rubber       = { color: RUBBER, roughness: 0.95, metalness: 0 }
 const frosted = {
   color: '#FFFFFF', roughness: 0.42, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
-const acrylic = (tint) => ({
-  color: '#FFFFFF', roughness: 0.18, metalness: 0,
-  transmission: 0.88, thickness: 0.5, ior: 1.42, transparent: true,
-  emissive: tint, emissiveIntensity: 0.06,
-})
+const smokedGlass = {
+  color: '#15151A', roughness: 0.08, metalness: 0.1,
+  clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 1.2,
+}
 
 /* ── the production schedule ─────────────────────────────────────────
-   Every unit follows the same timeline: travel → pause at the input
-   slot → slide into the chamber → hold while the machine works →
-   emerge from the output slot → travel on. Precomputed once.        */
-const MX = [-5.8, -2.9, 0, 2.9, 5.8]           // machine centers
-const SLOT = 0.86                              // entrance/exit offset
+   travel → pause at input slot → inside the chamber (machine works,
+   screen types) → emerge from the output slot → travel on.          */
+const MX = [-5.55, -1.85, 1.85, 5.55]
+const SLOT = 0.86
 const START_X = -7.3, END_X = 7.3
-const SPEED = 1.7, PAUSE = 0.32, PROCESS = 1.45
-const N_UNITS = 3
+const SPEED = 1.7, PAUSE = 0.3, PROCESS = 2.7
+/* a single unit travels the line — exactly one station is ever active,
+   so the eye always knows where the story is */
+const N_UNITS = 1
 
 const SCHED = (() => {
   const pts = [{ x: START_X, hold: 0 }]
   MX.forEach(x => {
-    pts.push({ x: x - SLOT, hold: PAUSE })     // stop at the input slot
-    pts.push({ x,           hold: PROCESS })   // inside the chamber
-    pts.push({ x: x + SLOT, hold: 0 })         // clear the output slot
+    pts.push({ x: x - SLOT, hold: PAUSE })
+    pts.push({ x,           hold: PROCESS })
+    pts.push({ x: x + SLOT, hold: 0 })
   })
   pts.push({ x: END_X, hold: 0 })
   let t = 0
@@ -84,10 +90,10 @@ const SCHED = (() => {
 
 const easeInOut = u => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2)
 const centerKey = m => SCHED.keys[2 + 3 * m]
+const mod = t => ((t % SCHED.total) + SCHED.total) % SCHED.total
 
-/* position + narrative state of one unit at wall-clock `time` */
 function unitState(time) {
-  const t = ((time % SCHED.total) + SCHED.total) % SCHED.total
+  const t = mod(time)
   const ks = SCHED.keys
   let x = ks[ks.length - 1].x
   for (let i = 0; i < ks.length; i++) {
@@ -100,28 +106,38 @@ function unitState(time) {
   }
   let stage = 0
   for (let m = 0; m < MX.length; m++) if (t > centerKey(m).t1) stage = m + 1
-  // pop: brief scale-up right after a transformation
-  let pop = 0
-  if (stage > 0) {
-    const dt = t - centerKey(stage - 1).t1
-    if (dt < 0.55) pop = Math.sin((dt / 0.55) * Math.PI) * 0.07
-  }
-  return { x, stage, pop, t }
+  return { x, stage, t }
 }
 const unitTime = (elapsed, i) => elapsed + (i * SCHED.total) / N_UNITS
 
-/* 0→1 while any unit is being processed inside machine m */
+/* 0→1 while any unit is processed inside station m */
 function machineActivity(elapsed, m) {
   const k = centerKey(m)
   let a = 0
   for (let i = 0; i < N_UNITS; i++) {
-    const t = ((unitTime(elapsed, i) % SCHED.total) + SCHED.total) % SCHED.total
-    const ramp = 0.3
+    const t = mod(unitTime(elapsed, i))
+    const ramp = 0.35
     const up = THREE.MathUtils.clamp((t - (k.t0 - ramp)) / ramp, 0, 1)
     const dn = THREE.MathUtils.clamp(((k.t1 + ramp) - t) / ramp, 0, 1)
     a = Math.max(a, Math.min(up, dn))
   }
   return a
+}
+
+/* screen lifecycle for station m: fade 0→1 as a unit arrives, typing
+   progress p through the process window, fade back out after exit */
+function screenState(elapsed, m) {
+  const k = centerKey(m)
+  const IN = 0.3, OUT = 0.8
+  let fade = 0, p = 0
+  for (let i = 0; i < N_UNITS; i++) {
+    const t = mod(unitTime(elapsed, i))
+    if (t < k.t0 - IN || t > k.t1 + OUT) continue
+    const f = t < k.t0 ? (t - (k.t0 - IN)) / IN
+            : t > k.t1 ? 1 - (t - k.t1) / OUT : 1
+    if (f >= fade) { fade = f; p = THREE.MathUtils.clamp((t - k.t0) / (k.t1 - k.t0), 0, 1) }
+  }
+  return { fade, p }
 }
 
 /* ── small shared parts ── */
@@ -141,315 +157,236 @@ function Foot({ position }) {
     </mesh>
   )
 }
-function Led({ position, color, phase = 0, speed = 2.2, base = 1.0 }) {
+/* status LED — near-dark while idle, pulses only when its station works */
+function Led({ position, color, m }) {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current)
-      ref.current.material.emissiveIntensity = base + Math.sin(clock.elapsedTime * speed + phase) * 0.5
+    if (!ref.current) return
+    const a = machineActivity(clock.elapsedTime, m)
+    ref.current.material.emissiveIntensity = 0.12 + a * (0.9 + Math.sin(clock.elapsedTime * 4) * 0.4)
   })
   return (
     <mesh ref={ref} position={position}>
       <sphereGeometry args={[0.03, 12, 12]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.12} />
     </mesh>
   )
 }
 
-/* ── integrated machine label: embedded OLED panel (canvas texture,
-      self-contained — no font fetches) ── */
-function useLabelTexture(title, status, accent) {
-  return useMemo(() => {
-    const c = document.createElement('canvas')
-    c.width = 512; c.height = 216
-    const g = c.getContext('2d')
-    // dark acrylic panel with hairline accent border
-    const r = 34
-    g.beginPath(); g.roundRect(4, 4, 504, 208, r); g.closePath()
-    g.fillStyle = 'rgba(18,18,23,0.94)'; g.fill()
-    g.lineWidth = 3; g.strokeStyle = accent + '55'; g.stroke()
-    // engraved title
-    g.font = '600 46px "Helvetica Neue", Arial, sans-serif'
-    g.textAlign = 'center'
-    g.fillStyle = 'rgba(255,255,255,0.92)'
-    const spaced = title.split('').join('  ')
-    g.fillText(spaced, 256, 92)
-    // live status readout in accent
-    g.font = '500 38px "Helvetica Neue", Arial, sans-serif'
-    g.fillStyle = accent
-    g.fillText(status, 256, 162)
-    // status dot
-    g.beginPath()
-    g.arc(256 - g.measureText(status).width / 2 - 30, 150, 8, 0, Math.PI * 2)
-    g.fillStyle = accent; g.fill()
-    const tex = new THREE.CanvasTexture(c)
-    tex.anisotropy = 8
-    tex.colorSpace = THREE.SRGBColorSpace
-    return tex
-  }, [title, status, accent])
+/* ── event-driven display: smoked glass, powers on + types + fades ── */
+function drawScreen(g, title, line, accent, caret) {
+  g.clearRect(0, 0, 512, 216)
+  g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
+  g.fillStyle = 'rgba(14,14,18,0.96)'; g.fill()
+  g.lineWidth = 3; g.strokeStyle = accent + '44'; g.stroke()
+  g.textAlign = 'left'
+  g.font = '600 30px "Helvetica Neue", Arial, sans-serif'
+  g.fillStyle = 'rgba(255,255,255,0.55)'
+  g.fillText(title.split('').join(' '), 36, 66)
+  g.beginPath(); g.arc(478, 56, 7, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
+  g.font = '500 40px "Helvetica Neue", Arial, sans-serif'
+  g.fillStyle = accent
+  g.fillText(line + (caret ? '▎' : ''), 36, 152)
 }
 
-function MachineLabel({ title, status, accent, m }) {
-  const tex = useLabelTexture(title, status, accent)
-  const ref = useRef()
+function StationScreen({ m, title, lines, accent }) {
+  const mesh = useRef()
+  const stateRef = useRef({ key: '' })
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 512; c.height = 216
+    const t = new THREE.CanvasTexture(c)
+    t.anisotropy = 8
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [])
+
   useFrame(({ clock }) => {
-    if (ref.current)
-      ref.current.material.opacity =
-        0.86 + machineActivity(clock.elapsedTime, m) * 0.14
+    if (!mesh.current) return
+    const { fade, p } = screenState(clock.elapsedTime, m)
+    mesh.current.material.opacity = fade
+    if (fade <= 0.01) return
+    // phase 0: working…  phase 1: result  phase 2: complete ✓
+    const B = [0, 0.42, 0.84, 1]
+    const ph = p < B[1] ? 0 : p < B[2] ? 1 : 2
+    const u = (p - B[ph]) / (B[ph + 1] - B[ph])
+    const full = lines[ph]
+    const n = Math.min(full.length, Math.ceil(u * (full.length + 4)))
+    const typed = full.slice(0, n)
+    const caret = n < full.length && Math.floor(clock.elapsedTime * 3) % 2 === 0
+    const key = `${typed}|${caret ? 1 : 0}`
+    if (key !== stateRef.current.key) {
+      stateRef.current.key = key
+      drawScreen(tex.image.getContext('2d'), title, typed, accent, caret)
+      tex.needsUpdate = true
+    }
   })
+
   return (
-    <group position={[0, 2.14, 1.3]}>
-      {/* brushed bezel */}
-      <RoundedBox args={[1.42, 0.64, 0.05]} radius={0.05} position={[0, 0, -0.04]}>
-        <meshPhysicalMaterial {...brushedAlu} />
+    <group position={[0, 2.14, 1.28]}>
+      {/* smoked-glass panel — visibly off while idle */}
+      <RoundedBox args={[1.42, 0.62, 0.04]} radius={0.05} position={[0, 0, -0.03]}>
+        <meshPhysicalMaterial {...smokedGlass} />
       </RoundedBox>
-      {/* self-lit OLED panel */}
-      <mesh ref={ref} position={[0, 0, 0.005]}>
-        <planeGeometry args={[1.32, 0.56]} />
-        <meshBasicMaterial map={tex} transparent toneMapped={false} />
+      <mesh ref={mesh} position={[0, 0, 0.005]}>
+        <planeGeometry args={[1.34, 0.56]} />
+        <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
     </group>
   )
 }
 
-/* ── machine shell: matte-white enclosure straddling the belt with a
-      real tunnel — input slot, chamber, output slot. Units passing
-      through are genuinely occluded by the walls. ── */
-function MachineShell({ accent, m, children, title, status }) {
+/* ── station shell: neutral premium body, real input/output slots,
+      enclosed chamber that genuinely occludes the passing unit ── */
+function Station({ m, tint, accent, title, lines, children }) {
   const glow = useRef()
   useFrame(({ clock }) => {
-    if (glow.current)
-      glow.current.material.emissiveIntensity =
-        0.25 + machineActivity(clock.elapsedTime, m) * 1.1
+    if (glow.current) {
+      const a = machineActivity(clock.elapsedTime, m)
+      glow.current.material.emissiveIntensity = a * 1.1
+      glow.current.material.opacity = a * 0.5
+    }
   })
   return (
     <group position={[MX[m], 0, 0]}>
-      {/* anodized base plinth beside the belt */}
+      {/* anodized plinths + rubber feet */}
       {[-1, 1].map(s => (
         <group key={s}>
-          <Foot position={[0.6, 0.27, s * 1.05]} />
-          <Foot position={[-0.6, 0.27, s * 1.05]} />
+          <Foot position={[0.55, 0.27, s * 1.02]} />
+          <Foot position={[-0.55, 0.27, s * 1.02]} />
           <RoundedBox args={[1.66, 0.14, 0.5]} radius={0.06} position={[0, 0.37, s * 1.02]} castShadow>
             <meshPhysicalMaterial {...anodizedAlu} />
           </RoundedBox>
         </group>
       ))}
-      {/* front + back chamber walls (the cube passes between them) */}
+      {/* chamber walls — the unit passes between them */}
       {[-1, 1].map(s => (
-        <group key={s}>
-          <RoundedBox args={[1.66, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
-            <meshPhysicalMaterial {...plastic(0.42, 0.28)} />
-          </RoundedBox>
-          <Seam args={[1.6, 0.02, 0.46]} position={[0, 1.42, s * 1.0]} />
-        </group>
+        <RoundedBox key={s} args={[1.66, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
+          <meshPhysicalMaterial {...body(tint)} />
+        </RoundedBox>
       ))}
-      {/* roof block over the tunnel — the processing head */}
+      {/* processing head over the tunnel */}
       <RoundedBox args={[1.66, 1.16, 2.52]} radius={0.2} position={[0, 2.06, 0]} castShadow>
-        <meshPhysicalMaterial {...plastic(0.38, 0.32)} />
+        <meshPhysicalMaterial {...body(tint, 0.38)} />
       </RoundedBox>
       <Seam args={[1.6, 0.02, 2.46]} position={[0, 2.62, 0]} />
-      <RoundedBox args={[1.52, 0.3, 2.38]} radius={0.12} position={[0, 2.8, 0]} castShadow>
-        <meshPhysicalMaterial {...plastic2} />
+      <RoundedBox args={[1.52, 0.28, 2.38]} radius={0.12} position={[0, 2.79, 0]} castShadow>
+        <meshPhysicalMaterial {...softPlastic(tint)} />
       </RoundedBox>
-      {/* aluminum slot frames — clearly defined input & output */}
+      {/* brushed slot frames — clearly defined input & output */}
       {[-1, 1].map(s => (
         <group key={s} position={[s * 0.81, 0, 0]}>
-          <RoundedBox args={[0.07, 0.1, 1.34]} radius={0.03} position={[0, 1.46, 0]}>
+          <RoundedBox args={[0.06, 0.09, 1.3]} radius={0.03} position={[0, 1.45, 0]}>
             <meshPhysicalMaterial {...brushedAlu} />
           </RoundedBox>
           {[-1, 1].map(z => (
-            <RoundedBox key={z} args={[0.07, 1.12, 0.1]} radius={0.03} position={[0, 0.93, z * 0.64]}>
+            <RoundedBox key={z} args={[0.06, 1.1, 0.09]} radius={0.03} position={[0, 0.93, z * 0.63]}>
               <meshPhysicalMaterial {...brushedAlu} />
             </RoundedBox>
           ))}
-          {/* soft rubber slot curtain hint */}
-          <mesh position={[0, 1.38, 0]}>
-            <boxGeometry args={[0.02, 0.06, 1.18]} />
-            <meshStandardMaterial {...rubber} />
-          </mesh>
         </group>
       ))}
-      {/* tinted acrylic chamber window on the front wall */}
-      <RoundedBox args={[1.1, 0.5, 0.06]} radius={0.06} position={[0, 1.0, 1.27]}>
-        <meshPhysicalMaterial {...acrylic(accent)} />
-      </RoundedBox>
-      {/* interior chamber light — brightens while processing */}
+      {/* chamber worklight — dark until the station processes */}
       <mesh ref={glow} position={[0, 1.42, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1.6, 1.2]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.3}
-                              transparent opacity={0.55} side={THREE.DoubleSide} />
+        <planeGeometry args={[1.4, 1.1]} />
+        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0}
+                              transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
-      <Led position={[0.8, 2.8, 1.15]} color={accent} phase={m * 1.7} />
-      <MachineLabel title={title} status={status} accent={accent} m={m} />
+      <Led position={[0.72, 2.79, 1.2]} color={accent} m={m} />
+      <StationScreen m={m} title={title} lines={lines} accent={accent} />
       {children}
     </group>
   )
 }
 
-/* ── 1 · Event Discovery Scanner — blue scan beam sweeps the chamber ── */
-function DiscoveryScanner({ m }) {
+/* ── 1 · DISCOVER — scanner gate: optical sensors + sweeping beam ── */
+function ScannerGate({ m }) {
   const beam = useRef()
-  const pulse = useRef()
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
     if (beam.current) {
-      beam.current.position.x = Math.sin(clock.elapsedTime * 2.6) * 0.55 * a
-      beam.current.material.opacity = 0.05 + a * 0.5
-      beam.current.material.emissiveIntensity = 0.3 + a * 1.4
-    }
-    if (pulse.current) {
-      const s = 1 + ((clock.elapsedTime * 0.7) % 1) * 1.6
-      pulse.current.scale.setScalar(s)
-      pulse.current.material.opacity = (0.35 - ((clock.elapsedTime * 0.7) % 1) * 0.35) * (0.4 + a)
+      beam.current.position.x = Math.sin(clock.elapsedTime * 2.4) * 0.5 * a
+      beam.current.material.opacity = a * 0.5
+      beam.current.material.emissiveIntensity = a * 1.6
     }
   })
   return (
     <group>
-      {/* optical sensor bar across the roof */}
-      <RoundedBox args={[1.3, 0.16, 0.5]} radius={0.07} position={[0, 3.02, 0]} castShadow>
-        <meshPhysicalMaterial {...plastic(0.36, 0.4)} />
+      <RoundedBox args={[1.2, 0.14, 0.46]} radius={0.06} position={[0, 3.0, 0]} castShadow>
+        <meshPhysicalMaterial {...softPlastic('#E9E6DF')} />
       </RoundedBox>
-      {[-0.4, 0, 0.4].map((ox, i) => (
-        <mesh key={i} position={[ox, 3.02, 0.26]}>
-          <sphereGeometry args={[0.05, 16, 16]} />
+      {[-0.35, 0, 0.35].map((ox, i) => (
+        <mesh key={i} position={[ox, 3.0, 0.24]}>
+          <sphereGeometry args={[0.045, 16, 16]} />
           <meshPhysicalMaterial color="#0E1524" roughness={0.1} metalness={0.4}
-                                emissive={BLUE} emissiveIntensity={0.6} />
+                                emissive={BLUE} emissiveIntensity={0.4} />
         </mesh>
       ))}
-      {/* sweeping blue scan sheet inside the chamber */}
       <mesh ref={beam} position={[0, 0.95, 0]}>
-        <boxGeometry args={[0.015, 1.05, 1.15]} />
-        <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0.8}
-                              transparent opacity={0.3} />
-      </mesh>
-      {/* search pulse ring above the machine */}
-      <mesh ref={pulse} position={[0, 3.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.3, 0.34, 48]} />
-        <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={1}
-                              transparent opacity={0.3} side={THREE.DoubleSide} />
+        <boxGeometry args={[0.015, 1.05, 1.1]} />
+        <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0}
+                              transparent opacity={0} />
       </mesh>
     </group>
   )
 }
 
-/* ── 2 · ICP Qualification Engine — emerald AI core scores the unit ── */
-function QualificationEngine({ m }) {
-  const core = useRef()
-  const bars = useRef([])
+/* ── 2 · MATCH — AI engine: rotating ring inside a frosted dome ── */
+function MatchEngine({ m }) {
+  const ring = useRef()
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
-    if (core.current) {
-      core.current.material.emissiveIntensity = 0.35 + a * 1.2 + Math.sin(clock.elapsedTime * 3) * 0.15 * a
-      core.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 3) * 0.05 * a)
+    if (ring.current) {
+      ring.current.rotation.y += (0.05 + a * 2.6) * 0.016
+      ring.current.material.emissiveIntensity = 0.1 + a * 1.1
     }
-    bars.current.forEach((b, i) => {
-      if (!b) return
-      const h = 0.06 + (0.5 + 0.5 * Math.sin(clock.elapsedTime * 4 + i * 1.3)) * 0.2 * a
-      b.scale.y = h / 0.12
-      b.material.emissiveIntensity = 0.3 + a * 1.0
-    })
   })
   return (
-    <group>
-      {/* frosted dome housing the AI core */}
-      <mesh position={[0, 3.0, 0]} castShadow>
+    <group position={[0, 2.96, 0]}>
+      <mesh castShadow>
         <sphereGeometry args={[0.42, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshPhysicalMaterial {...frosted} />
       </mesh>
-      <mesh ref={core} position={[0, 3.02, 0]}>
-        <icosahedronGeometry args={[0.22, 1]} />
-        <meshStandardMaterial color={EMERALD} emissive={EMERALD} emissiveIntensity={0.5}
-                              transparent opacity={0.85} />
-      </mesh>
-      {/* emerald scoring bars on the status display */}
-      <group position={[0, 2.8, 1.22]}>
-        {[-0.3, -0.1, 0.1, 0.3].map((ox, i) => (
-          <mesh key={i} ref={el => (bars.current[i] = el)} position={[ox, 0, 0]}>
-            <boxGeometry args={[0.09, 0.12, 0.03]} />
-            <meshStandardMaterial color={EMERALD} emissive={EMERALD} emissiveIntensity={0.4} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  )
-}
-
-/* ── 3 · Buyer Match Engine — orange rings rotate to lock a match ── */
-function MatchEngine({ m }) {
-  const r1 = useRef(), r2 = useRef(), dot = useRef()
-  useFrame(({ clock }) => {
-    const a = machineActivity(clock.elapsedTime, m)
-    const w = 0.35 + a * 2.4
-    if (r1.current) {
-      r1.current.rotation.y += w * 0.016
-      r1.current.material.emissiveIntensity = 0.3 + a * 0.9
-    }
-    if (r2.current) {
-      r2.current.rotation.y -= w * 0.011
-      r2.current.rotation.x = Math.PI / 2.6 + Math.sin(clock.elapsedTime * 0.8) * 0.1
-      r2.current.material.emissiveIntensity = 0.3 + a * 0.9
-    }
-    if (dot.current)
-      dot.current.material.emissiveIntensity = 0.5 + a * 1.6 + Math.sin(clock.elapsedTime * 5) * 0.3 * a
-  })
-  return (
-    <group position={[0, 3.12, 0]}>
-      <mesh position={[0, -0.22, 0]} castShadow>
-        <cylinderGeometry args={[0.2, 0.26, 0.18, 32]} />
-        <meshPhysicalMaterial {...anodizedAlu} />
-      </mesh>
-      {/* rotating matching rings */}
-      <mesh ref={r1} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.38, 0.022, 12, 64]} />
-        <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.4}
+      <mesh ref={ring} position={[0, 0.12, 0]} rotation={[Math.PI / 2.4, 0, 0]}>
+        <torusGeometry args={[0.26, 0.022, 12, 64]} />
+        <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.1}
                               metalness={0.3} roughness={0.3} />
-      </mesh>
-      <mesh ref={r2} rotation={[Math.PI / 2.6, 0, 0]}>
-        <torusGeometry args={[0.28, 0.018, 12, 64]} />
-        <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.4}
-                              metalness={0.3} roughness={0.3} />
-      </mesh>
-      {/* connection made — the locked match indicator */}
-      <mesh ref={dot}>
-        <sphereGeometry args={[0.07, 16, 16]} />
-        <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.8} />
       </mesh>
     </group>
   )
 }
 
-/* ── 4 · Meeting Generator — robotic arm dips into the purple chamber ── */
-function MeetingGenerator({ m }) {
+/* ── 3 · MEETINGS — robotic processing arm, parked while idle ── */
+function MeetingArm({ m }) {
   const arm = useRef(), fore = useRef(), tip = useRef()
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
-    const work = Math.sin(clock.elapsedTime * 2.2) * 0.5 + 0.5
-    if (arm.current)  arm.current.rotation.z = -0.15 - a * work * 0.4
-    if (fore.current) fore.current.rotation.z = 0.35 + a * work * 0.75
-    if (tip.current)  tip.current.material.emissiveIntensity = 0.4 + a * 1.5
+    const work = (Math.sin(clock.elapsedTime * 2.2) * 0.5 + 0.5) * a
+    if (arm.current)  arm.current.rotation.z = -0.12 - work * 0.4
+    if (fore.current) fore.current.rotation.z = 0.3 + work * 0.75
+    if (tip.current)  tip.current.material.emissiveIntensity = 0.1 + a * 1.4
   })
   return (
     <group position={[0, 2.62, 0]}>
-      {/* shoulder base */}
-      <mesh castShadow position={[0.45, 0.28, 0]}>
-        <cylinderGeometry args={[0.16, 0.2, 0.24, 24]} />
+      <mesh castShadow position={[0.42, 0.26, 0]}>
+        <cylinderGeometry args={[0.15, 0.19, 0.22, 24]} />
         <meshPhysicalMaterial {...anodizedAlu} />
       </mesh>
-      <group ref={arm} position={[0.45, 0.4, 0]}>
-        <RoundedBox args={[0.14, 0.6, 0.14]} radius={0.05} position={[0, 0.3, 0]} castShadow>
-          <meshPhysicalMaterial {...plastic(0.36, 0.4)} />
+      <group ref={arm} position={[0.42, 0.37, 0]}>
+        <RoundedBox args={[0.13, 0.56, 0.13]} radius={0.05} position={[0, 0.28, 0]} castShadow>
+          <meshPhysicalMaterial {...softPlastic('#DDDEE3')} />
         </RoundedBox>
-        <group ref={fore} position={[0, 0.6, 0]}>
+        <group ref={fore} position={[0, 0.56, 0]}>
           <mesh>
-            <sphereGeometry args={[0.09, 16, 16]} />
+            <sphereGeometry args={[0.085, 16, 16]} />
             <meshPhysicalMaterial {...anodizedAlu} />
           </mesh>
-          <RoundedBox args={[0.6, 0.11, 0.11]} radius={0.04} position={[-0.3, 0, 0]} castShadow>
-            <meshPhysicalMaterial {...plastic(0.36, 0.4)} />
+          <RoundedBox args={[0.56, 0.1, 0.1]} radius={0.04} position={[-0.28, 0, 0]} castShadow>
+            <meshPhysicalMaterial {...softPlastic('#DDDEE3')} />
           </RoundedBox>
-          {/* card-forming emitter tip */}
-          <mesh ref={tip} position={[-0.6, -0.04, 0]}>
+          <mesh ref={tip} position={[-0.56, -0.04, 0]}>
             <cylinderGeometry args={[0.04, 0.05, 0.08, 16]} />
-            <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.6} />
+            <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.1} />
           </mesh>
         </group>
       </group>
@@ -457,167 +394,172 @@ function MeetingGenerator({ m }) {
   )
 }
 
-/* ── 5 · Brief Generator — premium printer, paper glides into the tray ── */
-function BriefGenerator({ m }) {
+/* ── 4 · BRIEF — premium printer: paper glides out only when working ── */
+function BriefPrinter({ m }) {
   const paper = useRef()
   const lamp = useRef()
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
     if (paper.current) {
-      const slide = ((clock.elapsedTime * 0.55) % 1)
-      paper.current.position.z = 1.05 + slide * 0.42 * a
+      const slide = (clock.elapsedTime * 0.5) % 1
+      paper.current.position.z = 1.05 + slide * 0.4
       paper.current.material.opacity = a * (slide < 0.85 ? 0.95 : (1 - slide) * 6)
       paper.current.visible = a > 0.05
     }
     if (lamp.current)
-      lamp.current.material.emissiveIntensity = 0.4 + a * 1.4
+      lamp.current.material.emissiveIntensity = 0.12 + a * 1.3
   })
   return (
     <group>
-      {/* printer head with paper slit */}
-      <RoundedBox args={[1.3, 0.3, 0.7] } radius={0.1} position={[0, 3.02, 0.4]} castShadow>
-        <meshPhysicalMaterial {...plastic(0.36, 0.4)} />
+      <RoundedBox args={[1.2, 0.28, 0.66]} radius={0.1} position={[0, 3.0, 0.35]} castShadow>
+        <meshPhysicalMaterial {...softPlastic('#F1EBDE')} />
       </RoundedBox>
-      <mesh position={[0, 2.98, 0.76]}>
-        <boxGeometry args={[0.95, 0.03, 0.02]} />
+      <mesh position={[0, 2.96, 0.69]}>
+        <boxGeometry args={[0.9, 0.03, 0.02]} />
         <meshStandardMaterial color="#1B1B1F" roughness={0.8} />
       </mesh>
-      {/* document output tray on the front */}
-      <RoundedBox args={[1.0, 0.05, 0.55]} radius={0.02} position={[0, 2.86, 1.15]}
+      {/* brushed output tray */}
+      <RoundedBox args={[0.95, 0.05, 0.52]} radius={0.02} position={[0, 2.85, 1.08]}
                   rotation={[0.14, 0, 0]} castShadow>
         <meshPhysicalMaterial {...brushedAlu} />
       </RoundedBox>
-      {/* the brief sliding out */}
-      <mesh ref={paper} position={[0, 2.93, 1.05]} rotation={[-Math.PI / 2 + 0.14, 0, 0]}>
-        <planeGeometry args={[0.8, 0.5]} />
+      <mesh ref={paper} position={[0, 2.92, 1.05]} rotation={[-Math.PI / 2 + 0.14, 0, 0]}>
+        <planeGeometry args={[0.76, 0.48]} />
         <meshStandardMaterial color="#FDFCF9" roughness={0.7} transparent opacity={0}
                               side={THREE.DoubleSide} />
       </mesh>
-      {/* gold completion light */}
-      <mesh ref={lamp} position={[0, 3.24, 0.4]}>
-        <sphereGeometry args={[0.06, 16, 16]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.6} />
+      <mesh ref={lamp} position={[0, 3.2, 0.35]}>
+        <sphereGeometry args={[0.055, 16, 16]} />
+        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.12} />
       </mesh>
     </group>
   )
 }
 
-/* ── travelling unit: the cube tells the story ── */
+/* ── stage labels printed on the travelling unit ── */
+function makeStickerTexture(l1, l2, accent, dark = false) {
+  const c = document.createElement('canvas')
+  c.width = 320; c.height = 160
+  const g = c.getContext('2d')
+  g.textAlign = 'center'
+  g.font = '700 44px "Helvetica Neue", Arial, sans-serif'
+  g.fillStyle = dark ? 'rgba(255,255,255,0.9)' : 'rgba(46,49,55,0.85)'
+  g.fillText(l1, 160, l2 ? 70 : 95)
+  if (l2) {
+    g.font = '600 38px "Helvetica Neue", Arial, sans-serif'
+    g.fillStyle = accent
+    g.fillText(l2, 160, 126)
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.anisotropy = 8
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+/* ── travelling unit: the box tells the story ── */
 function Unit({ index }) {
   const group = useRef()
-  const cube = useRef()       // stages 0–3 body
-  const scanGlow = useRef()   // stage ≥1: blue glow ring
-  const stripe = useRef()     // stage ≥2: emerald ICP stripe
-  const badge = useRef()      // stage ≥3: orange match badge
-  const card = useRef()       // stage 4: premium meeting card
-  const brief = useRef()      // stage 5: dark briefing document
+  const cube = useRef()
+  const blueEdge = useRef()   // stage ≥1: blue accent
+  const stripe = useRef()     // stage ≥2: emerald stripe
+  const card = useRef()       // stage 3: meeting card
+  const brief = useRef()      // stage 4: executive brief
+  const stickers = useRef([])
+  const prev = useRef({ stage: 0, at: -10 })
+
+  const stickerTex = useMemo(() => [
+    makeStickerTexture('RAW', '53 Events', BLUE),
+    makeStickerTexture('53 Events', '92% ICP', BLUE),
+    makeStickerTexture('247 Matches', '', EMERALD),
+    makeStickerTexture('6 Meetings', '', PURPLE),
+    makeStickerTexture('Executive Brief', 'A+ Ready', GOLD, true),
+  ], [])
 
   useFrame(({ clock }) => {
     const g = group.current
     if (!g) return
     const s = unitState(unitTime(clock.elapsedTime, index))
     g.position.x = s.x
-    g.position.y = 0.72 + Math.sin(clock.elapsedTime * 0.8 + index * 3.7) * 0.008
-    const k = 1 + s.pop
-    g.scale.setScalar(k)
+    g.position.y = 0.72
 
-    const isCube = s.stage <= 3
+    // smooth grow-in after each transformation
+    if (s.stage !== prev.current.stage) prev.current = { stage: s.stage, at: clock.elapsedTime }
+    const k = THREE.MathUtils.clamp((clock.elapsedTime - prev.current.at) / 0.5, 0, 1)
+    g.scale.setScalar(0.86 + 0.14 * easeInOut(k))
+
+    const isCube = s.stage <= 2
     if (cube.current)  cube.current.visible = isCube
-    if (card.current)  card.current.visible = s.stage === 4
-    if (brief.current) brief.current.visible = s.stage >= 5
-    if (scanGlow.current) {
-      scanGlow.current.visible = isCube && s.stage >= 1
-      scanGlow.current.material.emissiveIntensity = 0.7 + Math.sin(clock.elapsedTime * 1.6) * 0.2
-    }
-    if (stripe.current) stripe.current.visible = isCube && s.stage >= 2
-    if (badge.current)  badge.current.visible = isCube && s.stage >= 3
+    if (card.current)  card.current.visible = s.stage === 3
+    if (brief.current) brief.current.visible = s.stage >= 4
+    if (blueEdge.current) blueEdge.current.visible = isCube && s.stage >= 1
+    if (stripe.current)   stripe.current.visible = isCube && s.stage >= 2
+    // one sticker per stage; parents (cube/card/brief) gate the rest
+    stickers.current.forEach((st, i) => {
+      if (st) st.visible = i === Math.min(s.stage, 4)
+    })
   })
+
+  const sticker = (i, w, h, pos) => (
+    <mesh key={i} ref={el => (stickers.current[i] = el)} visible={false} position={pos}>
+      <planeGeometry args={[w, h]} />
+      <meshBasicMaterial map={stickerTex[i]} transparent toneMapped={false} />
+    </mesh>
+  )
 
   return (
     <group ref={group} position={[START_X, 0.72, 0]}>
-      {/* raw event cube — accrues marks as it clears each machine */}
+      {/* stages 0–2: the event cube, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[0.8, 0.62, 0.8]} radius={0.16} smoothness={6} castShadow>
-          <meshPhysicalMaterial {...plastic(0.38, 0.35)} />
+          <meshPhysicalMaterial {...body('#F4F2ED', 0.38)} />
         </RoundedBox>
-        <Seam args={[0.68, 0.02, 0.68]} position={[0, 0.29, 0]} />
-        {/* blue discovery glow */}
-        <mesh ref={scanGlow} visible={false} position={[0, -0.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.44, 0.02, 12, 48]} />
-          <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0.8} />
+        {/* stage 1: blue accent ring */}
+        <mesh ref={blueEdge} visible={false} position={[0, -0.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.44, 0.018, 12, 48]} />
+          <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0.7} />
         </mesh>
-        {/* emerald ICP stripe */}
-        <mesh ref={stripe} visible={false} position={[0, 0.08, 0]}>
-          <boxGeometry args={[0.82, 0.05, 0.82]} />
-          <meshStandardMaterial color={EMERALD} emissive={EMERALD} emissiveIntensity={0.55}
+        {/* stage 2: emerald stripe */}
+        <mesh ref={stripe} visible={false} position={[0, 0.2, 0]}>
+          <boxGeometry args={[0.82, 0.045, 0.82]} />
+          <meshStandardMaterial color={EMERALD} emissive={EMERALD} emissiveIntensity={0.45}
                                 roughness={0.3} />
         </mesh>
-        {/* orange match badge */}
-        <group ref={badge} visible={false} position={[0, 0.05, 0.41]}>
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.11, 0.11, 0.03, 24]} />
-            <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.6} />
-          </mesh>
-          <mesh position={[0, 0, 0.02]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.05, 0.05, 0.03, 20]} />
-            <meshStandardMaterial color="#FFFFFF" emissive="#FFFFFF" emissiveIntensity={0.4} />
-          </mesh>
-        </group>
+        {sticker(0, 0.56, 0.28, [0, -0.02, 0.41])}
+        {sticker(1, 0.56, 0.28, [0, -0.02, 0.41])}
+        {sticker(2, 0.56, 0.28, [0, -0.02, 0.41])}
       </group>
 
-      {/* stage 4 — premium meeting card */}
+      {/* stage 3: premium meeting card */}
       <group ref={card} visible={false}>
         <RoundedBox args={[0.9, 0.58, 0.09]} radius={0.05} position={[0, 0.02, 0]} castShadow>
-          <meshPhysicalMaterial {...plastic(0.3, 0.5)} />
+          <meshPhysicalMaterial {...body('#F6F4EF', 0.3)} clearcoat={0.6} />
         </RoundedBox>
-        <mesh position={[0, 0.02, 0.055]}>
-          <planeGeometry args={[0.78, 0.08]} />
-          <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.7} />
+        <mesh position={[0, 0.2, 0.052]}>
+          <planeGeometry args={[0.78, 0.07]} />
+          <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.6} />
         </mesh>
-        {[0.12, 0.0, -0.12].map((oy, i) => (
-          <mesh key={i} position={[-0.08 + i * 0.02, oy - 0.08, 0.055]}>
-            <planeGeometry args={[0.5 - i * 0.1, 0.028]} />
-            <meshStandardMaterial color="#C9C4BB" roughness={0.8} />
-          </mesh>
-        ))}
+        {sticker(3, 0.6, 0.3, [0, -0.06, 0.052])}
       </group>
 
-      {/* stage 5 — elegant dark brief with gold seal */}
+      {/* stage 4: elegant dark executive brief with gold seal */}
       <group ref={brief} visible={false}>
         <RoundedBox args={[0.74, 0.96, 0.08]} radius={0.04} position={[0, 0.18, 0]} castShadow>
           <meshPhysicalMaterial color="#23252B" roughness={0.35} clearcoat={0.6}
                                 clearcoatRoughness={0.3} />
         </RoundedBox>
-        {/* gold seal */}
-        <mesh position={[0, 0.4, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.1, 0.1, 0.025, 28]} />
+        <mesh position={[0, 0.46, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.09, 0.09, 0.025, 28]} />
           <meshPhysicalMaterial color={GOLD} metalness={0.85} roughness={0.3}
                                 emissive={GOLD} emissiveIntensity={0.25} />
         </mesh>
-        <mesh position={[0, 0.4, 0.062]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.065, 0.008, 8, 28]} />
-          <meshStandardMaterial color="#2B2416" roughness={0.5} />
-        </mesh>
-        {/* gold rule lines */}
-        {[0.12, 0.0, -0.12].map((oy, i) => (
-          <mesh key={i} position={[0, oy, 0.05]}>
-            <planeGeometry args={[0.5 - i * 0.08, 0.018]} />
-            <meshPhysicalMaterial color={GOLD} metalness={0.7} roughness={0.4}
-                                  emissive={GOLD} emissiveIntensity={0.15} />
-          </mesh>
-        ))}
+        {sticker(4, 0.62, 0.31, [0, 0.1, 0.047])}
       </group>
     </group>
   )
 }
 
-/* ── conveyor: precision rail system (unchanged design language) ── */
+/* ── conveyor: brushed precision rails, quiet ── */
 function Conveyor() {
-  const dashes = useRef()
-  useFrame(({ clock }) => {
-    if (dashes.current)
-      dashes.current.position.x = ((clock.elapsedTime * 0.6) % 3.6) - 1.8
-  })
   return (
     <group>
       <RoundedBox args={[15.5, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
@@ -629,9 +571,8 @@ function Conveyor() {
           <meshPhysicalMaterial {...rubber} />
         </mesh>
       ))}
-      <Seam args={[15.3, 0.03, 1.6]} position={[0, -0.2, 0]} />
       <RoundedBox args={[15.2, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
-        <meshPhysicalMaterial {...plastic(0.42, 0.25)} />
+        <meshPhysicalMaterial {...body('#F0EDE7', 0.42)} />
       </RoundedBox>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[14.7, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
@@ -639,26 +580,9 @@ function Conveyor() {
         </RoundedBox>
       ))}
       <RoundedBox args={[14.6, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
-        <meshPhysicalMaterial {...plastic2} />
+        <meshPhysicalMaterial {...softPlastic('#EAE7E0')} />
       </RoundedBox>
       <Seam args={[14.6, 0.02, 1.12]} position={[0, 0.24, 0]} />
-      {[-0.22, 0.22].map((gz, i) => (
-        <Seam key={i} args={[14.4, 0.015, 0.02]} position={[0, 0.3, gz]} />
-      ))}
-      {/* hairline guide light + drifting dash cluster (belt motion) */}
-      <mesh position={[0, 0.31, 0.46]}>
-        <boxGeometry args={[14.2, 0.014, 0.014]} />
-        <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0.7} />
-      </mesh>
-      <group ref={dashes}>
-        {[-6, -4.8, -3.6, -2.4, -1.2, 0, 1.2, 2.4, 3.6, 4.8].map((dx, i) => (
-          <mesh key={i} position={[dx, 0.305, -0.46]}>
-            <boxGeometry args={[0.28, 0.012, 0.012]} />
-            <meshStandardMaterial color={BLUE} emissive={BLUE} emissiveIntensity={0.4}
-                                  transparent opacity={0.5} />
-          </mesh>
-        ))}
-      </group>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 7.66, 0.02, 0]} castShadow>
           <meshPhysicalMaterial {...brushedAlu} />
@@ -668,56 +592,15 @@ function Conveyor() {
   )
 }
 
-/* finished brief on a display plinth at the end of the line */
-function OutputPlinth() {
-  const seal = useRef()
-  useFrame(({ clock }) => {
-    if (seal.current)
-      seal.current.material.emissiveIntensity = 0.3 + Math.sin(clock.elapsedTime * 1.4) * 0.15
-  })
-  return (
-    <group position={[7.15, 0.5, 0]}>
-      <mesh castShadow receiveShadow>
-        <cylinderGeometry args={[0.78, 0.84, 0.14, 48]} />
-        <meshPhysicalMaterial {...brushedAlu} />
-      </mesh>
-      <mesh position={[0, 0.14, 0]} castShadow>
-        <cylinderGeometry args={[0.72, 0.72, 0.12, 48]} />
-        <meshPhysicalMaterial {...plastic(0.4, 0.3)} />
-      </mesh>
-      {/* the finished brief on display, slightly tilted back */}
-      <group position={[0, 0.72, 0]} rotation={[-0.12, -0.25, 0]}>
-        <RoundedBox args={[0.74, 0.96, 0.08]} radius={0.04} castShadow>
-          <meshPhysicalMaterial color="#23252B" roughness={0.35} clearcoat={0.6}
-                                clearcoatRoughness={0.3} />
-        </RoundedBox>
-        <mesh ref={seal} position={[0, 0.22, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.1, 0.1, 0.025, 28]} />
-          <meshPhysicalMaterial color={GOLD} metalness={0.85} roughness={0.3}
-                                emissive={GOLD} emissiveIntensity={0.3} />
-        </mesh>
-        {[-0.06, -0.18, -0.3].map((oy, i) => (
-          <mesh key={i} position={[0, oy, 0.05]}>
-            <planeGeometry args={[0.5 - i * 0.08, 0.018]} />
-            <meshPhysicalMaterial color={GOLD} metalness={0.7} roughness={0.4}
-                                  emissive={GOLD} emissiveIntensity={0.15} />
-          </mesh>
-        ))}
-      </group>
-      <mesh position={[0, 0.26, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.46, 0.02, 12, 48]} />
-        <meshPhysicalMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.7} roughness={0.2} />
-      </mesh>
-    </group>
-  )
-}
-
-const MACHINES = [
-  { title: 'DISCOVERY', status: 'Searching…',   accent: BLUE,    Inner: DiscoveryScanner },
-  { title: 'ICP SCORE', status: '92%',          accent: EMERALD, Inner: QualificationEngine },
-  { title: 'MATCH',     status: '247 contacts', accent: ORANGE,  Inner: MatchEngine },
-  { title: 'MEETINGS',  status: '6 booked',     accent: PURPLE,  Inner: MeetingGenerator },
-  { title: 'BRIEF',     status: 'Ready',        accent: GOLD,    Inner: BriefGenerator },
+const STATIONS = [
+  { title: 'DISCOVER', accent: BLUE,   tint: '#ECE9E2',
+    lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
+  { title: 'MATCH',    accent: ORANGE, tint: '#E8E2D7',
+    lines: ['Matching…', '247 Attendees', 'Complete ✓'], Inner: MatchEngine },
+  { title: 'MEETINGS', accent: PURPLE, tint: '#DFE0E5',
+    lines: ['Generating…', '6 Meetings', 'Complete ✓'], Inner: MeetingArm },
+  { title: 'BRIEF',    accent: GOLD,   tint: '#F4EEE1',
+    lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
 
 function FactoryScene() {
@@ -725,34 +608,36 @@ function FactoryScene() {
   useFrame(({ clock }) => {
     const g = float.current
     if (!g) return
-    g.position.y = Math.sin(clock.elapsedTime * 0.45) * 0.05
-    g.rotation.y = -0.12 + Math.sin(clock.elapsedTime * 0.08) * 0.015
+    g.position.y = Math.sin(clock.elapsedTime * 0.45) * 0.04
   })
   return (
     <group ref={float} rotation={[0, -0.1, 0]}>
       <Conveyor />
-      {MACHINES.map((mc, m) => (
-        <MachineShell key={mc.title} m={m} accent={mc.accent} title={mc.title} status={mc.status}>
-          <mc.Inner m={m} />
-        </MachineShell>
+      {STATIONS.map((st, m) => (
+        <Station key={st.title} m={m} tint={st.tint} accent={st.accent}
+                 title={st.title} lines={st.lines}>
+          <st.Inner m={m} />
+        </Station>
       ))}
       {Array.from({ length: N_UNITS }, (_, i) => (
         <Unit key={i} index={i} />
       ))}
-      <OutputPlinth />
-      <ContactShadows position={[0, -0.44, 0]} opacity={0.34} scale={18}
-                      blur={1.6} far={3.4} resolution={1024} color="#332B44" />
-      <ContactShadows position={[0, -0.46, 0]} opacity={0.16} scale={28}
-                      blur={5} far={6} resolution={512} color="#39304A" />
+      <ContactShadows position={[0, -0.44, 0]} opacity={0.3} scale={18}
+                      blur={1.8} far={3.4} resolution={1024} color="#3A3630" />
     </group>
   )
 }
 
-/* fixed hero camera — no zoom, no rotation; only a responsive pullback */
+/* fixed hero camera — always frames the entire line, first station to
+   last, with generous whitespace; distance adapts to viewport aspect */
 function ResponsiveCamera() {
   const { camera, size } = useThree()
   useFrame(() => {
-    const targetZ = size.width < 480 ? 20 : size.width < 760 ? 16.5 : 13.2
+    const aspect = size.width / Math.max(size.height, 1)
+    const vfov = THREE.MathUtils.degToRad(26)
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect)
+    // half-width of the full line (+ margin) must fit the horizontal fov
+    const targetZ = Math.max(9.4 / Math.tan(hfov / 2), 11)
     camera.position.z += (targetZ - camera.position.z) * 0.08
   })
   return null
@@ -764,36 +649,35 @@ export default function EventFactory3D() {
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [0.55, 2.55, 13.2], fov: 26 }}
+        camera={{ position: [0.4, 2.5, 14], fov: 26 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.12
+          gl.setClearColor(0x000000, 0)
         }}
         style={{ background: 'transparent' }}
       >
         <ResponsiveCamera />
         <ambientLight intensity={0.5} />
         <directionalLight
-          position={[4, 10, 7]} intensity={1.2} color="#FFF3E2"
+          position={[4, 10, 7]} intensity={1.15} color="#FFF4E6"
           castShadow shadow-mapSize={[2048, 2048]} shadow-radius={10}
           shadow-camera-left={-10} shadow-camera-right={10}
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
-        <directionalLight position={[-6, 6, -8]} intensity={0.7} color="#DCCFFF" />
+        <directionalLight position={[-6, 6, -8]} intensity={0.6} color="#E4DDF5" />
         <Environment frames={1} resolution={256}>
-          <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF6EA" />
+          <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
           <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
-          <Lightformer intensity={1.1} position={[9, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} color="#FFEEDB" />
-          <Lightformer intensity={1.5} position={[0, 3, -12]} scale={[20, 1.2, 1]} color="#D9CCFF" />
-          <Lightformer intensity={0.7} position={[0, -4, 8]} scale={[16, 3, 1]} color="#F3EFE7" />
+          <Lightformer intensity={1.1} position={[9, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} color="#FFEFDD" />
+          <Lightformer intensity={0.7} position={[0, -4, 8]} scale={[16, 3, 1]} color="#F4F0E8" />
         </Environment>
         <group position={[0, -1.15, 0]}>
           <FactoryScene />
         </group>
         <EffectComposer multisampling={4}>
-          <Bloom intensity={0.35} luminanceThreshold={0.85} luminanceSmoothing={0.3} mipmapBlur />
-          <Vignette eskil={false} offset={0.28} darkness={0.55} />
+          <Bloom intensity={0.3} luminanceThreshold={0.88} luminanceSmoothing={0.3} mipmapBlur />
         </EffectComposer>
       </Canvas>
     </div>
