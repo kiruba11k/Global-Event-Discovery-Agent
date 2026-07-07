@@ -27,7 +27,7 @@
 */
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { RoundedBox, ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
+import { RoundedBox, ContactShadows, Environment, Lightformer } from '@react-three/drei'
 import { EffectComposer, Bloom, BrightnessContrast, HueSaturation } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
@@ -65,6 +65,19 @@ const noiseTex = (() => {
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3)
   return t
 })()
+/* soft radial glow sprite — used for grounded light pools */
+const glowTex = (() => {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas'); c.width = c.height = 256
+  const g = c.getContext('2d')
+  const rg = g.createRadialGradient(128, 128, 8, 128, 128, 126)
+  rg.addColorStop(0, 'rgba(255,255,255,0.9)')
+  rg.addColorStop(0.55, 'rgba(255,255,255,0.28)')
+  rg.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = rg; g.fillRect(0, 0, 256, 256)
+  return new THREE.CanvasTexture(c)
+})()
+
 /* cardboard fiber — subtle streaks + grain on the carton */
 const cartonTex = (() => {
   if (typeof document === 'undefined') return null
@@ -385,6 +398,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
   const glow = useRef()
   const bounce = useRef()
   const headMat = useRef()
+  const heroGlow = useRef()
   const { hw, hh, hy, r = 0.2, sw, sx = 0, bw = 1.66 } = shape
   const top = hy + hh / 2
   useFrame(({ clock }) => {
@@ -394,6 +408,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       glow.current.material.opacity = a * 0.5
     }
     if (bounce.current) bounce.current.intensity = 0.08 + a * 0.5
+    if (heroGlow.current) heroGlow.current.material.opacity = 0.03 + a * 0.16
     // the colored body itself breathes with light while processing
     if (headMat.current)
       headMat.current.emissiveIntensity =
@@ -480,10 +495,11 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
                   intensity={0.1} distance={3.6} decay={2} />
       {/* hero station: soft accent underglow beneath the base */}
       {hero && (
-        <mesh position={[0, -0.63, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[3.4, 3.0]} />
-          <meshBasicMaterial color={accent} transparent opacity={0.1} toneMapped={false}
-                             blending={THREE.AdditiveBlending} depthWrite={false} />
+        <mesh ref={heroGlow} position={[0, -0.62, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[3.6, 3.2]} />
+          <meshBasicMaterial map={glowTex} color={accent} transparent opacity={0.04}
+                             toneMapped={false} blending={THREE.AdditiveBlending}
+                             depthWrite={false} />
         </mesh>
       )}
       <FloatingStat m={m} stats={stats} accent={accent} y={top + 0.75 + (hero ? 0.35 : 0)} />
@@ -799,9 +815,10 @@ function Unit({ index }) {
 
       {/* soft under-halo while a machine works on the package */}
       <mesh ref={halo} visible={false} position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1.7, 1.5]} />
-        <meshBasicMaterial color="#FFF3D6" transparent opacity={0} toneMapped={false}
-                           blending={THREE.AdditiveBlending} depthWrite={false} />
+        <planeGeometry args={[1.9, 1.7]} />
+        <meshBasicMaterial map={glowTex} color="#FFF3D6" transparent opacity={0}
+                           toneMapped={false} blending={THREE.AdditiveBlending}
+                           depthWrite={false} />
       </mesh>
 
       {/* stage 3: elegant dark executive brief with gold seal */}
@@ -920,29 +937,6 @@ const STATIONS = [
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
 
-/* ── presentation platform: a floating studio floor — soft reflections,
-      no hard edges against the page ── */
-function Platform() {
-  return (
-    <group position={[0, -0.72, 0]}>
-      <RoundedBox args={[13.4, 0.07, 4.2]} radius={0.035} receiveShadow>
-        <meshPhysicalMaterial color="#F3F5F9" roughness={0.95} metalness={0}
-                              envMapIntensity={0.2} />
-      </RoundedBox>
-      {/* whisper of a reflection in the floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
-        <planeGeometry args={[13.0, 3.9]} />
-        <MeshReflectorMaterial
-          resolution={512} blur={[320, 110]} mixBlur={1}
-          mixStrength={0.14} roughness={0.92} depthScale={0.5}
-          minDepthThreshold={0.4} maxDepthThreshold={1.4}
-          color="#F3F5F9" metalness={0} transparent opacity={0.4}
-        />
-      </mesh>
-    </group>
-  )
-}
-
 function FactoryScene() {
   const float = useRef()
   useFrame(({ clock }) => {
@@ -952,7 +946,6 @@ function FactoryScene() {
   })
   return (
     <group ref={float} rotation={[0, -0.1, 0]}>
-      <Platform />
       <Conveyor />
       {STATIONS.map((st, m) => (
         <Station key={st.title} m={m} accent={st.accent} accent2={st.accent2} shape={st.shape}
@@ -966,10 +959,12 @@ function FactoryScene() {
       ))}
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.48} scale={18}
-                      blur={2.2} far={3.6} resolution={1024} color="#3A3630" />
-      <ContactShadows position={[0, -0.8, 0]} opacity={0.08} scale={30}
-                      blur={6.5} far={5} resolution={512} color="#443C33" />
+      {/* web-blended grounding: soft contact shadows melt straight into
+          the page background — no 3D floor plate */}
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.5} scale={18}
+                      blur={2.8} far={3.6} resolution={1024} color="#3A3630" />
+      <ContactShadows position={[0, -0.76, 0]} opacity={0.1} scale={28}
+                      blur={7} far={5} resolution={512} color="#443C33" />
     </group>
   )
 }
@@ -1015,18 +1010,16 @@ function ResponsiveCamera() {
 
 export default function EventFactory3D() {
   return (
-    <div className="ef3d-canvas" aria-hidden="true">
+    <div className="ef3d-canvas" aria-hidden="true"
+         style={{ background: 'transparent', pointerEvents: 'none' }}>
       <Canvas
-        shadows
         dpr={[1, 2]}
         camera={{ position: [0.35, 2.1, 11.5], fov: 32 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.1
-          gl.setClearColor(0x000000, 0)
-          gl.shadowMap.enabled = true
-          gl.shadowMap.type = THREE.PCFSoftShadowMap
+          gl.setClearColor(0x000000, 0)   // fully transparent canvas
         }}
         style={{ background: 'transparent' }}
       >
@@ -1036,13 +1029,7 @@ export default function EventFactory3D() {
         <AmbientPulse />
         {/* dominant sun from top-front-right: bright top highlights,
             deep soft drop shadows; frustum tightly bounds the line */}
-        <directionalLight
-          position={[6, 12, 6]} intensity={2.4} color="#FFEEDA"
-          castShadow shadow-mapSize={[2048, 2048]}
-          shadow-bias={-0.0005} shadow-normalBias={0.02}
-          shadow-camera-left={-8} shadow-camera-right={8}
-          shadow-camera-top={6} shadow-camera-bottom={-4}
-        />
+        <directionalLight position={[6, 12, 6]} intensity={2.4} color="#FFEEDA" />
         <directionalLight position={[-6, 6, -8]} intensity={0.35} color="#DDE4F4" />
         <hemisphereLight args={['#FFFDF9', '#EFE3CE', 0.22]} />
         <Environment frames={1} resolution={512}>
