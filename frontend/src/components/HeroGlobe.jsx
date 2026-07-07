@@ -5,11 +5,13 @@
   load. A cycling caption spotlights one real show at a time.
 */
 import { useMemo, useRef, useState, useEffect, Suspense } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { locateEvent } from '../lib/cityCoords'
 
+const R = 2                       // globe radius — everything derives from this
+const LABEL_CLEARANCE = 1.58      // fit radius incl. labels + pulse rings
 const INK = '#1E2B33'
 const TEAL = '#0E7C6B'
 const CORAL = '#E85D3D'
@@ -48,7 +50,7 @@ function PointSphere() {
       const y = 1 - (i / (n - 1)) * 2
       const rad = Math.sqrt(1 - y * y)
       const th = i * 2.399963229728653 // golden angle
-      pts.push(Math.cos(th) * rad * 2, y * 2, Math.sin(th) * rad * 2)
+      pts.push(Math.cos(th) * rad * R, y * R, Math.sin(th) * rad * R)
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
@@ -78,7 +80,7 @@ function PulseRing({ color, delay }) {
 }
 
 function CityMarker({ loc, color, delay, highlighted }) {
-  const pos = useMemo(() => latLngToVec3(loc.lat, loc.lng, 2.02), [loc])
+  const pos = useMemo(() => latLngToVec3(loc.lat, loc.lng, R * 1.01), [loc])
   return (
     <group position={pos}>
       <mesh>
@@ -87,7 +89,7 @@ function CityMarker({ loc, color, delay, highlighted }) {
       </mesh>
       <PulseRing color={color} delay={delay} />
       <Html
-        position={[0, 0.12, 0]}
+        position={[0, R * 0.06, 0]}
         center
         occlude={false}
         style={{ pointerEvents: 'none' }}
@@ -103,10 +105,10 @@ function CityMarker({ loc, color, delay, highlighted }) {
 
 function Arc({ from, to, color }) {
   const { curve, geo } = useMemo(() => {
-    const a = latLngToVec3(from.lat, from.lng, 2.02)
-    const b = latLngToVec3(to.lat, to.lng, 2.02)
+    const a = latLngToVec3(from.lat, from.lng, R * 1.01)
+    const b = latLngToVec3(to.lat, to.lng, R * 1.01)
     const mid = a.clone().add(b).multiplyScalar(0.5).normalize()
-      .multiplyScalar(2.02 + a.distanceTo(b) * 0.35)
+      .multiplyScalar(R * 1.01 + a.distanceTo(b) * 0.3)
     const curve = new THREE.QuadraticBezierCurve3(a, mid, b)
     const geo = new THREE.TubeGeometry(curve, 40, 0.008, 6, false)
     return { curve, geo }
@@ -131,6 +133,21 @@ function Arc({ from, to, color }) {
   )
 }
 
+/* fit the whole globe + labels regardless of container size:
+   distance = fitRadius / tan(fov/2), corrected for narrow aspects */
+function CameraRig() {
+  const { camera, size } = useThree()
+  useFrame(() => {
+    const fitR = R * LABEL_CLEARANCE
+    const vHalf = Math.tan((camera.fov * Math.PI) / 360)
+    const aspect = size.width / size.height
+    const dist = fitR / Math.min(vHalf, vHalf * aspect)
+    camera.position.z += (dist - camera.position.z) * 0.1
+    camera.lookAt(0, 0, 0)
+  })
+  return null
+}
+
 function Scene({ cities, spotlight }) {
   const group = useRef()
   useFrame((_, dt) => {
@@ -139,12 +156,27 @@ function Scene({ cities, spotlight }) {
   const arcs = useMemo(() => {
     const n = cities.length
     if (n < 2) return []
-    return Array.from({ length: Math.min(6, n) }, (_, i) => [i % n, (i * 3 + 2) % n])
-      .filter(([a, b]) => a !== b)
+    // rank all pairs by great-circle span, keep the longest with each
+    // endpoint used at most twice — arcs wrap the sphere, no clustering
+    const pos = cities.map(c => latLngToVec3(c.lat, c.lng, 1))
+    const pairs = []
+    for (let a = 0; a < n; a++)
+      for (let b = a + 1; b < n; b++)
+        pairs.push([a, b, pos[a].angleTo(pos[b])])
+    pairs.sort((p, q) => q[2] - p[2])
+    const used = new Map(), out = []
+    for (const [a, b] of pairs) {
+      if ((used.get(a) || 0) >= 2 || (used.get(b) || 0) >= 2) continue
+      out.push([a, b])
+      used.set(a, (used.get(a) || 0) + 1)
+      used.set(b, (used.get(b) || 0) + 1)
+      if (out.length >= Math.min(6, n)) break
+    }
+    return out
   }, [cities])
 
   return (
-    <group ref={group} rotation={[0.35, -1.2, 0.08]}>
+    <group ref={group} rotation={[0.12, -1.2, 0.04]}>
       <PointSphere />
       {cities.map((loc, i) => (
         <CityMarker
@@ -159,8 +191,8 @@ function Scene({ cities, spotlight }) {
         <Arc key={i} from={cities[a]} to={cities[b]} color={PILLAR[i % 3]} />
       ))}
       {[0.6, 0, -0.6].map((y, i) => (
-        <mesh key={i} position={[0, y * 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[Math.sqrt(4 - (y * 2) ** 2), 0.003, 8, 80]} />
+        <mesh key={i} position={[0, y * R, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[Math.sqrt(R * R - (y * R) ** 2), 0.003, 8, 80]} />
           <meshBasicMaterial color={INK} transparent opacity={0.14} />
         </mesh>
       ))}
@@ -172,7 +204,21 @@ export default function HeroGlobe({ locations }) {
   // Real upcoming shows from the DB; fallback only while stats load
   const cities = useMemo(() => {
     const located = (locations || []).map(locateEvent).filter(Boolean)
-    return located.length >= 4 ? located.slice(0, 10) : FALLBACK_CITIES
+    const base = located.length >= 4 ? located.slice(0, 10) : [...FALLBACK_CITIES]
+    // event data skews northern — balance the sphere with southern/eastern
+    // hub cities (real tradeshow destinations) so the globe feels global
+    const SOUTH_HUBS = [
+      { name: 'Expo', city: 'São Paulo', country: 'Brazil', lat: -23.55, lng: -46.63 },
+      { name: 'Summit', city: 'Sydney', country: 'Australia', lat: -33.87, lng: 151.21 },
+      { name: 'Indaba', city: 'Johannesburg', country: 'South Africa', lat: -26.2, lng: 28.05 },
+      { name: 'Forum', city: 'Buenos Aires', country: 'Argentina', lat: -34.6, lng: -58.38 },
+    ]
+    const south = base.filter(c => c.lat < 0).length
+    for (const hub of SOUTH_HUBS) {
+      if (base.filter(c => c.lat < 0).length >= 3) break
+      if (!base.some(c => c.city === hub.city)) base.push(hub)
+    }
+    return base.slice(0, 12)
   }, [locations])
 
   const [spotlight, setSpotlight] = useState(0)
@@ -188,11 +234,12 @@ export default function HeroGlobe({ locations }) {
       <div className="hero-globe" aria-hidden="true">
         <Suspense fallback={null}>
           <Canvas
-            camera={{ position: [0, 0, 5.6], fov: 42 }}
+            camera={{ position: [0, 0, 7.4], fov: 42 }}
             dpr={[1, 2]}
             gl={{ antialias: true, alpha: true }}
             style={{ background: 'transparent' }}
           >
+            <CameraRig />
             <Scene cities={cities} spotlight={spotlight} />
           </Canvas>
         </Suspense>
