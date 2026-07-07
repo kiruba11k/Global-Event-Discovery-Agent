@@ -16,8 +16,12 @@
   · The travelling box evolves: RAW cube → blue-scored → emerald
     matched → premium meeting card → dark executive brief w/ gold seal,
     each stage carrying its own printed label.
-  · Machine bodies are neutral premium greys (warm grey / stone /
-    slate / champagne); accents are light only, ~15% of each machine.
+  · Material system: warm powder-coated aluminum bodies (#F3F1EC),
+    graphite anodized frames/bezels, smoked tempered-glass OLED
+    displays, stainless rails, dark rubber belt, frosted acrylic
+    inserts, rubber feet, tiny fasteners + vents. Accents (azure /
+    emerald / burnt orange / royal purple / warm gold) appear only as
+    light and anodized trim — 10-15% of each machine.
   · Fully transparent canvas — the scene sits directly on the page.
   · The camera always frames the whole line, first to last station.
 */
@@ -28,36 +32,46 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
 /* ── palette ── */
-const SEAM   = '#C9C4BB'
-const ALU    = '#D9DADF'
-const ALU_D  = '#9FA3AB'
-const RUBBER = '#3A3A3E'
-/* accents — light only */
-const BLUE    = '#3F8CFF'
-const EMERALD = '#17C787'
-const ORANGE  = '#FF9C3D'
-const PURPLE  = '#9D6BFF'
-const GOLD    = '#E7B54A'
+const BODY_C   = '#F3F1EC'   // warm powder-coated aluminum
+const GRAPHITE = '#4E5358'   // anodized frame / bezels
+const SEAM     = '#C6C2B9'
+const STEEL    = '#E9EBEE'   // stainless
+const ALU      = '#D6D8DC'   // brushed aluminum
+const RUBBER   = '#232327'   // soft black rubber
+/* accents — light + anodized trim only, never painted bodies */
+const BLUE    = '#2F6BE0'    // deep azure
+const EMERALD = '#0FAF7D'    // emerald green
+const ORANGE  = '#E0762B'    // burnt orange
+const PURPLE  = '#7D5BD9'    // royal purple
+const GOLD    = '#D9A33C'    // warm gold
 
 /* ── materials ── */
-const body = (color, rough = 0.42) => ({
-  // matte powder-coated finish
-  color, roughness: rough, metalness: 0.12,
-  clearcoat: 0.2, clearcoatRoughness: 0.7,
-  sheen: 0.2, sheenColor: '#FFFFFF', envMapIntensity: 0.7,
+const powder = (rough = 0.5) => ({
+  // warm matte powder-coated aluminum
+  color: BODY_C, roughness: rough, metalness: 0.06,
+  clearcoat: 0.08, clearcoatRoughness: 0.8,
+  sheen: 0.15, sheenColor: '#FFFFFF', envMapIntensity: 0.65,
 })
-const softPlastic  = (color) => ({ color, roughness: 0.55, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.7 })
-const brushedAlu   = { color: ALU,   roughness: 0.32, metalness: 0.9,  envMapIntensity: 1.3 }
-const anodizedAlu  = { color: ALU_D, roughness: 0.42, metalness: 0.85, envMapIntensity: 1.0 }
-const rubber       = { color: RUBBER, roughness: 0.95, metalness: 0 }
+const graphite = {
+  color: GRAPHITE, roughness: 0.45, metalness: 0.85, envMapIntensity: 0.9,
+}
+const brushedAlu = { color: ALU, roughness: 0.3, metalness: 0.9, envMapIntensity: 1.3 }
+const stainless  = { color: STEEL, roughness: 0.16, metalness: 1.0, envMapIntensity: 1.5 }
+const rubber     = { color: RUBBER, roughness: 0.95, metalness: 0 }
+const beltRubber = { color: '#2A2A2F', roughness: 0.82, metalness: 0 }
 const frosted = {
-  color: '#FFFFFF', roughness: 0.42, metalness: 0,
+  color: '#FFFFFF', roughness: 0.45, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  color: '#15151A', roughness: 0.08, metalness: 0.1,
-  clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 1.2,
+  // deep-black tempered glass with crisp reflections
+  color: '#0B0B0F', roughness: 0.05, metalness: 0.15,
+  clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.6,
 }
+/* anodized aluminum tinted to a station's accent */
+const anodizedAccent = (c) => ({
+  color: c, roughness: 0.4, metalness: 0.85, envMapIntensity: 1.0,
+})
 
 /* ── the production schedule ─────────────────────────────────────────
    travel → pause at input slot → inside the chamber (machine works,
@@ -177,14 +191,14 @@ function Led({ position, color, m }) {
 function drawScreen(g, title, line, accent, caret) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
-  g.fillStyle = 'rgba(14,14,18,0.96)'; g.fill()
-  g.lineWidth = 3; g.strokeStyle = accent + '44'; g.stroke()
+  g.fillStyle = 'rgba(7,7,10,0.98)'; g.fill()
+  g.lineWidth = 2; g.strokeStyle = accent + '38'; g.stroke()
   g.textAlign = 'left'
-  g.font = '600 30px "Helvetica Neue", Arial, sans-serif'
-  g.fillStyle = 'rgba(255,255,255,0.55)'
-  g.fillText(title.split('').join(' '), 36, 66)
-  g.beginPath(); g.arc(478, 56, 7, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
-  g.font = '500 40px "Helvetica Neue", Arial, sans-serif'
+  g.font = '600 26px "Helvetica Neue", Arial, sans-serif'
+  g.fillStyle = 'rgba(255,255,255,0.5)'
+  g.fillText(title.split('').join(' '), 36, 62)
+  g.beginPath(); g.arc(478, 54, 6, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
+  g.font = '500 36px "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = accent
   g.fillText(line + (caret ? '▎' : ''), 36, 152)
 }
@@ -224,11 +238,15 @@ function StationScreen({ m, title, lines, accent }) {
 
   return (
     <group position={[0, 2.14, 1.28]}>
-      {/* smoked-glass panel — visibly off while idle */}
-      <RoundedBox args={[1.42, 0.62, 0.04]} radius={0.05} position={[0, 0, -0.03]}>
+      {/* dark graphite bezel around the display */}
+      <RoundedBox args={[1.5, 0.7, 0.05]} radius={0.06} position={[0, 0, -0.045]}>
+        <meshPhysicalMaterial {...graphite} />
+      </RoundedBox>
+      {/* smoked tempered glass — visibly off while idle */}
+      <RoundedBox args={[1.42, 0.62, 0.04]} radius={0.05} position={[0, 0, -0.015]}>
         <meshPhysicalMaterial {...smokedGlass} />
       </RoundedBox>
-      <mesh ref={mesh} position={[0, 0, 0.005]}>
+      <mesh ref={mesh} position={[0, 0, 0.012]}>
         <planeGeometry args={[1.34, 0.56]} />
         <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
@@ -238,7 +256,7 @@ function StationScreen({ m, title, lines, accent }) {
 
 /* ── station shell: neutral premium body, real input/output slots,
       enclosed chamber that genuinely occludes the passing unit ── */
-function Station({ m, tint, accent, title, lines, children }) {
+function Station({ m, accent, title, lines, children }) {
   const glow = useRef()
   useFrame(({ clock }) => {
     if (glow.current) {
@@ -249,39 +267,61 @@ function Station({ m, tint, accent, title, lines, children }) {
   })
   return (
     <group position={[MX[m], 0, 0]}>
-      {/* anodized plinths + rubber feet */}
+      {/* graphite plinths + soft rubber feet */}
       {[-1, 1].map(s => (
         <group key={s}>
           <Foot position={[0.55, 0.27, s * 1.02]} />
           <Foot position={[-0.55, 0.27, s * 1.02]} />
           <RoundedBox args={[1.66, 0.14, 0.5]} radius={0.06} position={[0, 0.37, s * 1.02]} castShadow>
-            <meshPhysicalMaterial {...anodizedAlu} />
+            <meshPhysicalMaterial {...graphite} />
           </RoundedBox>
         </group>
       ))}
-      {/* chamber walls — the unit passes between them */}
+      {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[1.66, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
-          <meshPhysicalMaterial {...body(tint)} />
+          <meshPhysicalMaterial {...powder()} />
         </RoundedBox>
       ))}
+      <RoundedBox args={[1.1, 0.44, 0.05]} radius={0.05} position={[0, 0.92, 1.27]}>
+        <meshPhysicalMaterial {...frosted} />
+      </RoundedBox>
       {/* processing head over the tunnel */}
       <RoundedBox args={[1.66, 1.16, 2.52]} radius={0.2} position={[0, 2.06, 0]} castShadow>
-        <meshPhysicalMaterial {...body(tint, 0.38)} />
+        <meshPhysicalMaterial {...powder(0.46)} />
       </RoundedBox>
       <Seam args={[1.6, 0.02, 2.46]} position={[0, 2.62, 0]} />
       <RoundedBox args={[1.52, 0.28, 2.38]} radius={0.12} position={[0, 2.79, 0]} castShadow>
-        <meshPhysicalMaterial {...softPlastic(tint)} />
+        <meshPhysicalMaterial {...powder(0.55)} />
       </RoundedBox>
-      {/* brushed slot frames — clearly defined input & output */}
+      {/* anodized accent strip along the head's lower edge */}
+      <mesh position={[0, 1.53, 1.26]}>
+        <boxGeometry args={[1.5, 0.035, 0.02]} />
+        <meshPhysicalMaterial {...anodizedAccent(accent)} />
+      </mesh>
+      {/* ventilation slots on the head flank */}
+      {[0, 1, 2, 3].map(i => (
+        <mesh key={i} position={[0.84, 2.2, 0.65 - i * 0.16]}>
+          <boxGeometry args={[0.012, 0.4, 0.03]} />
+          <meshStandardMaterial color="#2E3134" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* brushed steel fasteners at the head corners */}
+      {[[-0.6, 1.72], [0.6, 1.72], [-0.6, 2.4], [0.6, 2.4]].map(([fx, fy], i) => (
+        <mesh key={i} position={[fx, fy, 1.265]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.016, 0.016, 0.012, 12]} />
+          <meshPhysicalMaterial {...stainless} roughness={0.35} />
+        </mesh>
+      ))}
+      {/* graphite slot frames — clearly defined input & output */}
       {[-1, 1].map(s => (
         <group key={s} position={[s * 0.81, 0, 0]}>
           <RoundedBox args={[0.06, 0.09, 1.3]} radius={0.03} position={[0, 1.45, 0]}>
-            <meshPhysicalMaterial {...brushedAlu} />
+            <meshPhysicalMaterial {...graphite} />
           </RoundedBox>
           {[-1, 1].map(z => (
             <RoundedBox key={z} args={[0.06, 1.1, 0.09]} radius={0.03} position={[0, 0.93, z * 0.63]}>
-              <meshPhysicalMaterial {...brushedAlu} />
+              <meshPhysicalMaterial {...graphite} />
             </RoundedBox>
           ))}
         </group>
@@ -313,7 +353,7 @@ function ScannerGate({ m }) {
   return (
     <group>
       <RoundedBox args={[1.2, 0.14, 0.46]} radius={0.06} position={[0, 3.0, 0]} castShadow>
-        <meshPhysicalMaterial {...softPlastic('#E9E6DF')} />
+        <meshPhysicalMaterial {...powder(0.52)} />
       </RoundedBox>
       {[-0.35, 0, 0.35].map((ox, i) => (
         <mesh key={i} position={[ox, 3.0, 0.24]}>
@@ -370,19 +410,19 @@ function MeetingArm({ m }) {
     <group position={[0, 2.62, 0]}>
       <mesh castShadow position={[0.42, 0.26, 0]}>
         <cylinderGeometry args={[0.15, 0.19, 0.22, 24]} />
-        <meshPhysicalMaterial {...anodizedAlu} />
+        <meshPhysicalMaterial {...graphite} />
       </mesh>
       <group ref={arm} position={[0.42, 0.37, 0]}>
         <RoundedBox args={[0.13, 0.56, 0.13]} radius={0.05} position={[0, 0.28, 0]} castShadow>
-          <meshPhysicalMaterial {...softPlastic('#DDDEE3')} />
+          <meshPhysicalMaterial {...powder(0.5)} />
         </RoundedBox>
         <group ref={fore} position={[0, 0.56, 0]}>
           <mesh>
             <sphereGeometry args={[0.085, 16, 16]} />
-            <meshPhysicalMaterial {...anodizedAlu} />
+            <meshPhysicalMaterial {...graphite} />
           </mesh>
           <RoundedBox args={[0.56, 0.1, 0.1]} radius={0.04} position={[-0.28, 0, 0]} castShadow>
-            <meshPhysicalMaterial {...softPlastic('#DDDEE3')} />
+            <meshPhysicalMaterial {...powder(0.5)} />
           </RoundedBox>
           <mesh ref={tip} position={[-0.56, -0.04, 0]}>
             <cylinderGeometry args={[0.04, 0.05, 0.08, 16]} />
@@ -412,7 +452,7 @@ function BriefPrinter({ m }) {
   return (
     <group>
       <RoundedBox args={[1.2, 0.28, 0.66]} radius={0.1} position={[0, 3.0, 0.35]} castShadow>
-        <meshPhysicalMaterial {...softPlastic('#F1EBDE')} />
+        <meshPhysicalMaterial {...powder(0.52)} />
       </RoundedBox>
       <mesh position={[0, 2.96, 0.69]}>
         <boxGeometry args={[0.9, 0.03, 0.02]} />
@@ -511,7 +551,7 @@ function Unit({ index }) {
       {/* stages 0–2: the event cube, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[0.8, 0.62, 0.8]} radius={0.16} smoothness={6} castShadow>
-          <meshPhysicalMaterial {...body('#F4F2ED', 0.38)} />
+          <meshPhysicalMaterial {...powder(0.42)} />
         </RoundedBox>
         {/* stage 1: blue accent ring */}
         <mesh ref={blueEdge} visible={false} position={[0, -0.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -532,7 +572,7 @@ function Unit({ index }) {
       {/* stage 3: premium meeting card */}
       <group ref={card} visible={false}>
         <RoundedBox args={[0.9, 0.58, 0.09]} radius={0.05} position={[0, 0.02, 0]} castShadow>
-          <meshPhysicalMaterial {...body('#F6F4EF', 0.3)} clearcoat={0.6} />
+          <meshPhysicalMaterial {...powder(0.32)} clearcoat={0.5} />
         </RoundedBox>
         <mesh position={[0, 0.2, 0.052]}>
           <planeGeometry args={[0.78, 0.07]} />
@@ -563,7 +603,7 @@ function Conveyor() {
   return (
     <group>
       <RoundedBox args={[15.5, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
-        <meshPhysicalMaterial {...anodizedAlu} />
+        <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
       {[-6.4, -3.2, 0, 3.2, 6.4].map((rx, i) => (
         <mesh key={i} position={[rx, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -572,34 +612,50 @@ function Conveyor() {
         </mesh>
       ))}
       <RoundedBox args={[15.2, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
-        <meshPhysicalMaterial {...body('#F0EDE7', 0.42)} />
+        <meshPhysicalMaterial {...brushedAlu} />
       </RoundedBox>
+      {/* stainless guide rails */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[14.7, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
-          <meshPhysicalMaterial {...brushedAlu} />
+          <meshPhysicalMaterial {...stainless} />
         </RoundedBox>
       ))}
+      {/* dark rubber belt */}
       <RoundedBox args={[14.6, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
-        <meshPhysicalMaterial {...softPlastic('#EAE7E0')} />
+        <meshPhysicalMaterial {...beltRubber} />
       </RoundedBox>
-      <Seam args={[14.6, 0.02, 1.12]} position={[0, 0.24, 0]} />
+      <mesh position={[0, 0.24, 0]}>
+        <boxGeometry args={[14.6, 0.02, 1.12]} />
+        <meshStandardMaterial color="#1B1B1F" roughness={0.9} />
+      </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 7.66, 0.02, 0]} castShadow>
           <meshPhysicalMaterial {...brushedAlu} />
         </RoundedBox>
+      ))}
+      {/* graphite steel support legs */}
+      {[-6.6, -2.2, 2.2, 6.6].map((lx, i) => (
+        <group key={i}>
+          {[-1, 1].map(s => (
+            <mesh key={s} position={[lx, -0.5, s * 0.6]} castShadow>
+              <boxGeometry args={[0.12, 0.3, 0.12]} />
+              <meshPhysicalMaterial {...graphite} />
+            </mesh>
+          ))}
+        </group>
       ))}
     </group>
   )
 }
 
 const STATIONS = [
-  { title: 'DISCOVER', accent: BLUE,   tint: '#ECE9E2',
+  { title: 'DISCOVER', accent: BLUE,
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
-  { title: 'MATCH',    accent: ORANGE, tint: '#E8E2D7',
+  { title: 'MATCH',    accent: ORANGE,
     lines: ['Matching…', '247 Attendees', 'Complete ✓'], Inner: MatchEngine },
-  { title: 'MEETINGS', accent: PURPLE, tint: '#DFE0E5',
+  { title: 'MEETINGS', accent: PURPLE,
     lines: ['Generating…', '6 Meetings', 'Complete ✓'], Inner: MeetingArm },
-  { title: 'BRIEF',    accent: GOLD,   tint: '#F4EEE1',
+  { title: 'BRIEF',    accent: GOLD,
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
 
@@ -614,7 +670,7 @@ function FactoryScene() {
     <group ref={float} rotation={[0, -0.1, 0]}>
       <Conveyor />
       {STATIONS.map((st, m) => (
-        <Station key={st.title} m={m} tint={st.tint} accent={st.accent}
+        <Station key={st.title} m={m} accent={st.accent}
                  title={st.title} lines={st.lines}>
           <st.Inner m={m} />
         </Station>
@@ -622,8 +678,8 @@ function FactoryScene() {
       {Array.from({ length: N_UNITS }, (_, i) => (
         <Unit key={i} index={i} />
       ))}
-      <ContactShadows position={[0, -0.44, 0]} opacity={0.3} scale={18}
-                      blur={1.8} far={3.4} resolution={1024} color="#3A3630" />
+      <ContactShadows position={[0, -0.68, 0]} opacity={0.3} scale={18}
+                      blur={1.8} far={3.6} resolution={1024} color="#3A3630" />
     </group>
   )
 }
