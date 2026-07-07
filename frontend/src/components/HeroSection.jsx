@@ -32,10 +32,10 @@ export default function HeroSection({ onScrollToForm, stats }) {
     <section className="ld-hero" aria-label="Find your shows">
       <div className="ld-hero-inner">
         <div className="ld-hero-left">
-          <motion.div className="ld-hero-badge" variants={rise} custom={0} initial="hidden" animate="show">
+          {/* <motion.div className="ld-hero-badge" variants={rise} custom={0} initial="hidden" animate="show">
             <span className="ld-hero-badge-dot" aria-hidden="true" />
             Trade-show intelligence for B2B teams
-          </motion.div>
+          </motion.div> */}
 
           <motion.h1 className="ld-hero-h1" variants={rise} custom={1} initial="hidden" animate="show">
             Your buyers are already at a show.
