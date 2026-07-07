@@ -31,46 +31,51 @@ import { RoundedBox, ContactShadows, Environment, Lightformer, MeshReflectorMate
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
-/* ── palette ── */
-const BODY_C   = '#F3F1EC'   // warm powder-coated aluminum
-const GRAPHITE = '#4E5358'   // anodized frame / bezels
-const SEAM     = '#C6C2B9'
-const STEEL    = '#E9EBEE'   // stainless
-const ALU      = '#D6D8DC'   // brushed aluminum
-const RUBBER   = '#232327'   // soft black rubber
-/* accents — light + anodized trim only, never painted bodies */
-const BLUE    = '#2F6BE0'    // deep azure
-const EMERALD = '#0FAF7D'    // emerald green
-const ORANGE  = '#E0762B'    // burnt orange
-const PURPLE  = '#7D5BD9'    // royal purple
-const GOLD    = '#D9A33C'    // warm gold
+/* ── palette: warm pastel claymorphism ── */
+const BODY_C   = '#F2EEE8'   // warm ivory clay body
+const PANEL_C  = '#E8E1D7'   // secondary panels
+const DETAIL_C = '#D8CFC3'   // small details / seams
+const FRAME_C  = '#B4ACA0'   // warm frame tone (no harsh black)
+const SUPPORT  = '#C6BFB3'   // plinths / legs
+const RAIL_C   = '#A8A59F'   // rails / soft metal
+const RUBBER_C = '#5A5B58'   // soft rubber, never pure black
+const CARTON   = '#C79D6A'   // premium shipping carton
+const CARTON_E = '#B3834F'   // carton edges
+/* pastel accents — trims, LEDs, glow, progress bars only */
+const BLUE    = '#6D8EFF'    // soft blue · discover
+const EMERALD = '#68D5A8'    // mint · score marks
+const ORANGE  = '#FF8C72'    // coral · match
+const PURPLE  = '#A98DFF'    // lavender · meetings
+const GOLD    = '#E9BE6B'    // soft gold · brief
+const LED_IDLE = '#FFE37D'   // warm idle indicator
 
-/* ── materials ── */
-const powder = (rough = 0.5) => ({
-  // warm matte powder-coated aluminum
-  color: BODY_C, roughness: rough, metalness: 0.06,
-  clearcoat: 0.08, clearcoatRoughness: 0.8,
-  sheen: 0.15, sheenColor: '#FFFFFF', envMapIntensity: 0.65,
+/* ── materials: soft matte clay, nothing harshly metallic ── */
+const powder = (rough = 0.72) => ({
+  color: BODY_C, roughness: rough, metalness: 0.03,
+  sheen: 0.35, sheenColor: '#FFF8EC', envMapIntensity: 0.5,
 })
+const panelClay = { color: PANEL_C, roughness: 0.68, metalness: 0.03, sheen: 0.25, sheenColor: '#FFF8EC' }
 const graphite = {
-  color: GRAPHITE, roughness: 0.45, metalness: 0.85, envMapIntensity: 0.9,
+  // warm matte frame — reads as tinted polymer, not metal
+  color: FRAME_C, roughness: 0.6, metalness: 0.08, envMapIntensity: 0.55,
 }
-const brushedAlu = { color: ALU, roughness: 0.3, metalness: 0.9, envMapIntensity: 1.3 }
-const stainless  = { color: STEEL, roughness: 0.16, metalness: 1.0, envMapIntensity: 1.5 }
-const rubber     = { color: RUBBER, roughness: 0.95, metalness: 0 }
-const beltRubber = { color: '#2A2A2F', roughness: 0.82, metalness: 0 }
+const support    = { color: SUPPORT, roughness: 0.65, metalness: 0.05 }
+const brushedAlu = { color: RAIL_C, roughness: 0.48, metalness: 0.35, envMapIntensity: 0.8 }
+const stainless  = { color: '#C9C4BA', roughness: 0.45, metalness: 0.35, envMapIntensity: 0.8 }
+const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
+const beltRubber = { color: '#6E706D', roughness: 0.95, metalness: 0 }
 const frosted = {
   color: '#FFFFFF', roughness: 0.45, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // deep-black tempered glass with crisp reflections
-  color: '#0B0B0F', roughness: 0.05, metalness: 0.15,
-  clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.6,
+  // matte OLED glass — deep but not mirror-hard
+  color: '#101014', roughness: 0.12, metalness: 0.05,
+  clearcoat: 0.6, clearcoatRoughness: 0.25, envMapIntensity: 0.9,
 }
-/* anodized aluminum tinted to a station's accent */
+/* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
-  color: c, roughness: 0.4, metalness: 0.85, envMapIntensity: 1.0,
+  color: c, roughness: 0.5, metalness: 0.1, envMapIntensity: 0.7,
 })
 
 /* ── the production schedule ─────────────────────────────────────────
@@ -159,7 +164,7 @@ function Seam({ args, position, rotation }) {
   return (
     <mesh position={position} rotation={rotation}>
       <boxGeometry args={args} />
-      <meshStandardMaterial color={SEAM} roughness={0.9} />
+      <meshStandardMaterial color={DETAIL_C} roughness={0.9} />
     </mesh>
   )
 }
@@ -171,18 +176,24 @@ function Foot({ position }) {
     </mesh>
   )
 }
-/* status LED — near-dark while idle, pulses only when its station works */
+/* status LED — warm soft glow while idle, shifts to the station's
+   accent and breathes while processing; smooth fades, no flashing */
 function Led({ position, color, m }) {
   const ref = useRef()
+  const idle = useMemo(() => new THREE.Color(LED_IDLE), [])
+  const busy = useMemo(() => new THREE.Color(color), [color])
   useFrame(({ clock }) => {
     if (!ref.current) return
     const a = machineActivity(clock.elapsedTime, m)
-    ref.current.material.emissiveIntensity = 0.12 + a * (0.9 + Math.sin(clock.elapsedTime * 4) * 0.4)
+    const mat = ref.current.material
+    mat.emissive.copy(idle).lerp(busy, a)
+    mat.color.copy(mat.emissive)
+    mat.emissiveIntensity = 0.35 + a * (0.75 + Math.sin(clock.elapsedTime * 3) * 0.25)
   })
   return (
     <mesh ref={ref} position={position}>
       <sphereGeometry args={[0.03, 12, 12]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.12} />
+      <meshStandardMaterial color={LED_IDLE} emissive={LED_IDLE} emissiveIntensity={0.35} />
     </mesh>
   )
 }
@@ -191,7 +202,7 @@ function Led({ position, color, m }) {
 function drawScreen(g, title, line, accent, caret, prog) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
-  g.fillStyle = 'rgba(7,7,10,0.98)'; g.fill()
+  g.fillStyle = 'rgba(16,16,16,0.98)'; g.fill()
   g.lineWidth = 2; g.strokeStyle = accent + '38'; g.stroke()
   g.textAlign = 'left'
   g.font = '600 26px "Helvetica Neue", Arial, sans-serif'
@@ -284,14 +295,14 @@ function Station({ m, accent, title, lines, shape, children }) {
           <Foot position={[0.55, 0.27, s * 1.02]} />
           <Foot position={[-0.55, 0.27, s * 1.02]} />
           <RoundedBox args={[1.66, 0.14, 0.5]} radius={0.06} position={[0, 0.37, s * 1.02]} castShadow>
-            <meshPhysicalMaterial {...graphite} />
+            <meshPhysicalMaterial {...support} />
           </RoundedBox>
         </group>
       ))}
       {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[1.66, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
-          <meshPhysicalMaterial {...powder()} />
+          <meshPhysicalMaterial {...panelClay} />
         </RoundedBox>
       ))}
       <RoundedBox args={[1.1, 0.44, 0.05]} radius={0.05} position={[0, 0.92, 1.27]}>
@@ -316,7 +327,7 @@ function Station({ m, accent, title, lines, shape, children }) {
       {[0, 1, 2, 3].map(i => (
         <mesh key={i} position={[hw / 2 + 0.005, hy, 0.65 - i * 0.16]}>
           <boxGeometry args={[0.012, Math.min(0.4, hh - 0.34), 0.03]} />
-          <meshStandardMaterial color="#2E3134" roughness={0.9} />
+          <meshStandardMaterial color="#8A8276" roughness={0.9} />
         </mesh>
       ))}
       {/* brushed steel fasteners recessed at the head corners */}
@@ -478,7 +489,7 @@ function BriefPrinter({ m }) {
       {/* front paper slot in the low printer face */}
       <mesh position={[0.55, 2.0, 1.265]}>
         <boxGeometry args={[0.86, 0.035, 0.02]} />
-        <meshStandardMaterial color="#1B1B1F" roughness={0.8} />
+        <meshStandardMaterial color="#55564F" roughness={0.9} />
       </mesh>
       {/* brushed output tray under the slot */}
       <RoundedBox args={[0.9, 0.045, 0.5]} radius={0.02} position={[0.55, 1.93, 1.5]}
@@ -500,19 +511,36 @@ function BriefPrinter({ m }) {
   )
 }
 
-/* ── stage labels printed on the travelling unit ── */
+/* ── stage labels: warm-white shipping stickers on the carton, with a
+      tiny barcode; the brief keeps its dark cover ── */
 function makeStickerTexture(l1, l2, accent, dark = false) {
   const c = document.createElement('canvas')
   c.width = 320; c.height = 160
   const g = c.getContext('2d')
+  if (!dark) {
+    // paper sticker
+    g.beginPath(); g.roundRect(6, 6, 308, 148, 16); g.closePath()
+    g.fillStyle = '#F9F5ED'; g.fill()
+    g.lineWidth = 2; g.strokeStyle = 'rgba(90,75,55,0.18)'; g.stroke()
+    // tiny barcode bottom-left
+    let bx = 26
+    for (const w of [3, 2, 5, 2, 3, 6, 2, 4, 3, 2, 5, 3]) {
+      g.fillStyle = 'rgba(60,50,38,0.7)'; g.fillRect(bx, 118, w, 24); bx += w + 4
+    }
+    // tracking code bottom-right
+    g.font = '600 16px "Courier New", monospace'
+    g.textAlign = 'right'
+    g.fillStyle = 'rgba(60,50,38,0.55)'
+    g.fillText('LS-2481-07', 296, 136)
+  }
   g.textAlign = 'center'
-  g.font = '700 44px "Helvetica Neue", Arial, sans-serif'
-  g.fillStyle = dark ? 'rgba(255,255,255,0.9)' : 'rgba(46,49,55,0.85)'
-  g.fillText(l1, 160, l2 ? 70 : 95)
+  g.font = '700 40px "Helvetica Neue", Arial, sans-serif'
+  g.fillStyle = dark ? 'rgba(255,255,255,0.9)' : '#4A4438'
+  g.fillText(l1, 160, l2 ? 58 : 76)
   if (l2) {
-    g.font = '600 38px "Helvetica Neue", Arial, sans-serif'
+    g.font = '600 34px "Helvetica Neue", Arial, sans-serif'
     g.fillStyle = accent
-    g.fillText(l2, 160, 126)
+    g.fillText(l2, 160, 102)
   }
   const tex = new THREE.CanvasTexture(c)
   tex.anisotropy = 8
@@ -572,11 +600,17 @@ function Unit({ index }) {
 
   return (
     <group ref={group} position={[START_X, 0.72, 0]}>
-      {/* stages 0–2: the event cube, accruing marks */}
+      {/* stages 0–2: a premium shipping carton, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[0.8, 0.62, 0.8]} radius={0.16} smoothness={6} castShadow>
-          <meshPhysicalMaterial {...powder(0.42)} />
+          <meshPhysicalMaterial color={CARTON} roughness={0.75} metalness={0}
+                                sheen={0.3} sheenColor="#FFEAC9" />
         </RoundedBox>
+        {/* carton fold line */}
+        <mesh position={[0, 0.29, 0]}>
+          <boxGeometry args={[0.7, 0.02, 0.7]} />
+          <meshStandardMaterial color={CARTON_E} roughness={0.85} />
+        </mesh>
         {/* stage 1: blue accent ring */}
         <mesh ref={blueEdge} visible={false} position={[0, -0.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.44, 0.018, 12, 48]} />
@@ -608,7 +642,7 @@ function Unit({ index }) {
       {/* stage 4: elegant dark executive brief with gold seal */}
       <group ref={brief} visible={false}>
         <RoundedBox args={[0.74, 0.96, 0.08]} radius={0.04} position={[0, 0.18, 0]} castShadow>
-          <meshPhysicalMaterial color="#23252B" roughness={0.35} clearcoat={0.6}
+          <meshPhysicalMaterial color="#2E2E36" roughness={0.5} clearcoat={0.25}
                                 clearcoatRoughness={0.3} />
         </RoundedBox>
         <mesh position={[0, 0.46, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
@@ -628,8 +662,8 @@ function Conveyor() {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const g = c.getContext('2d')
-    g.fillStyle = '#2A2A2F'; g.fillRect(0, 0, 256, 64)
-    g.fillStyle = 'rgba(255,255,255,0.05)'
+    g.fillStyle = '#6E706D'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = 'rgba(255,255,255,0.08)'
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
     const t = new THREE.CanvasTexture(c)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
@@ -666,7 +700,7 @@ function Conveyor() {
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[14.6, 0.02, 1.12]} />
-        <meshStandardMaterial color="#1B1B1F" roughness={0.9} />
+        <meshStandardMaterial color="#5E5F5A" roughness={0.9} />
       </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 7.66, 0.02, 0]} castShadow>
@@ -677,7 +711,7 @@ function Conveyor() {
       {[-4.4, 4.4].map((px, i) => (
         <group key={i}>
           <RoundedBox args={[0.6, 0.14, 0.02]} radius={0.03} position={[px, 0.02, 0.955]}>
-            <meshPhysicalMaterial {...powder(0.55)} />
+            <meshPhysicalMaterial {...panelClay} />
           </RoundedBox>
           <mesh position={[px + 0.24, 0.02, 0.968]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.014, 0.014, 0.01, 12]} />
@@ -691,7 +725,7 @@ function Conveyor() {
           {[-1, 1].map(s => (
             <mesh key={s} position={[lx, -0.5, s * 0.6]} castShadow>
               <boxGeometry args={[0.12, 0.3, 0.12]} />
-              <meshPhysicalMaterial {...graphite} />
+              <meshPhysicalMaterial {...support} />
             </mesh>
           ))}
         </group>
@@ -724,7 +758,7 @@ function Platform() {
     <group position={[0, -0.72, 0]}>
       {/* thin, near-page-tone slab — a studio floor, not an object */}
       <RoundedBox args={[16.4, 0.07, 4.2]} radius={0.035} receiveShadow>
-        <meshPhysicalMaterial color="#F1EDE3" roughness={0.62} metalness={0.03}
+        <meshPhysicalMaterial color="#EEE7DB" roughness={0.66} metalness={0.02}
                               envMapIntensity={0.3} />
       </RoundedBox>
       {/* whisper of a reflection in the floor */}
@@ -734,7 +768,7 @@ function Platform() {
           resolution={512} blur={[320, 110]} mixBlur={1}
           mixStrength={0.2} roughness={0.8} depthScale={0.5}
           minDepthThreshold={0.4} maxDepthThreshold={1.4}
-          color="#F2EEE4" metalness={0.03} transparent opacity={0.55}
+          color="#EFE8DC" metalness={0.02} transparent opacity={0.5}
         />
       </mesh>
     </group>
@@ -811,22 +845,22 @@ export default function EventFactory3D() {
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
-          gl.toneMappingExposure = 1.12
+          gl.toneMappingExposure = 1.1
           gl.setClearColor(0x000000, 0)
         }}
         style={{ background: 'transparent' }}
       >
         <ResponsiveCamera />
         {/* faint atmospheric depth — distant metal melts toward the page tone */}
-        <fog attach="fog" args={['#F2EDE1', 17, 34]} />
-        <ambientLight intensity={0.5} />
+        <fog attach="fog" args={['#F2E9DA', 17, 34]} />
+        <ambientLight intensity={0.62} color="#FFF6E8" />
         <directionalLight
-          position={[4, 10, 7]} intensity={1.15} color="#FFF4E6"
-          castShadow shadow-mapSize={[2048, 2048]} shadow-radius={10}
+          position={[4, 10, 7]} intensity={1.1} color="#FFEEDA"
+          castShadow shadow-mapSize={[2048, 2048]} shadow-radius={28}
           shadow-camera-left={-10} shadow-camera-right={10}
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
-        <directionalLight position={[-6, 6, -8]} intensity={0.6} color="#E4DDF5" />
+        <directionalLight position={[-6, 6, -8]} intensity={0.45} color="#EFE6F7" />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
           <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
@@ -837,7 +871,7 @@ export default function EventFactory3D() {
           <FactoryScene />
         </group>
         <EffectComposer multisampling={4}>
-          <Bloom intensity={0.36} luminanceThreshold={0.85} luminanceSmoothing={0.3} mipmapBlur />
+          <Bloom intensity={0.22} luminanceThreshold={0.82} luminanceSmoothing={0.35} mipmapBlur />
         </EffectComposer>
       </Canvas>
     </div>
