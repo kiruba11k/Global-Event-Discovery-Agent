@@ -226,7 +226,10 @@
   width: 100%;
   aspect-ratio: 1 / 1;
   max-height: 560px;
+  margin: 0 auto;
+  overflow: visible;
 }
+.hero-globe canvas { overflow: visible !important; }
 .ld-hero-globe-caption {
   text-align: center;
   font-family: var(--font-mono);
@@ -786,7 +789,7 @@
 }
 
 /* ════════ GLOBE — live DB labels ════════ */
-.hero-globe-wrap { position: relative; }
+.hero-globe-wrap { position: relative; overflow: visible; }
 .globe-label {
   font-family: var(--font-mono);
   font-size: 10px;
