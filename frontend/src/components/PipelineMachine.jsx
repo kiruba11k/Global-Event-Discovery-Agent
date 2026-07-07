@@ -1,8 +1,10 @@
 /*
   PipelineMachine.jsx — "Inside the machine": a real 3D factory scene
-  (three.js via EventFactory3D) where raw event parcels ride a conveyor
-  through three cubical machines and come out packaged. Labels render as
-  crisp HTML below the canvas; live figures come from /api/stats.
+  (three.js via EventFactory3D) where raw event units ride a conveyor
+  through five machines — discovery, ICP qualification, buyer matching,
+  meeting generation, brief creation — and emerge as a finished brief.
+  Station labels are integrated into the machines themselves; live
+  figures come from /api/stats.
 */
 import { lazy, Suspense } from 'react'
 import { motion } from 'framer-motion'
@@ -10,12 +12,6 @@ import { fmtCountPlus } from '../lib/format'
 import '../landing.css'
 
 const EventFactory3D = lazy(() => import('./EventFactory3D'))
-
-const STATIONS = [
-  { key: 'scan',  cls: 'find', title: '01 Scan',  sub: 'ICP-density scored — free' },
-  { key: 'match', cls: 'meet', title: '02 Match', sub: 'meetings booked by us' },
-  { key: 'brief', cls: 'talk', title: '03 Brief', sub: 'briefed by our team' },
-]
 
 export default function PipelineMachine({ stats }) {
   const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
@@ -47,16 +43,7 @@ export default function PipelineMachine({ stats }) {
 
           <div className="ef3d-endcaps" aria-hidden="true">
             <span className="ef3d-endcap">{events} raw events in</span>
-            <span className="ef3d-endcap">your top 6, graded A+</span>
-          </div>
-
-          <div className="ef3d-labels">
-            {STATIONS.map(s => (
-              <div key={s.key} className={`ef3d-label ef3d-label-${s.cls}`}>
-                <span className="ef3d-label-title">{s.title}</span>
-                <span className="ef3d-label-sub">{s.sub}</span>
-              </div>
-            ))}
+            <span className="ef3d-endcap">6 briefed meetings out</span>
           </div>
         </motion.div>
       </div>
