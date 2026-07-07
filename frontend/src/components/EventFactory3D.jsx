@@ -127,10 +127,11 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // high-fidelity glassmorphism panel: deep transmission, slick coat
-  color: '#C4CAD4', roughness: 0.1, metalness: 0,
-  transmission: 0.9, thickness: 1.2, ior: 1.5, transparent: true,
-  clearcoat: 1.0, clearcoatRoughness: 0.1, envMapIntensity: 1.1,
+  // deep slate smoked glass — smartphone-screen finish; inner neon UI
+  // transmits through from behind
+  color: '#12131A', roughness: 0.05, metalness: 0,
+  transmission: 0.6, thickness: 2.5, ior: 1.5, transparent: true,
+  clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 1.2,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -265,7 +266,11 @@ function Led({ position, color, m }) {
 function drawScreen(g, title, line, accent, caret, prog, accent2) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
-  g.fillStyle = 'rgba(16,16,18,0.98)'; g.fill()
+  g.fillStyle = 'rgba(14,15,22,0.98)'; g.fill()
+  // holographic matrix dots
+  g.fillStyle = accent + '22'
+  for (let dy = 28; dy < 216; dy += 24)
+    for (let dx = 28; dx < 512; dx += 24) g.fillRect(dx, dy, 2, 2)
   g.lineWidth = 2; g.strokeStyle = accent + '38'; g.stroke()
   // header row
   g.textAlign = 'left'
@@ -340,14 +345,15 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
       <RoundedBox args={[sw + 0.08, 0.62 * k + 0.08, 0.05]} radius={0.06} position={[0, 0, -0.045]}>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
-      {/* smoked tempered glass — visibly off while idle */}
-      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.05} position={[0, 0, -0.015]}>
-        <meshPhysicalMaterial {...smokedGlass} />
-      </RoundedBox>
-      <mesh ref={mesh} position={[0, 0, 0.012]}>
+      {/* inner holographic UI — light emits from within the shell */}
+      <mesh ref={mesh} position={[0, 0, -0.034]}>
         <planeGeometry args={[1.34 * k, 0.56 * k]} />
         <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
+      {/* deep smoked glass shell in front */}
+      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.05} position={[0, 0, -0.008]}>
+        <meshPhysicalMaterial {...smokedGlass} />
+      </RoundedBox>
     </group>
   )
 }
@@ -431,39 +437,25 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       <RoundedBox args={[1.1, 0.44, 0.05]} radius={0.05} position={[0, 0.92, 1.27]}>
         <meshPhysicalMaterial {...frosted} />
       </RoundedBox>
-      {/* service-door seam on the wall front */}
-      <Seam args={[0.4, 0.012, 0.02]} position={[-0.45, 1.22, 1.27]} />
-      {[-0.65, -0.25].map((ox, i) => (
-        <Seam key={i} args={[0.012, 0.2, 0.02]} position={[ox, 1.32, 1.27]} />
-      ))}
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.85)}
-                              sheen={0.7} sheenRoughness={0.45} sheenColor="#FFF6E8"
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.25)} metalness={0.2}
+                              sheen={0.4} sheenRoughness={0.5} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
-      <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
-      {/* anodized accent strip along the head's lower edge */}
+      {/* embedded cyber light line along the head's lower groove */}
       <mesh position={[0, hy - hh / 2 + 0.05, 1.26]}>
-        <boxGeometry args={[hw - 0.16, 0.035, 0.02]} />
-        <meshPhysicalMaterial {...anodizedAccent(accent)} />
+        <boxGeometry args={[hw - 0.16, 0.022, 0.02]} />
+        <meshStandardMaterial color={glowColor} emissive={glowColor}
+                              emissiveIntensity={3.0} toneMapped={false} />
       </mesh>
-      {/* ventilation slots on the head flank */}
-      {[0, 1, 2, 3].map(i => (
-        <mesh key={i} position={[hw / 2 + 0.005, hy, 0.65 - i * 0.16]}>
-          <boxGeometry args={[0.012, Math.min(0.4, hh - 0.34), 0.03]} />
-          <meshStandardMaterial color="#8A8276" roughness={0.9} />
-        </mesh>
-      ))}
-      {/* brushed steel fasteners recessed at the head corners */}
-      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([fx, fy], i) => (
-        <mesh key={i} position={[fx * (hw / 2 - 0.24), hy + fy * (hh / 2 - 0.16), 1.265]}
-              rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.016, 0.016, 0.012, 12]} />
-          <meshPhysicalMaterial {...stainless} roughness={0.35} />
-        </mesh>
-      ))}
+      {/* second light line seated in the chamber base joint */}
+      <mesh position={[0, 0.46, 1.27]}>
+        <boxGeometry args={[bw - 0.3, 0.016, 0.015]} />
+        <meshStandardMaterial color={glowColor} emissive={glowColor}
+                              emissiveIntensity={2.2} toneMapped={false} />
+      </mesh>
       {/* slot frames — accent-tinted lintel gives each station its
           identity; posts stay warm gray */}
       {[-1, 1].map(s => (
@@ -488,6 +480,9 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
           washes the chamber walls, not the glass */}
       <pointLight ref={bounce} position={[0, 0.8, 2.1]} color={glowColor}
                   intensity={0.1} distance={3.6} decay={2} />
+      {/* rear neon wash under/behind the machine */}
+      <pointLight position={[0, 0.5, -1.7]} color={glowColor}
+                  intensity={0.35} distance={4.5} decay={2} />
       {/* hero station: soft accent underglow beneath the base */}
       {hero && (
         <mesh ref={heroGlow} position={[0, -0.62, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -915,17 +910,17 @@ function Conveyor() {
    Brief. The center station is the hero: larger, taller, wider display,
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
-  { title: 'DISCOVER', accent: BLUE, neon: '#3BC8FF',
+  { title: 'DISCOVER', accent: BLUE, neon: '#00F3FF',
     body: '#7C8EE8', walls: '#DCE3F8',     // soft periwinkle over pale ice blue
     shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
-  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#B98BFF', neon: '#FF3BD4', hero: true,
+  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#B98BFF', neon: '#FF007F', hero: true,
     body: '#E88170', walls: '#F7DBD3',     // warm salmon over powder pink
     shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
-  { title: 'BRIEF & DELIVER', accent: GOLD, neon: '#FFB020',
+  { title: 'BRIEF & DELIVER', accent: GOLD, neon: '#FFC400',
     body: '#E0AC55', walls: '#F1E3C8',     // soft honey over almond cream
     shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
