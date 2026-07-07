@@ -127,9 +127,10 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // matte OLED glass — deep but not mirror-hard
-  color: '#101014', roughness: 0.12, metalness: 0.05,
-  clearcoat: 0.6, clearcoatRoughness: 0.25, envMapIntensity: 0.9,
+  // premium frosted display glass — translucent with a glossy coat
+  color: '#B8BEC9', roughness: 0.15, metalness: 0,
+  transmission: 0.75, thickness: 0.5, ior: 1.5, transparent: true,
+  clearcoat: 1.0, clearcoatRoughness: 0.12, envMapIntensity: 1.0,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -139,9 +140,9 @@ const anodizedAccent = (c) => ({
 /* ── the production schedule ─────────────────────────────────────────
    travel → pause at input slot → inside the chamber (machine works,
    screen types) → emerge from the output slot → travel on.          */
-const MX = [-5.0, 0, 5.0]
+const MX = [-5.2, 0, 5.2]
 const SLOT = 1.3
-const START_X = -6.4, END_X = 6.4
+const START_X = -6.6, END_X = 6.6
 const SPEED = 1.7, PAUSE = 0.5, PROCESS = 2.7
 /* a single unit travels the line — exactly one station is ever active,
    so the eye always knows where the story is */
@@ -157,7 +158,7 @@ const SCHED = (() => {
     pts.push({ x,           hold: PROCESS, v: 0.85 })   // ease inside
     pts.push({ x: x + SLOT, hold: 0, v: 1.3 })          // accelerate out
   })
-  pts.push({ x: END_X, hold: 0 })
+  pts.push({ x: END_X, hold: 2.0 })   // deliberate 2s dwell at the end
   let t = 0
   const keys = pts.map((p, i) => {
     if (i > 0) t += Math.abs(p.x - pts[i - 1].x) / (SPEED * (p.v || 1))
@@ -359,8 +360,13 @@ function FloatingStat({ m, stats, accent, y }) {
     c.width = 512; c.height = 256
     const g = c.getContext('2d')
     g.beginPath(); g.roundRect(24, 24, 464, 208, 36); g.closePath()
-    g.fillStyle = 'rgba(255,254,250,0.94)'; g.fill()
-    g.lineWidth = 3; g.strokeStyle = accent + '66'; g.stroke()
+    g.fillStyle = 'rgba(255,255,255,0.62)'; g.fill()
+    g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,0.9)'; g.stroke()
+    // inner glass highlight
+    g.beginPath(); g.roundRect(32, 30, 448, 60, 26); g.closePath()
+    g.fillStyle = 'rgba(255,255,255,0.28)'; g.fill()
+    g.lineWidth = 2; g.strokeStyle = accent + '55'
+    g.beginPath(); g.roundRect(24, 24, 464, 208, 36); g.closePath(); g.stroke()
     g.textAlign = 'center'
     g.font = '700 56px "Helvetica Neue", Arial, sans-serif'
     g.fillStyle = '#3D3A33'
@@ -394,7 +400,8 @@ function FloatingStat({ m, stats, accent, y }) {
 
 /* ── station shell: shared chamber + slots below, a per-station head
       silhouette above. `shape` = { hw, hh, hy, r } for the head. ── */
-function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, walls, children }) {
+function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, body, walls, children }) {
+  const glowColor = neon || accent
   const glow = useRef()
   const bounce = useRef()
   const headMat = useRef()
@@ -443,7 +450,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.65)}
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.7)}
                               clearcoat={0.12} clearcoatRoughness={0.6}
                               sheen={0.7} sheenRoughness={0.45} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
@@ -486,12 +493,12 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       {/* chamber worklight — dark until the station processes */}
       <mesh ref={glow} position={[0, 1.42, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[bw - 0.26, 1.1]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0}
+        <meshStandardMaterial color={glowColor} emissive={glowColor} emissiveIntensity={0}
                               transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
       {/* faint accent bounce onto nearby ivory panels — kept low so it
           washes the chamber walls, not the glass */}
-      <pointLight ref={bounce} position={[0, 0.8, 2.1]} color={accent}
+      <pointLight ref={bounce} position={[0, 0.8, 2.1]} color={glowColor}
                   intensity={0.1} distance={3.6} decay={2} />
       {/* hero station: soft accent underglow beneath the base */}
       {hero && (
@@ -503,8 +510,8 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
         </mesh>
       )}
       <FloatingStat m={m} stats={stats} accent={accent} y={top + 0.75 + (hero ? 0.35 : 0)} />
-      <Led position={[hw / 2 - 0.18, top - 0.12, 1.275]} color={accent} m={m} />
-      <StationScreen m={m} title={title} lines={lines} accent={accent} accent2={accent2}
+      <Led position={[hw / 2 - 0.18, top - 0.12, 1.275]} color={glowColor} m={m} />
+      <StationScreen m={m} title={title} lines={lines} accent={glowColor} accent2={accent2}
                      sw={sw ?? Math.min(1.42, hw - 0.34)} sx={sx} sy={hy} />
       {children}
     </group>
@@ -858,7 +865,7 @@ function Conveyor() {
   })
   return (
     <group>
-      <RoundedBox args={[13.6, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
+      <RoundedBox args={[14.0, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
       {[-5.5, -2.75, 0, 2.75, 5.5].map((rx, i) => (
@@ -867,25 +874,25 @@ function Conveyor() {
           <meshPhysicalMaterial {...rollerSatin} />
         </mesh>
       ))}
-      <RoundedBox args={[13.3, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
+      <RoundedBox args={[13.7, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
         <meshPhysicalMaterial {...brushedAlu} />
       </RoundedBox>
       {/* stainless guide rails */}
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[12.8, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
+        <RoundedBox key={s} args={[13.2, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
           <meshPhysicalMaterial {...stainless} />
         </RoundedBox>
       ))}
       {/* dark rubber belt with slowly drifting tread marks */}
-      <RoundedBox args={[12.7, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
+      <RoundedBox args={[13.1, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
         <meshPhysicalMaterial {...beltRubber} map={beltTex} />
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
-        <boxGeometry args={[12.7, 0.02, 1.12]} />
+        <boxGeometry args={[13.1, 0.02, 1.12]} />
         <meshStandardMaterial color="#1F2024" roughness={0.92} />
       </mesh>
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.7, 0.02, 0]} castShadow>
+        <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.9, 0.02, 0]} castShadow>
           <meshPhysicalMaterial {...coverClay} />
         </RoundedBox>
       ))}
@@ -920,17 +927,17 @@ function Conveyor() {
    Brief. The center station is the hero: larger, taller, wider display,
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
-  { title: 'DISCOVER', accent: BLUE,
+  { title: 'DISCOVER', accent: BLUE, neon: '#3BC8FF',
     body: '#7C8EE8', walls: '#DCE3F8',     // soft periwinkle over pale ice blue
     shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
-  { title: 'MATCH & SCORE', accent: ORANGE, accent2: PURPLE, hero: true,
+  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#B98BFF', neon: '#FF3BD4', hero: true,
     body: '#E88170', walls: '#F7DBD3',     // warm salmon over powder pink
     shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
-  { title: 'BRIEF & DELIVER', accent: GOLD,
+  { title: 'BRIEF & DELIVER', accent: GOLD, neon: '#FFB020',
     body: '#E0AC55', walls: '#F1E3C8',     // soft honey over almond cream
     shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
@@ -948,8 +955,8 @@ function FactoryScene() {
     <group ref={float} rotation={[0, 0, 0]}>
       <Conveyor />
       {STATIONS.map((st, m) => (
-        <Station key={st.title} m={m} accent={st.accent} accent2={st.accent2} shape={st.shape}
-                 hero={st.hero} stats={st.stats} body={st.body} walls={st.walls}
+        <Station key={st.title} m={m} accent={st.accent} accent2={st.accent2} neon={st.neon}
+                 shape={st.shape} hero={st.hero} stats={st.stats} body={st.body} walls={st.walls}
                  title={st.title} lines={st.lines}>
           <st.Inner m={m} />
         </Station>
@@ -995,7 +1002,7 @@ function ResponsiveCamera() {
     // horizontal fov; the line's height must fit the vertical fov
     // +1.7 compensates for the conveyor's near edge sitting in front of
     // the fit plane — keeps the end caps inside the frame at all aspects
-    const fitW = 7.4 / Math.tan(hfov / 2) + 1.55
+    const fitW = 7.6 / Math.tan(hfov / 2) + 1.55
     const fitH = 2.55 / Math.tan(vfov / 2)
     const targetZ = Math.max(fitW, fitH, 8.5)
     camera.position.z += (targetZ - camera.position.z) * 0.08
@@ -1050,7 +1057,7 @@ export default function EventFactory3D() {
           <FactoryScene />
         </group>
         <EffectComposer multisampling={4}>
-          <Bloom intensity={0.22} luminanceThreshold={0.82} luminanceSmoothing={0.35} mipmapBlur />
+          <Bloom intensity={0.34} luminanceThreshold={0.72} luminanceSmoothing={0.3} mipmapBlur />
           <HueSaturation saturation={0.05} />
           <BrightnessContrast brightness={0.012} contrast={0.035} />
         </EffectComposer>
