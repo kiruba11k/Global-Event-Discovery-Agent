@@ -32,7 +32,7 @@ import { EffectComposer, Bloom, BrightnessContrast, HueSaturation } from '@react
 import * as THREE from 'three'
 
 /* ── palette: warm pastel claymorphism ── */
-const BODY_C   = '#F2EEE8'   // warm ivory clay body
+const BODY_C   = '#FFFDF6'   // rich warm cream housings
 const PANEL_C  = '#E7DED2'   // secondary panels
 const DETAIL_C = '#D5CCBE'   // door frames / seams
 const FRAME_C  = '#A59F95'   // handles / warm gray frame
@@ -107,7 +107,8 @@ const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapI
 const brushedAlu = { color: '#B9B0A0', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.7 }  // warm soft aluminum
 const stainless  = { color: '#9FA0A2', roughness: 0.4, metalness: 0.6, envMapIntensity: 0.9 }   // satin steel
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
-const beltRubber = { color: '#63665C', roughness: 0.95, metalness: 0 }  // dark olive rubber
+const beltRubber = { color: '#2A2B30', roughness: 0.9, metalness: 0 }  // deep matte charcoal belt
+const rollerSatin = { color: '#B9BCC2', roughness: 0.3, metalness: 0.6, envMapIntensity: 0.9 }
 const frosted = {
   color: '#FFFFFF', roughness: 0.45, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
@@ -427,7 +428,9 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.4)}
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.42)}
+                              clearcoat={0.2} clearcoatRoughness={0.5}
+                              sheen={0.8} sheenRoughness={0.4} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
       <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
@@ -824,8 +827,8 @@ function Conveyor() {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const g = c.getContext('2d')
-    g.fillStyle = '#63665C'; g.fillRect(0, 0, 256, 64)
-    g.fillStyle = 'rgba(255,255,255,0.08)'
+    g.fillStyle = '#2A2B30'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = 'rgba(255,255,255,0.07)'
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
     const t = new THREE.CanvasTexture(c)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
@@ -844,7 +847,7 @@ function Conveyor() {
       {[-5.0, -2.5, 0, 2.5, 5.0].map((rx, i) => (
         <mesh key={i} position={[rx, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.1, 0.1, 1.5, 20]} />
-          <meshPhysicalMaterial {...rubber} />
+          <meshPhysicalMaterial {...rollerSatin} />
         </mesh>
       ))}
       <RoundedBox args={[12.3, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
@@ -862,7 +865,7 @@ function Conveyor() {
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[11.7, 0.02, 1.12]} />
-        <meshStandardMaterial color="#5E5F5A" roughness={0.9} />
+        <meshStandardMaterial color="#1F2024" roughness={0.92} />
       </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.2, 0.02, 0]} castShadow>
@@ -901,17 +904,17 @@ function Conveyor() {
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE,
-    body: '#7290E4', walls: '#D9E1F8',     // dusty azure hardware
+    body: '#4F75FF', walls: '#D9E2FF',     // rich milk-cobalt blue
     shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH & SCORE', accent: ORANGE, accent2: PURPLE, hero: true,
-    body: '#E77B60', walls: '#F8DCD2',     // warm coral hero
+    body: '#FF6B57', walls: '#FFDFD7',     // vibrant coral / persimmon
     shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
   { title: 'BRIEF & DELIVER', accent: GOLD,
-    body: '#DCA94E', walls: '#F5E6C6',     // warm mustard gold
+    body: '#FFB834', walls: '#FFEBC4',     // sunny marigold / mango
     shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
@@ -923,7 +926,7 @@ function Platform() {
   return (
     <group position={[0, -0.72, 0]}>
       <RoundedBox args={[13.4, 0.07, 4.2]} radius={0.035} receiveShadow>
-        <meshPhysicalMaterial color="#F4F6F9" roughness={0.95} metalness={0}
+        <meshPhysicalMaterial color="#F3F5F9" roughness={0.95} metalness={0}
                               envMapIntensity={0.2} />
       </RoundedBox>
       {/* whisper of a reflection in the floor */}
@@ -933,7 +936,7 @@ function Platform() {
           resolution={512} blur={[320, 110]} mixBlur={1}
           mixStrength={0.14} roughness={0.92} depthScale={0.5}
           minDepthThreshold={0.4} maxDepthThreshold={1.4}
-          color="#F4F6F9" metalness={0} transparent opacity={0.4}
+          color="#F3F5F9" metalness={0} transparent opacity={0.4}
         />
       </mesh>
     </group>
@@ -963,7 +966,7 @@ function FactoryScene() {
       ))}
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.4} scale={18}
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.48} scale={18}
                       blur={2.2} far={3.6} resolution={1024} color="#3A3630" />
       <ContactShadows position={[0, -0.8, 0]} opacity={0.08} scale={30}
                       blur={6.5} far={5} resolution={512} color="#443C33" />
