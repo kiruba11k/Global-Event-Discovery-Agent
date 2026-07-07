@@ -41,10 +41,6 @@ export default function PipelineMachine({ stats }) {
             <EventFactory3D />
           </Suspense>
 
-          <div className="ef3d-endcaps" aria-hidden="true">
-            <span className="ef3d-endcap">{events} raw events in</span>
-            <span className="ef3d-endcap">6 briefed meetings out</span>
-          </div>
         </motion.div>
       </div>
     </section>
