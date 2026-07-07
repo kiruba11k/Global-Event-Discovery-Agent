@@ -139,9 +139,9 @@ const anodizedAccent = (c) => ({
 /* ── the production schedule ─────────────────────────────────────────
    travel → pause at input slot → inside the chamber (machine works,
    screen types) → emerge from the output slot → travel on.          */
-const MX = [-4.5, 0, 4.5]
+const MX = [-5.0, 0, 5.0]
 const SLOT = 1.3
-const START_X = -5.9, END_X = 5.9
+const START_X = -6.4, END_X = 6.4
 const SPEED = 1.7, PAUSE = 0.5, PROCESS = 2.7
 /* a single unit travels the line — exactly one station is ever active,
    so the eye always knows where the story is */
@@ -443,9 +443,9 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.42)}
-                              clearcoat={0.2} clearcoatRoughness={0.5}
-                              sheen={0.8} sheenRoughness={0.4} sheenColor="#FFF6E8"
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.65)}
+                              clearcoat={0.12} clearcoatRoughness={0.6}
+                              sheen={0.7} sheenRoughness={0.45} sheenColor="#FFF6E8"
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
       <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
@@ -858,39 +858,39 @@ function Conveyor() {
   })
   return (
     <group>
-      <RoundedBox args={[12.6, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
+      <RoundedBox args={[13.6, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
-      {[-5.0, -2.5, 0, 2.5, 5.0].map((rx, i) => (
+      {[-5.5, -2.75, 0, 2.75, 5.5].map((rx, i) => (
         <mesh key={i} position={[rx, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.1, 0.1, 1.5, 20]} />
           <meshPhysicalMaterial {...rollerSatin} />
         </mesh>
       ))}
-      <RoundedBox args={[12.3, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
+      <RoundedBox args={[13.3, 0.42, 1.9]} radius={0.21} position={[0, 0.04, 0]} receiveShadow castShadow>
         <meshPhysicalMaterial {...brushedAlu} />
       </RoundedBox>
       {/* stainless guide rails */}
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[11.8, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
+        <RoundedBox key={s} args={[12.8, 0.06, 0.09]} radius={0.03} position={[0, 0.29, s * 0.58]}>
           <meshPhysicalMaterial {...stainless} />
         </RoundedBox>
       ))}
       {/* dark rubber belt with slowly drifting tread marks */}
-      <RoundedBox args={[11.7, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
+      <RoundedBox args={[12.7, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
         <meshPhysicalMaterial {...beltRubber} map={beltTex} />
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
-        <boxGeometry args={[11.7, 0.02, 1.12]} />
+        <boxGeometry args={[12.7, 0.02, 1.12]} />
         <meshStandardMaterial color="#1F2024" roughness={0.92} />
       </mesh>
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.2, 0.02, 0]} castShadow>
+        <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.7, 0.02, 0]} castShadow>
           <meshPhysicalMaterial {...coverClay} />
         </RoundedBox>
       ))}
       {/* tiny maintenance panels recessed in the deck face */}
-      {[-3.2, 3.2].map((px, i) => (
+      {[-3.6, 3.6].map((px, i) => (
         <group key={i}>
           <RoundedBox args={[0.6, 0.14, 0.02]} radius={0.03} position={[px, 0.02, 0.955]}>
             <meshPhysicalMaterial {...panelClay} />
@@ -902,7 +902,7 @@ function Conveyor() {
         </group>
       ))}
       {/* graphite steel support legs */}
-      {[-5.4, -1.8, 1.8, 5.4].map((lx, i) => (
+      {[-5.9, -2.0, 2.0, 5.9].map((lx, i) => (
         <group key={i}>
           {[-1, 1].map(s => (
             <mesh key={s} position={[lx, -0.5, s * 0.6]} castShadow>
@@ -921,17 +921,17 @@ function Conveyor() {
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE,
-    body: '#4F75FF', walls: '#D9E2FF',     // rich milk-cobalt blue
+    body: '#7C8EE8', walls: '#DCE3F8',     // soft periwinkle over pale ice blue
     shape: { hw: 3.0, hh: 0.78, hy: 1.89, r: 0.18, bw: 2.4 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH & SCORE', accent: ORANGE, accent2: PURPLE, hero: true,
-    body: '#FF6B57', walls: '#FFDFD7',     // vibrant coral / persimmon
+    body: '#E88170', walls: '#F7DBD3',     // warm salmon over powder pink
     shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
   { title: 'BRIEF & DELIVER', accent: GOLD,
-    body: '#FFB834', walls: '#FFEBC4',     // sunny marigold / mango
+    body: '#E0AC55', walls: '#F1E3C8',     // soft honey over almond cream
     shape: { hw: 2.9, hh: 0.72, hy: 1.86, r: 0.18, bw: 2.4, sw: 1.3, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
@@ -945,7 +945,7 @@ function FactoryScene() {
     g.position.y = Math.sin(clock.elapsedTime * 0.45) * 0.04
   })
   return (
-    <group ref={float} rotation={[0, -0.1, 0]}>
+    <group ref={float} rotation={[0, 0, 0]}>
       <Conveyor />
       {STATIONS.map((st, m) => (
         <Station key={st.title} m={m} accent={st.accent} accent2={st.accent2} shape={st.shape}
@@ -995,7 +995,7 @@ function ResponsiveCamera() {
     // horizontal fov; the line's height must fit the vertical fov
     // +1.7 compensates for the conveyor's near edge sitting in front of
     // the fit plane — keeps the end caps inside the frame at all aspects
-    const fitW = 6.9 / Math.tan(hfov / 2) + 1.55
+    const fitW = 7.4 / Math.tan(hfov / 2) + 1.55
     const fitH = 2.55 / Math.tan(vfov / 2)
     const targetZ = Math.max(fitW, fitH, 8.5)
     camera.position.z += (targetZ - camera.position.z) * 0.08
@@ -1020,6 +1020,8 @@ export default function EventFactory3D() {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.1
           gl.setClearColor(0x000000, 0)   // fully transparent canvas
+          gl.shadowMap.enabled = true
+          gl.shadowMap.type = THREE.PCFSoftShadowMap
         }}
         style={{ background: 'transparent' }}
       >
@@ -1029,7 +1031,13 @@ export default function EventFactory3D() {
         <AmbientPulse />
         {/* dominant sun from top-front-right: bright top highlights,
             deep soft drop shadows; frustum tightly bounds the line */}
-        <directionalLight position={[6, 12, 6]} intensity={2.4} color="#FFEEDA" />
+        <directionalLight
+          position={[6, 12, 6]} intensity={2.2} color="#FFEEDA"
+          castShadow shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0005} shadow-normalBias={0.02}
+          shadow-camera-left={-9} shadow-camera-right={9}
+          shadow-camera-top={6} shadow-camera-bottom={-4}
+        />
         <directionalLight position={[-6, 6, -8]} intensity={0.35} color="#DDE4F4" />
         <hemisphereLight args={['#FFFDF9', '#EFE3CE', 0.22]} />
         <Environment frames={1} resolution={512}>
