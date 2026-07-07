@@ -28,15 +28,16 @@
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { RoundedBox, ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
-import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, BrightnessContrast, HueSaturation } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
 /* ── palette: warm pastel claymorphism ── */
 const BODY_C   = '#F2EEE8'   // warm ivory clay body
-const PANEL_C  = '#E8E1D7'   // secondary panels
-const DETAIL_C = '#D8CFC3'   // small details / seams
-const FRAME_C  = '#B4ACA0'   // warm frame tone (no harsh black)
-const SUPPORT  = '#C6BFB3'   // plinths / legs
+const PANEL_C  = '#E7DED2'   // secondary panels
+const DETAIL_C = '#D5CCBE'   // door frames / seams
+const FRAME_C  = '#A59F95'   // handles / warm gray frame
+const CHAMPAGNE = '#BFAE8C'  // satin champagne hinges/trims
+const SUPPORT  = '#D0C6B7'   // base pedestals / legs
 const RAIL_C   = '#A8A59F'   // rails / soft metal
 const RUBBER_C = '#5A5B58'   // soft rubber, never pure black
 const CARTON   = '#C79D6A'   // premium shipping carton
@@ -49,21 +50,61 @@ const PURPLE  = '#A98DFF'    // lavender · meetings
 const GOLD    = '#E9BE6B'    // soft gold · brief
 const LED_IDLE = '#FFE37D'   // warm idle indicator
 
-/* ── materials: soft matte clay, nothing harshly metallic ── */
-const powder = (rough = 0.72) => ({
-  color: BODY_C, roughness: rough, metalness: 0.03,
+/* micro roughness variation — nothing reads mathematically perfect */
+const noiseTex = (() => {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas'); c.width = c.height = 128
+  const g = c.getContext('2d')
+  const img = g.createImageData(128, 128)
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 205 + Math.random() * 50
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255
+  }
+  g.putImageData(img, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3)
+  return t
+})()
+/* cardboard fiber — subtle streaks + grain on the carton */
+const cartonTex = (() => {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas'); c.width = c.height = 256
+  const g = c.getContext('2d')
+  g.fillStyle = CARTON; g.fillRect(0, 0, 256, 256)
+  for (let i = 0; i < 130; i++) {
+    const x = Math.random() * 256
+    g.strokeStyle = `rgba(${Math.random() > 0.5 ? '90,60,25' : '255,235,205'},${0.025 + Math.random() * 0.035})`
+    g.lineWidth = 0.6 + Math.random() * 1.2
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + (Math.random() - 0.5) * 14, 256); g.stroke()
+  }
+  for (let i = 0; i < 500; i++) {
+    g.fillStyle = `rgba(70,45,18,${0.02 + Math.random() * 0.04})`
+    g.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5)
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+})()
+
+/* ── materials: soft matte clay, layered — no default-material look ── */
+const clay = (color, rough = 0.72) => ({
+  color, roughness: rough, metalness: 0.03,
+  roughnessMap: noiseTex || undefined,
   sheen: 0.35, sheenColor: '#FFF8EC', envMapIntensity: 0.5,
 })
-const panelClay = { color: PANEL_C, roughness: 0.68, metalness: 0.03, sheen: 0.25, sheenColor: '#FFF8EC' }
+const powder = (rough = 0.72) => clay(BODY_C, rough)
+const panelClay = clay('#E7DED2', 0.68)
+const coverClay = clay('#EAE3D8', 0.7)
 const graphite = {
   // warm matte frame — reads as tinted polymer, not metal
   color: FRAME_C, roughness: 0.6, metalness: 0.08, envMapIntensity: 0.55,
 }
-const support    = { color: SUPPORT, roughness: 0.65, metalness: 0.05 }
-const brushedAlu = { color: RAIL_C, roughness: 0.48, metalness: 0.35, envMapIntensity: 0.8 }
-const stainless  = { color: '#C9C4BA', roughness: 0.45, metalness: 0.35, envMapIntensity: 0.8 }
+const support    = { color: SUPPORT, roughness: 0.65, metalness: 0.05, roughnessMap: noiseTex || undefined }
+const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapIntensity: 0.85 }
+const brushedAlu = { color: '#B9B0A0', roughness: 0.44, metalness: 0.5, envMapIntensity: 0.85 }  // warm aluminum
+const stainless  = { color: '#9FA0A2', roughness: 0.4, metalness: 0.6, envMapIntensity: 0.9 }   // satin steel
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
-const beltRubber = { color: '#6E706D', roughness: 0.95, metalness: 0 }
+const beltRubber = { color: '#63665C', roughness: 0.95, metalness: 0 }  // dark olive rubber
 const frosted = {
   color: '#FFFFFF', roughness: 0.45, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
@@ -202,17 +243,32 @@ function Led({ position, color, m }) {
 function drawScreen(g, title, line, accent, caret, prog) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
-  g.fillStyle = 'rgba(16,16,16,0.98)'; g.fill()
+  g.fillStyle = 'rgba(16,16,18,0.98)'; g.fill()
   g.lineWidth = 2; g.strokeStyle = accent + '38'; g.stroke()
+  // header row
   g.textAlign = 'left'
-  g.font = '600 26px "Helvetica Neue", Arial, sans-serif'
+  g.font = '600 24px "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = 'rgba(255,255,255,0.5)'
-  g.fillText(title.split('').join(' '), 36, 62)
-  g.beginPath(); g.arc(478, 54, 6, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
-  g.font = '500 36px "Helvetica Neue", Arial, sans-serif'
+  g.fillText(title.split('').join(' '), 36, 54)
+  g.beginPath(); g.arc(478, 46, 6, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
+  // status card
+  g.beginPath(); g.roundRect(28, 74, 336, 78, 14); g.closePath()
+  g.fillStyle = 'rgba(255,255,255,0.055)'; g.fill()
+  g.font = '500 32px "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = accent
-  g.fillText(line + (caret ? '▎' : ''), 36, 140)
-  // tiny progress bar along the bottom
+  g.fillText(line + (caret ? '▎' : ''), 46, 124)
+  // live waveform card on the right
+  g.beginPath(); g.roundRect(376, 74, 108, 78, 14); g.closePath()
+  g.fillStyle = 'rgba(255,255,255,0.055)'; g.fill()
+  g.strokeStyle = accent + 'AA'; g.lineWidth = 2.5
+  g.beginPath()
+  for (let i = 0; i <= 22; i++) {
+    const x = 388 + i * 4
+    const y = 113 + Math.sin(i * 0.9 + prog * 26) * (9 + 8 * Math.sin(i * 0.35 + prog * 9))
+    i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)
+  }
+  g.stroke()
+  // progress bar
   g.beginPath(); g.roundRect(36, 172, 440, 6, 3); g.closePath()
   g.fillStyle = 'rgba(255,255,255,0.09)'; g.fill()
   if (prog > 0.01) {
@@ -278,14 +334,16 @@ function StationScreen({ m, title, lines, accent, sw = 1.42, sx = 0, sy = 2.14 }
       silhouette above. `shape` = { hw, hh, hy, r } for the head. ── */
 function Station({ m, accent, title, lines, shape, children }) {
   const glow = useRef()
+  const bounce = useRef()
   const { hw, hh, hy, r = 0.2, sw, sx = 0 } = shape
   const top = hy + hh / 2
   useFrame(({ clock }) => {
+    const a = machineActivity(clock.elapsedTime, m)
     if (glow.current) {
-      const a = machineActivity(clock.elapsedTime, m)
       glow.current.material.emissiveIntensity = a * 1.1
       glow.current.material.opacity = a * 0.5
     }
+    if (bounce.current) bounce.current.intensity = 0.08 + a * 0.5
   })
   return (
     <group position={[MX[m], 0, 0]}>
@@ -338,11 +396,12 @@ function Station({ m, accent, title, lines, shape, children }) {
           <meshPhysicalMaterial {...stainless} roughness={0.35} />
         </mesh>
       ))}
-      {/* graphite slot frames — clearly defined input & output */}
+      {/* slot frames — accent-tinted lintel gives each station its
+          identity; posts stay warm gray */}
       {[-1, 1].map(s => (
         <group key={s} position={[s * 0.81, 0, 0]}>
           <RoundedBox args={[0.06, 0.09, 1.3]} radius={0.03} position={[0, 1.45, 0]}>
-            <meshPhysicalMaterial {...graphite} />
+            <meshPhysicalMaterial {...anodizedAccent(accent)} roughness={0.55} envMapIntensity={0.5} />
           </RoundedBox>
           {[-1, 1].map(z => (
             <RoundedBox key={z} args={[0.06, 1.1, 0.09]} radius={0.03} position={[0, 0.93, z * 0.63]}>
@@ -357,6 +416,10 @@ function Station({ m, accent, title, lines, shape, children }) {
         <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0}
                               transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
+      {/* faint accent bounce onto nearby ivory panels — kept low so it
+          washes the chamber walls, not the glass */}
+      <pointLight ref={bounce} position={[0, 0.8, 2.1]} color={accent}
+                  intensity={0.1} distance={3.6} decay={2} />
       <Led position={[hw / 2 - 0.18, top - 0.12, 1.275]} color={accent} m={m} />
       <StationScreen m={m} title={title} lines={lines} accent={accent}
                      sw={sw ?? Math.min(1.42, hw - 0.34)} sx={sx} sy={hy} />
@@ -494,7 +557,7 @@ function BriefPrinter({ m }) {
       {/* brushed output tray under the slot */}
       <RoundedBox args={[0.9, 0.045, 0.5]} radius={0.02} position={[0.55, 1.93, 1.5]}
                   rotation={[0.12, 0, 0]} castShadow>
-        <meshPhysicalMaterial {...brushedAlu} />
+        <meshPhysicalMaterial {...champagne} />
       </RoundedBox>
       {/* the brief gliding out of the slot */}
       <mesh ref={paper} position={[0.55, 1.99, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
@@ -532,6 +595,23 @@ function makeStickerTexture(l1, l2, accent, dark = false) {
     g.textAlign = 'right'
     g.fillStyle = 'rgba(60,50,38,0.55)'
     g.fillText('LS-2481-07', 296, 136)
+    // printed logo chip + handling marks
+    g.fillStyle = 'rgba(60,50,38,0.6)'
+    g.font = '700 13px "Helvetica Neue", Arial, sans-serif'
+    g.textAlign = 'left'
+    g.strokeStyle = 'rgba(60,50,38,0.5)'; g.lineWidth = 1.5
+    g.strokeRect(258, 14, 40, 18)
+    g.fillText('LS', 266, 28)
+    // this-way-up arrows
+    for (const ax of [26, 44]) {
+      g.beginPath()
+      g.moveTo(ax, 30); g.lineTo(ax - 6, 40); g.lineTo(ax + 6, 40); g.closePath()
+      g.fillStyle = 'rgba(60,50,38,0.45)'; g.fill()
+      g.fillRect(ax - 2, 40, 4, 10)
+    }
+    // recycling ring
+    g.beginPath(); g.arc(230, 24, 8, 0, Math.PI * 2)
+    g.strokeStyle = 'rgba(60,50,38,0.45)'; g.lineWidth = 2; g.stroke()
   }
   g.textAlign = 'center'
   g.font = '700 40px "Helvetica Neue", Arial, sans-serif'
@@ -603,7 +683,8 @@ function Unit({ index }) {
       {/* stages 0–2: a premium shipping carton, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[0.8, 0.62, 0.8]} radius={0.16} smoothness={6} castShadow>
-          <meshPhysicalMaterial color={CARTON} roughness={0.75} metalness={0}
+          <meshPhysicalMaterial color="#FFFFFF" map={cartonTex} roughness={0.78} metalness={0}
+                                roughnessMap={noiseTex || undefined}
                                 sheen={0.3} sheenColor="#FFEAC9" />
         </RoundedBox>
         {/* carton fold line */}
@@ -662,7 +743,7 @@ function Conveyor() {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const g = c.getContext('2d')
-    g.fillStyle = '#6E706D'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = '#63665C'; g.fillRect(0, 0, 256, 64)
     g.fillStyle = 'rgba(255,255,255,0.08)'
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
     const t = new THREE.CanvasTexture(c)
@@ -704,7 +785,7 @@ function Conveyor() {
       </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 7.66, 0.02, 0]} castShadow>
-          <meshPhysicalMaterial {...brushedAlu} />
+          <meshPhysicalMaterial {...coverClay} />
         </RoundedBox>
       ))}
       {/* tiny maintenance panels recessed in the deck face */}
@@ -797,7 +878,7 @@ function FactoryScene() {
       ))}
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.28} scale={18}
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.33} scale={18}
                       blur={2.2} far={3.6} resolution={1024} color="#3A3630" />
       <ContactShadows position={[0, -0.8, 0]} opacity={0.08} scale={30}
                       blur={6.5} far={5} resolution={512} color="#443C33" />
@@ -860,7 +941,8 @@ export default function EventFactory3D() {
           shadow-camera-left={-10} shadow-camera-right={10}
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
-        <directionalLight position={[-6, 6, -8]} intensity={0.45} color="#EFE6F7" />
+        <directionalLight position={[-6, 6, -8]} intensity={0.45} color="#DDE4F4" />
+        <hemisphereLight args={['#FFF4E0', '#E6D9C4', 0.32]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
           <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
@@ -872,6 +954,8 @@ export default function EventFactory3D() {
         </group>
         <EffectComposer multisampling={4}>
           <Bloom intensity={0.22} luminanceThreshold={0.82} luminanceSmoothing={0.35} mipmapBlur />
+          <HueSaturation saturation={0.05} />
+          <BrightnessContrast brightness={0.012} contrast={0.035} />
         </EffectComposer>
       </Canvas>
     </div>
