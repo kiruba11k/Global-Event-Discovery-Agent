@@ -27,7 +27,7 @@
 */
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { RoundedBox, ContactShadows, Environment, Lightformer } from '@react-three/drei'
+import { RoundedBox, ContactShadows, Environment, Lightformer, MeshReflectorMaterial } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
@@ -693,6 +693,29 @@ const STATIONS = [
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
 
+/* ── presentation platform: a floating base that grounds the line —
+      soft floor reflections, no hard edges against the page ── */
+function Platform() {
+  return (
+    <group position={[0, -0.75, 0]}>
+      <RoundedBox args={[16.4, 0.14, 4.2]} radius={0.07} receiveShadow>
+        <meshPhysicalMaterial color="#EDE9DF" roughness={0.55} metalness={0.04}
+                              envMapIntensity={0.45} />
+      </RoundedBox>
+      {/* whisper of a reflection in the platform surface */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.075, 0]}>
+        <planeGeometry args={[16.0, 3.9]} />
+        <MeshReflectorMaterial
+          resolution={512} blur={[280, 90]} mixBlur={1}
+          mixStrength={0.35} roughness={0.72} depthScale={0.5}
+          minDepthThreshold={0.4} maxDepthThreshold={1.4}
+          color="#F0ECE2" metalness={0.04} transparent opacity={0.85}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 function FactoryScene() {
   const float = useRef()
   useFrame(({ clock }) => {
@@ -702,6 +725,7 @@ function FactoryScene() {
   })
   return (
     <group ref={float} rotation={[0, -0.1, 0]}>
+      <Platform />
       <Conveyor />
       {STATIONS.map((st, m) => (
         <Station key={st.title} m={m} accent={st.accent} shape={st.shape}
@@ -712,8 +736,12 @@ function FactoryScene() {
       {Array.from({ length: N_UNITS }, (_, i) => (
         <Unit key={i} index={i} />
       ))}
-      <ContactShadows position={[0, -0.68, 0]} opacity={0.3} scale={18}
+      {/* radial shadow pooled on the platform, plus a wide soft halo
+          that melts the base into the page */}
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.36} scale={18}
                       blur={1.8} far={3.6} resolution={1024} color="#3A3630" />
+      <ContactShadows position={[0, -0.84, 0]} opacity={0.14} scale={30}
+                      blur={5.5} far={5} resolution={512} color="#443C33" />
     </group>
   )
 }
@@ -764,6 +792,8 @@ export default function EventFactory3D() {
         style={{ background: 'transparent' }}
       >
         <ResponsiveCamera />
+        {/* faint atmospheric depth — distant metal melts toward the page tone */}
+        <fog attach="fog" args={['#F2EDE1', 17, 34]} />
         <ambientLight intensity={0.5} />
         <directionalLight
           position={[4, 10, 7]} intensity={1.15} color="#FFF4E6"
@@ -782,7 +812,7 @@ export default function EventFactory3D() {
           <FactoryScene />
         </group>
         <EffectComposer multisampling={4}>
-          <Bloom intensity={0.3} luminanceThreshold={0.88} luminanceSmoothing={0.3} mipmapBlur />
+          <Bloom intensity={0.36} luminanceThreshold={0.85} luminanceSmoothing={0.3} mipmapBlur />
         </EffectComposer>
       </Canvas>
     </div>
