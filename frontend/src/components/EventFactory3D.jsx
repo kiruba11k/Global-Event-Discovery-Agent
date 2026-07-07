@@ -188,7 +188,7 @@ function Led({ position, color, m }) {
 }
 
 /* ── event-driven display: smoked glass, powers on + types + fades ── */
-function drawScreen(g, title, line, accent, caret) {
+function drawScreen(g, title, line, accent, caret, prog) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
   g.fillStyle = 'rgba(7,7,10,0.98)'; g.fill()
@@ -200,7 +200,14 @@ function drawScreen(g, title, line, accent, caret) {
   g.beginPath(); g.arc(478, 54, 6, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
   g.font = '500 36px "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = accent
-  g.fillText(line + (caret ? '▎' : ''), 36, 152)
+  g.fillText(line + (caret ? '▎' : ''), 36, 140)
+  // tiny progress bar along the bottom
+  g.beginPath(); g.roundRect(36, 172, 440, 6, 3); g.closePath()
+  g.fillStyle = 'rgba(255,255,255,0.09)'; g.fill()
+  if (prog > 0.01) {
+    g.beginPath(); g.roundRect(36, 172, 440 * prog, 6, 3); g.closePath()
+    g.fillStyle = accent; g.fill()
+  }
 }
 
 function StationScreen({ m, title, lines, accent, sw = 1.42, sx = 0, sy = 2.14 }) {
@@ -228,10 +235,11 @@ function StationScreen({ m, title, lines, accent, sw = 1.42, sx = 0, sy = 2.14 }
     const n = Math.min(full.length, Math.ceil(u * (full.length + 4)))
     const typed = full.slice(0, n)
     const caret = n < full.length && Math.floor(clock.elapsedTime * 3) % 2 === 0
-    const key = `${typed}|${caret ? 1 : 0}`
+    const bar = Math.round(p * 44) / 44   // quantized so redraws stay rare
+    const key = `${typed}|${caret ? 1 : 0}|${bar}`
     if (key !== stateRef.current.key) {
       stateRef.current.key = key
-      drawScreen(tex.image.getContext('2d'), title, typed, accent, caret)
+      drawScreen(tex.image.getContext('2d'), title, typed, accent, caret, bar)
       tex.needsUpdate = true
     }
   })
@@ -614,8 +622,24 @@ function Unit({ index }) {
   )
 }
 
-/* ── conveyor: brushed precision rails, quiet ── */
+/* ── conveyor: brushed precision rails, quiet; only the belt creeps ── */
 function Conveyor() {
+  const beltTex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 256; c.height = 64
+    const g = c.getContext('2d')
+    g.fillStyle = '#2A2A2F'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = 'rgba(255,255,255,0.05)'
+    for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
+    const t = new THREE.CanvasTexture(c)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(14, 1)
+    return t
+  }, [])
+  useFrame(({ clock }) => {
+    // almost imperceptible tread crawl — continuous processing
+    beltTex.offset.x = -((clock.elapsedTime * 0.014) % 1)
+  })
   return (
     <group>
       <RoundedBox args={[15.5, 0.16, 1.7]} radius={0.08} position={[0, -0.3, 0]} castShadow>
@@ -636,9 +660,9 @@ function Conveyor() {
           <meshPhysicalMaterial {...stainless} />
         </RoundedBox>
       ))}
-      {/* dark rubber belt */}
+      {/* dark rubber belt with slowly drifting tread marks */}
       <RoundedBox args={[14.6, 0.08, 1.05]} radius={0.04} position={[0, 0.26, 0]} receiveShadow>
-        <meshPhysicalMaterial {...beltRubber} />
+        <meshPhysicalMaterial {...beltRubber} map={beltTex} />
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[14.6, 0.02, 1.12]} />
@@ -697,19 +721,20 @@ const STATIONS = [
       soft floor reflections, no hard edges against the page ── */
 function Platform() {
   return (
-    <group position={[0, -0.75, 0]}>
-      <RoundedBox args={[16.4, 0.14, 4.2]} radius={0.07} receiveShadow>
-        <meshPhysicalMaterial color="#EDE9DF" roughness={0.55} metalness={0.04}
-                              envMapIntensity={0.45} />
+    <group position={[0, -0.72, 0]}>
+      {/* thin, near-page-tone slab — a studio floor, not an object */}
+      <RoundedBox args={[16.4, 0.07, 4.2]} radius={0.035} receiveShadow>
+        <meshPhysicalMaterial color="#F1EDE3" roughness={0.62} metalness={0.03}
+                              envMapIntensity={0.3} />
       </RoundedBox>
-      {/* whisper of a reflection in the platform surface */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.075, 0]}>
+      {/* whisper of a reflection in the floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
         <planeGeometry args={[16.0, 3.9]} />
         <MeshReflectorMaterial
-          resolution={512} blur={[280, 90]} mixBlur={1}
-          mixStrength={0.35} roughness={0.72} depthScale={0.5}
+          resolution={512} blur={[320, 110]} mixBlur={1}
+          mixStrength={0.2} roughness={0.8} depthScale={0.5}
           minDepthThreshold={0.4} maxDepthThreshold={1.4}
-          color="#F0ECE2" metalness={0.04} transparent opacity={0.85}
+          color="#F2EEE4" metalness={0.03} transparent opacity={0.55}
         />
       </mesh>
     </group>
@@ -738,10 +763,10 @@ function FactoryScene() {
       ))}
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.36} scale={18}
-                      blur={1.8} far={3.6} resolution={1024} color="#3A3630" />
-      <ContactShadows position={[0, -0.84, 0]} opacity={0.14} scale={30}
-                      blur={5.5} far={5} resolution={512} color="#443C33" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.28} scale={18}
+                      blur={2.2} far={3.6} resolution={1024} color="#3A3630" />
+      <ContactShadows position={[0, -0.8, 0]} opacity={0.08} scale={30}
+                      blur={6.5} far={5} resolution={512} color="#443C33" />
     </group>
   )
 }
