@@ -1,156 +1,179 @@
 /*
-  EventFactory3D.jsx — the event factory as a real three.js scene
-  (react-three-fiber + drei), styled after soft-3D product renders:
-  cubical machines straddling a raised conveyor, parcel cubes travelling
-  through their tunnels and changing color at each stage, studio
-  lighting with soft contact shadows.
+  EventFactory3D.jsx — premium minimal product render of the event
+  pipeline (react-three-fiber + drei).
+
+  Design language: high-end industrial design visualization — one matte
+  white injection-molded material across the whole scene, soft rounded
+  CAD geometry, a single soft-purple accent (#D45CFF) reserved for
+  glass, interface panels and status lights. Large soft area lights,
+  gentle contact shadows, slow floating motion. No textures, no decals,
+  no exposed mechanics.
 */
-import { useRef, useMemo } from 'react'
+import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { RoundedBox, ContactShadows, Environment, Lightformer } from '@react-three/drei'
 import * as THREE from 'three'
 
-/* palette */
-const CREAM   = '#F6EDDD'
-const CREAM_D = '#E4D6BC'
-const INK     = '#22313B'
-const TEAL    = '#12907C'
-const CORAL   = '#F0633F'
-const AMBER   = '#F2A71B'
-const GOLD    = '#FFD98A'
-const CARD    = '#D9C49A'   // raw cardboard
+/* palette — white + one accent */
+const WHITE   = '#F5F3EF'   // matte white plastic
+const WHITE_D = '#E9E6E0'   // base tier
+const ACCENT  = '#D45CFF'   // soft purple — lights, glass, panels only
 
-const MACHINE_X = [-3.4, 0, 3.4]
-const MACHINE_C = [TEAL, CORAL, AMBER]
-const BELT_HALF = 7.2                    // travel from -BELT_HALF → +BELT_HALF
-const CYCLE = 9                          // seconds per crossing
-const N_BOXES = 3
+const STATION_X = [-3.6, 0, 3.6]
+const BELT_HALF = 7.0
+const CYCLE = 14            // slow, calm travel
+const N_UNITS = 3
 
-/* stage color for a given x position */
-const STAGE_COLORS = [
-  new THREE.Color(CARD),
-  new THREE.Color('#20B39A'),
-  new THREE.Color('#FF7A52'),
-  new THREE.Color(INK),
-]
-function stageAt(x) {
-  if (x < MACHINE_X[0]) return 0
-  if (x < MACHINE_X[1]) return 1
-  if (x < MACHINE_X[2]) return 2
-  return 3
+/* one shared material recipe: satin injection-molded plastic */
+const plastic = {
+  color: WHITE,
+  roughness: 0.38,
+  metalness: 0.0,
+  clearcoat: 0.25,
+  clearcoatRoughness: 0.5,
 }
 
-/* ── a travelling parcel cube ── */
-function Parcel({ offset }) {
-  const group = useRef()
-  const mat = useRef()
-  const bandRef = useRef()
-  const color = useMemo(() => new THREE.Color(CARD), [])
+/* purple acrylic (windows / light pipes) */
+const acrylic = {
+  color: ACCENT,
+  roughness: 0.12,
+  metalness: 0,
+  transmission: 0.75,
+  thickness: 0.5,
+  ior: 1.4,
+  transparent: true,
+  emissive: ACCENT,
+  emissiveIntensity: 0.25,
+}
 
+/* ── travelling unit: a white cube that earns a purple status ring ── */
+function Unit({ offset }) {
+  const group = useRef()
+  const ring = useRef()
   useFrame(({ clock }) => {
-    const t = ((clock.elapsedTime / CYCLE + offset) % 1)
+    const t = (clock.elapsedTime / CYCLE + offset) % 1
     const x = -BELT_HALF + t * BELT_HALF * 2
     const g = group.current
     if (!g) return
     g.position.x = x
-
-    // squash-pop when inside a machine tunnel
-    let pop = 0
-    for (const mx of MACHINE_X) {
-      const d = Math.abs(x - mx)
-      if (d < 0.9) pop = Math.max(pop, Math.cos((d / 0.9) * Math.PI * 0.5))
+    g.position.y = 0.66 + Math.sin(clock.elapsedTime * 0.9 + offset * 7) * 0.015
+    // status ring: appears after the first station, brightens per stage
+    const stage = x < STATION_X[0] ? 0 : x < STATION_X[1] ? 1 : x < STATION_X[2] ? 2 : 3
+    if (ring.current) {
+      ring.current.visible = stage > 0
+      ring.current.material.emissiveIntensity = 0.35 + stage * 0.3
+        + Math.sin(clock.elapsedTime * 1.6) * 0.08
     }
-    const s = 1 + pop * 0.12
-    g.scale.set(s, s, s)
-    g.position.y = 0.76 + pop * 0.08
-
-    // color per stage, eased near machine centers
-    color.copy(STAGE_COLORS[stageAt(x)])
-    if (mat.current) mat.current.color.lerp(color, 0.15)
-    // gold grade band only on the finished parcel
-    if (bandRef.current) bandRef.current.visible = stageAt(x) === 3
   })
 
   return (
-    <group ref={group} position={[-BELT_HALF, 0.76, 0]} castShadow>
-      <RoundedBox args={[0.95, 0.95, 0.95]} radius={0.09} smoothness={4} castShadow>
-        <meshPhysicalMaterial ref={mat} color={CARD} roughness={0.32} metalness={0.05} clearcoat={0.9} clearcoatRoughness={0.18} />
+    <group ref={group} position={[-BELT_HALF, 0.66, 0]}>
+      <RoundedBox args={[0.82, 0.82, 0.82]} radius={0.16} smoothness={6} castShadow>
+        <meshPhysicalMaterial {...plastic} />
       </RoundedBox>
-      {/* parcel tape */}
-      <mesh position={[0, 0.482, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.22, 0.96]} />
-        <meshStandardMaterial color="#FFFDF6" roughness={0.4} transparent opacity={0.85} />
+      {/* slim purple status band — the only mark it carries */}
+      <mesh ref={ring} visible={false} position={[0, -0.18, 0]}>
+        <torusGeometry args={[0.52, 0.022, 12, 48]} />
+        <meshPhysicalMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.5}
+                              roughness={0.2} />
       </mesh>
-      {/* gold ribbon band on the finished package */}
-      <group ref={bandRef} visible={false}>
-        <RoundedBox args={[0.99, 0.18, 0.99]} radius={0.04} position={[0, 0.12, 0]}>
-          <meshPhysicalMaterial color={GOLD} roughness={0.18} metalness={0.5} clearcoat={1} clearcoatRoughness={0.1} />
-        </RoundedBox>
-      </group>
     </group>
   )
 }
 
-/* ── a cubical machine straddling the belt ── */
-function MachineBlock({ x, color, phase }) {
-  const led = useRef()
-  const scanner = useRef()
+/* ── station A: scan arch — a single soft bridge with a light line ── */
+function ScanArch({ x, phase }) {
+  const line = useRef()
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime
-    if (led.current)
-      led.current.material.emissiveIntensity = 1.6 + Math.sin(t * 4 + phase) * 1.2
-    if (scanner.current)
-      scanner.current.position.y = 0.85 + Math.sin(t * 2.4 + phase) * 0.25
+    if (line.current)
+      line.current.material.emissiveIntensity = 0.7 + Math.sin(clock.elapsedTime * 0.9 + phase) * 0.25
   })
-
-  /* glossy candy plastic — clearcoat is what sells the 3D */
-  const body = { color, roughness: 0.24, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.12 }
-
   return (
     <group position={[x, 0, 0]}>
-      {/* roof block: sits exactly on the legs (legs top = 1.3) */}
-      <RoundedBox args={[2.5, 1.5, 2.5]} radius={0.2} position={[0, 2.02, 0]} castShadow>
-        <meshPhysicalMaterial {...body} />
+      <RoundedBox args={[1.1, 2.6, 2.2]} radius={0.34} position={[0, 1.55, 0]} castShadow>
+        <meshPhysicalMaterial {...plastic} />
       </RoundedBox>
-      {/* dark trim band joining roof to legs */}
-      <RoundedBox args={[2.54, 0.18, 2.54]} radius={0.06} position={[0, 1.3, 0]} castShadow>
-        <meshPhysicalMaterial color="#22313B" roughness={0.35} clearcoat={0.8} clearcoatRoughness={0.2} />
+      {/* pass-through cutout is implied by a recessed dark-white inner arch */}
+      <RoundedBox args={[1.16, 1.15, 1.5]} radius={0.28} position={[0, 0.78, 0]}>
+        <meshPhysicalMaterial color={WHITE_D} roughness={0.5} />
       </RoundedBox>
-      {/* legs: from belt top (0.28) up to the trim band */}
-      {[-1, 1].map(side => (
-        <RoundedBox key={side} args={[0.46, 1.04, 2.4]} radius={0.1}
-                    position={[side * 1.02, 0.79, 0]} castShadow>
-          <meshPhysicalMaterial {...body} roughness={0.3} />
-        </RoundedBox>
-      ))}
-      {/* glassy front window */}
-      <RoundedBox args={[1.6, 0.85, 0.1]} radius={0.06} position={[0, 2.02, 1.28]}>
-        <meshPhysicalMaterial
-          color="#FFFFFF" roughness={0.06} metalness={0}
-          transmission={0.92} thickness={0.6} ior={1.45}
-          clearcoat={1} clearcoatRoughness={0.05} transparent
-        />
+      {/* vertical purple scan line inside the opening */}
+      <mesh ref={line} position={[0, 0.78, 0]}>
+        <boxGeometry args={[0.02, 1.05, 1.4]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.8}
+                              transparent opacity={0.55} />
+      </mesh>
+      {/* status dot */}
+      <mesh position={[0, 2.72, 1.06]}>
+        <sphereGeometry args={[0.045, 16, 16]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={1.4} />
+      </mesh>
+    </group>
+  )
+}
+
+/* ── station B: monolith — rounded slab with a slim interface panel ── */
+function Monolith({ x, phase }) {
+  const panel = useRef()
+  useFrame(({ clock }) => {
+    if (panel.current)
+      panel.current.material.emissiveIntensity = 0.4 + Math.sin(clock.elapsedTime * 0.7 + phase) * 0.15
+  })
+  return (
+    <group position={[x, 0, 0]}>
+      <RoundedBox args={[2.2, 2.9, 1.15]} radius={0.3} position={[0, 1.7, -1.15]} castShadow>
+        <meshPhysicalMaterial {...plastic} />
       </RoundedBox>
-      {/* glowing core behind the glass */}
-      <mesh position={[0, 2.02, 1.1]}>
-        <planeGeometry args={[1.4, 0.7]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.55} />
+      {/* cantilevered reader hovering over the belt */}
+      <RoundedBox args={[1.5, 0.42, 1.9]} radius={0.2} position={[0, 1.62, 0]} castShadow>
+        <meshPhysicalMaterial {...plastic} />
+      </RoundedBox>
+      {/* purple acrylic interface strip on the monolith face */}
+      <RoundedBox ref={panel} args={[1.5, 0.32, 0.06]} radius={0.1} position={[0, 2.35, -0.56]}>
+        <meshPhysicalMaterial {...acrylic} />
+      </RoundedBox>
+      {/* soft under-light where the reader scans */}
+      <mesh position={[0, 1.38, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1.3, 1.6]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.35}
+                              transparent opacity={0.22} />
       </mesh>
-      {/* scanner bar inside the tunnel */}
-      <mesh ref={scanner} position={[0, 0.85, 0]}>
-        <boxGeometry args={[1.8, 0.06, 1.9]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9}
-                              transparent opacity={0.45} />
+    </group>
+  )
+}
+
+/* ── station C: tower — soft cylinder with a purple ring light ── */
+function Tower({ x, phase }) {
+  const ring = useRef()
+  useFrame(({ clock }) => {
+    if (ring.current)
+      ring.current.material.emissiveIntensity = 0.5 + Math.sin(clock.elapsedTime * 0.8 + phase) * 0.2
+  })
+  return (
+    <group position={[x, 0, 0]}>
+      <mesh position={[0, 1.85, -1.25]} castShadow>
+        <cylinderGeometry args={[0.95, 1.05, 3.2, 48]} />
+        <meshPhysicalMaterial {...plastic} />
       </mesh>
-      {/* chimney */}
-      <mesh position={[0.68, 2.92, 0]} castShadow>
-        <cylinderGeometry args={[0.15, 0.2, 0.42, 20]} />
-        <meshPhysicalMaterial color="#22313B" roughness={0.3} clearcoat={0.9} />
+      {/* rounded cap */}
+      <mesh position={[0, 3.45, -1.25]} castShadow>
+        <sphereGeometry args={[0.95, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshPhysicalMaterial {...plastic} />
       </mesh>
-      {/* blinking LED */}
-      <mesh ref={led} position={[-0.85, 2.6, 1.28]}>
-        <sphereGeometry args={[0.09, 16, 16]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={2} />
+      {/* purple ring light around the waist */}
+      <mesh ref={ring} position={[0, 2.5, -1.25]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.0, 0.035, 12, 64]} />
+        <meshPhysicalMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.6}
+                              roughness={0.15} />
+      </mesh>
+      {/* slim arm reaching over the belt */}
+      <RoundedBox args={[0.5, 0.3, 2.1]} radius={0.14} position={[0, 1.7, -0.1]} castShadow>
+        <meshPhysicalMaterial {...plastic} />
+      </RoundedBox>
+      {/* purple emitter dot under the arm */}
+      <mesh position={[0, 1.5, 0.55]}>
+        <sphereGeometry args={[0.05, 16, 16]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={1.3} />
       </mesh>
     </group>
   )
@@ -158,56 +181,56 @@ function MachineBlock({ x, color, phase }) {
 
 /* ── full scene ── */
 function FactoryScene() {
-  const sway = useRef()
+  const float = useRef()
   useFrame(({ clock }) => {
-    if (sway.current)
-      sway.current.rotation.y = Math.sin(clock.elapsedTime * 0.18) * 0.05 - 0.12
+    const g = float.current
+    if (!g) return
+    g.position.y = Math.sin(clock.elapsedTime * 0.5) * 0.05
+    g.rotation.y = -0.1 + Math.sin(clock.elapsedTime * 0.12) * 0.02
   })
 
   return (
-    <group ref={sway} rotation={[0, -0.12, 0]}>
-      {/* raised conveyor platform */}
-      <RoundedBox args={[15.4, 0.55, 2.0]} radius={0.18} position={[0, 0, 0]} receiveShadow castShadow>
-        <meshPhysicalMaterial color={CREAM} roughness={0.35} clearcoat={0.6} clearcoatRoughness={0.25} />
+    <group ref={float} rotation={[0, -0.1, 0]}>
+      {/* conveyor: two clean white tiers */}
+      <RoundedBox args={[15.2, 0.5, 1.9]} radius={0.24} position={[0, 0, 0]} receiveShadow castShadow>
+        <meshPhysicalMaterial {...plastic} />
       </RoundedBox>
-      <RoundedBox args={[15.8, 0.28, 2.4]} radius={0.14} position={[0, -0.38, 0]} receiveShadow>
-        <meshPhysicalMaterial color={CREAM_D} roughness={0.45} clearcoat={0.4} clearcoatRoughness={0.3} />
+      <RoundedBox args={[15.6, 0.26, 2.3]} radius={0.13} position={[0, -0.36, 0]} receiveShadow>
+        <meshPhysicalMaterial color={WHITE_D} roughness={0.45} clearcoat={0.15} clearcoatRoughness={0.6} />
       </RoundedBox>
+      {/* hairline purple guide light along the near edge */}
+      <mesh position={[0, 0.06, 0.96]}>
+        <boxGeometry args={[14.6, 0.02, 0.02]} />
+        <meshStandardMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={0.9} />
+      </mesh>
 
-      {/* intake hopper */}
-      <group position={[-7.3, 1.1, 0]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.85, 0.5, 1.15, 4]} />
-          <meshStandardMaterial color={INK} roughness={0.5} />
+      {/* stations */}
+      <ScanArch x={STATION_X[0]} phase={0} />
+      <Monolith x={STATION_X[1]} phase={2} />
+      <Tower    x={STATION_X[2]} phase={4} />
+
+      {/* travelling units */}
+      {Array.from({ length: N_UNITS }, (_, i) => (
+        <Unit key={i} offset={i / N_UNITS} />
+      ))}
+
+      {/* output plinth with a finished unit */}
+      <group position={[7.2, 0.44, 0]}>
+        <RoundedBox args={[1.4, 0.36, 1.4]} radius={0.14} castShadow receiveShadow>
+          <meshPhysicalMaterial {...plastic} />
+        </RoundedBox>
+        <RoundedBox args={[0.82, 0.82, 0.82]} radius={0.16} position={[0, 0.62, 0]} castShadow>
+          <meshPhysicalMaterial {...plastic} />
+        </RoundedBox>
+        <mesh position={[0, 0.44, 0]}>
+          <torusGeometry args={[0.52, 0.022, 12, 48]} />
+          <meshPhysicalMaterial color={ACCENT} emissive={ACCENT} emissiveIntensity={1.0} roughness={0.2} />
         </mesh>
       </group>
 
-      {/* output tray */}
-      <group position={[7.35, 0.5, 0]}>
-        <RoundedBox args={[1.5, 0.45, 1.5]} radius={0.08} castShadow receiveShadow>
-          <meshStandardMaterial color="#C98B3D" roughness={0.55} />
-        </RoundedBox>
-        <RoundedBox args={[0.95, 0.5, 0.95]} radius={0.08} position={[0, 0.48, 0]} castShadow>
-          <meshStandardMaterial color={INK} roughness={0.45} />
-        </RoundedBox>
-        <RoundedBox args={[0.99, 0.14, 0.99]} radius={0.04} position={[0, 0.44, 0]}>
-          <meshPhysicalMaterial color={GOLD} roughness={0.18} metalness={0.5} clearcoat={1} clearcoatRoughness={0.1} />
-        </RoundedBox>
-      </group>
-
-      {/* machines */}
-      {MACHINE_X.map((x, i) => (
-        <MachineBlock key={i} x={x} color={MACHINE_C[i]} phase={i * 2.1} />
-      ))}
-
-      {/* travelling parcels */}
-      {Array.from({ length: N_BOXES }, (_, i) => (
-        <Parcel key={i} offset={i / N_BOXES} />
-      ))}
-
-      {/* soft studio ground shadow */}
-      <ContactShadows position={[0, -0.55, 0]} opacity={0.42} scale={22}
-                      blur={2.6} far={4.5} resolution={512} color="#22313B" />
+      {/* soft ambient-occlusion-style ground shadow */}
+      <ContactShadows position={[0, -0.52, 0]} opacity={0.22} scale={24}
+                      blur={3.2} far={5} resolution={512} color="#3A3145" />
     </group>
   )
 }
@@ -218,27 +241,28 @@ export default function EventFactory3D() {
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [0.4, 4.4, 10.2], fov: 34 }}
+        camera={{ position: [0.4, 4.4, 10.6], fov: 32 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
-        <ambientLight intensity={0.85} />
+        {/* luxury product-photography lighting: big soft areas, no hard sun */}
+        <ambientLight intensity={0.75} />
         <directionalLight
-          position={[6, 9, 6]}
-          intensity={1.5}
+          position={[4, 10, 7]}
+          intensity={1.05}
           castShadow
           shadow-mapSize={[1024, 1024]}
+          shadow-radius={8}
           shadow-camera-left={-10} shadow-camera-right={10}
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
-        <directionalLight position={[-7, 5, -4]} intensity={0.45} color="#FFE9C9" />
         <Environment frames={1} resolution={256}>
-          <Lightformer intensity={3} position={[0, 6, -9]} scale={[12, 6, 1]} />
-          <Lightformer intensity={1.6} position={[-6, 3, 2]} rotation-y={Math.PI / 3} scale={[8, 3, 1]} />
-          <Lightformer intensity={1.2} position={[7, 4, 3]} rotation-y={-Math.PI / 3} scale={[6, 3, 1]} color="#FFE9C9" />
-          <Lightformer intensity={0.8} position={[0, -3, 6]} scale={[14, 2, 1]} color="#F6EDDD" />
+          <Lightformer intensity={3.2} position={[0, 8, -6]} scale={[16, 8, 1]} />
+          <Lightformer intensity={1.4} position={[-8, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
+          <Lightformer intensity={1.1} position={[8, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} />
+          <Lightformer intensity={0.7} position={[0, -4, 8]} scale={[16, 3, 1]} color="#F0EBFA" />
         </Environment>
-        <group position={[0, -1.1, 0]}>
+        <group position={[0, -1.25, 0]}>
           <FactoryScene />
         </group>
       </Canvas>

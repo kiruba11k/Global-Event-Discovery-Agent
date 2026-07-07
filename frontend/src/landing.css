@@ -1590,3 +1590,9 @@
   .ef3d-endcaps { display: none; }
   .ef3d-label-sub { font-size: 11px; }
 }
+
+/* premium 3D illustration: single soft-purple accent for its captions */
+.ef3d-label-find .ef3d-label-title,
+.ef3d-label-meet .ef3d-label-title,
+.ef3d-label-talk .ef3d-label-title { color: #A63BD4; }
+.ef3d-endcap { color: #7A5E8C; border-color: #E7D7F2; background: #FBF7FE; }
