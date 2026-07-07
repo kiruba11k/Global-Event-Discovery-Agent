@@ -203,7 +203,7 @@ function drawScreen(g, title, line, accent, caret) {
   g.fillText(line + (caret ? '▎' : ''), 36, 152)
 }
 
-function StationScreen({ m, title, lines, accent }) {
+function StationScreen({ m, title, lines, accent, sw = 1.42, sx = 0, sy = 2.14 }) {
   const mesh = useRef()
   const stateRef = useRef({ key: '' })
   const tex = useMemo(() => {
@@ -236,28 +236,31 @@ function StationScreen({ m, title, lines, accent }) {
     }
   })
 
+  const k = sw / 1.42   // proportional scale for narrow heads
   return (
-    <group position={[0, 2.14, 1.28]}>
+    <group position={[sx, sy, 1.28]}>
       {/* dark graphite bezel around the display */}
-      <RoundedBox args={[1.5, 0.7, 0.05]} radius={0.06} position={[0, 0, -0.045]}>
+      <RoundedBox args={[sw + 0.08, 0.62 * k + 0.08, 0.05]} radius={0.06} position={[0, 0, -0.045]}>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
       {/* smoked tempered glass — visibly off while idle */}
-      <RoundedBox args={[1.42, 0.62, 0.04]} radius={0.05} position={[0, 0, -0.015]}>
+      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.05} position={[0, 0, -0.015]}>
         <meshPhysicalMaterial {...smokedGlass} />
       </RoundedBox>
       <mesh ref={mesh} position={[0, 0, 0.012]}>
-        <planeGeometry args={[1.34, 0.56]} />
+        <planeGeometry args={[1.34 * k, 0.56 * k]} />
         <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
     </group>
   )
 }
 
-/* ── station shell: neutral premium body, real input/output slots,
-      enclosed chamber that genuinely occludes the passing unit ── */
-function Station({ m, accent, title, lines, children }) {
+/* ── station shell: shared chamber + slots below, a per-station head
+      silhouette above. `shape` = { hw, hh, hy, r } for the head. ── */
+function Station({ m, accent, title, lines, shape, children }) {
   const glow = useRef()
+  const { hw, hh, hy, r = 0.2, sw, sx = 0 } = shape
+  const top = hy + hh / 2
   useFrame(({ clock }) => {
     if (glow.current) {
       const a = machineActivity(clock.elapsedTime, m)
@@ -286,29 +289,32 @@ function Station({ m, accent, title, lines, children }) {
       <RoundedBox args={[1.1, 0.44, 0.05]} radius={0.05} position={[0, 0.92, 1.27]}>
         <meshPhysicalMaterial {...frosted} />
       </RoundedBox>
-      {/* processing head over the tunnel */}
-      <RoundedBox args={[1.66, 1.16, 2.52]} radius={0.2} position={[0, 2.06, 0]} castShadow>
+      {/* service-door seam on the wall front */}
+      <Seam args={[0.4, 0.012, 0.02]} position={[-0.45, 1.22, 1.27]} />
+      {[-0.65, -0.25].map((ox, i) => (
+        <Seam key={i} args={[0.012, 0.2, 0.02]} position={[ox, 1.32, 1.27]} />
+      ))}
+      {/* processing head — each station's own silhouette */}
+      <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
         <meshPhysicalMaterial {...powder(0.46)} />
       </RoundedBox>
-      <Seam args={[1.6, 0.02, 2.46]} position={[0, 2.62, 0]} />
-      <RoundedBox args={[1.52, 0.28, 2.38]} radius={0.12} position={[0, 2.79, 0]} castShadow>
-        <meshPhysicalMaterial {...powder(0.55)} />
-      </RoundedBox>
+      <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
       {/* anodized accent strip along the head's lower edge */}
-      <mesh position={[0, 1.53, 1.26]}>
-        <boxGeometry args={[1.5, 0.035, 0.02]} />
+      <mesh position={[0, hy - hh / 2 + 0.05, 1.26]}>
+        <boxGeometry args={[hw - 0.16, 0.035, 0.02]} />
         <meshPhysicalMaterial {...anodizedAccent(accent)} />
       </mesh>
       {/* ventilation slots on the head flank */}
       {[0, 1, 2, 3].map(i => (
-        <mesh key={i} position={[0.84, 2.2, 0.65 - i * 0.16]}>
-          <boxGeometry args={[0.012, 0.4, 0.03]} />
+        <mesh key={i} position={[hw / 2 + 0.005, hy, 0.65 - i * 0.16]}>
+          <boxGeometry args={[0.012, Math.min(0.4, hh - 0.34), 0.03]} />
           <meshStandardMaterial color="#2E3134" roughness={0.9} />
         </mesh>
       ))}
-      {/* brushed steel fasteners at the head corners */}
-      {[[-0.6, 1.72], [0.6, 1.72], [-0.6, 2.4], [0.6, 2.4]].map(([fx, fy], i) => (
-        <mesh key={i} position={[fx, fy, 1.265]} rotation={[Math.PI / 2, 0, 0]}>
+      {/* brushed steel fasteners recessed at the head corners */}
+      {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([fx, fy], i) => (
+        <mesh key={i} position={[fx * (hw / 2 - 0.24), hy + fy * (hh / 2 - 0.16), 1.265]}
+              rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.016, 0.016, 0.012, 12]} />
           <meshPhysicalMaterial {...stainless} roughness={0.35} />
         </mesh>
@@ -332,8 +338,9 @@ function Station({ m, accent, title, lines, children }) {
         <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0}
                               transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
-      <Led position={[0.72, 2.79, 1.2]} color={accent} m={m} />
-      <StationScreen m={m} title={title} lines={lines} accent={accent} />
+      <Led position={[hw / 2 - 0.18, top - 0.12, 1.275]} color={accent} m={m} />
+      <StationScreen m={m} title={title} lines={lines} accent={accent}
+                     sw={sw ?? Math.min(1.42, hw - 0.34)} sx={sx} sy={hy} />
       {children}
     </group>
   )
@@ -352,12 +359,13 @@ function ScannerGate({ m }) {
   })
   return (
     <group>
-      <RoundedBox args={[1.2, 0.14, 0.46]} radius={0.06} position={[0, 3.0, 0]} castShadow>
-        <meshPhysicalMaterial {...powder(0.52)} />
+      {/* full-width sensor rail across the low, wide gate */}
+      <RoundedBox args={[2.0, 0.12, 0.5]} radius={0.05} position={[0, 2.32, 0]} castShadow>
+        <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
-      {[-0.35, 0, 0.35].map((ox, i) => (
-        <mesh key={i} position={[ox, 3.0, 0.24]}>
-          <sphereGeometry args={[0.045, 16, 16]} />
+      {[-0.8, -0.4, 0, 0.4, 0.8].map((ox, i) => (
+        <mesh key={i} position={[ox, 2.32, 0.26]}>
+          <sphereGeometry args={[0.042, 16, 16]} />
           <meshPhysicalMaterial color="#0E1524" roughness={0.1} metalness={0.4}
                                 emissive={BLUE} emissiveIntensity={0.4} />
         </mesh>
@@ -382,13 +390,20 @@ function MatchEngine({ m }) {
     }
   })
   return (
-    <group position={[0, 2.96, 0]}>
-      <mesh castShadow>
-        <sphereGeometry args={[0.42, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+    <group position={[0, 2.56, 0]}>
+      {/* angular graphite chamfer slabs flanking the dome */}
+      {[-1, 1].map(s => (
+        <mesh key={s} position={[s * 0.62, 0.06, 0]} rotation={[0, 0, s * 0.42]} castShadow>
+          <boxGeometry args={[0.5, 0.09, 1.9]} />
+          <meshPhysicalMaterial {...graphite} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[0, 0.08, 0]}>
+        <sphereGeometry args={[0.4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshPhysicalMaterial {...frosted} />
       </mesh>
-      <mesh ref={ring} position={[0, 0.12, 0]} rotation={[Math.PI / 2.4, 0, 0]}>
-        <torusGeometry args={[0.26, 0.022, 12, 64]} />
+      <mesh ref={ring} position={[0, 0.2, 0]} rotation={[Math.PI / 2.4, 0, 0]}>
+        <torusGeometry args={[0.25, 0.022, 12, 64]} />
         <meshStandardMaterial color={ORANGE} emissive={ORANGE} emissiveIntensity={0.1}
                               metalness={0.3} roughness={0.3} />
       </mesh>
@@ -407,25 +422,26 @@ function MeetingArm({ m }) {
     if (tip.current)  tip.current.material.emissiveIntensity = 0.1 + a * 1.4
   })
   return (
-    <group position={[0, 2.62, 0]}>
-      <mesh castShadow position={[0.42, 0.26, 0]}>
-        <cylinderGeometry args={[0.15, 0.19, 0.22, 24]} />
+    <group position={[0, 3.06, 0]}>
+      {/* the arm dominates the tall tower */}
+      <mesh castShadow position={[0.28, 0.12, 0]}>
+        <cylinderGeometry args={[0.18, 0.23, 0.26, 24]} />
         <meshPhysicalMaterial {...graphite} />
       </mesh>
-      <group ref={arm} position={[0.42, 0.37, 0]}>
-        <RoundedBox args={[0.13, 0.56, 0.13]} radius={0.05} position={[0, 0.28, 0]} castShadow>
+      <group ref={arm} position={[0.28, 0.26, 0]}>
+        <RoundedBox args={[0.16, 0.78, 0.16]} radius={0.06} position={[0, 0.39, 0]} castShadow>
           <meshPhysicalMaterial {...powder(0.5)} />
         </RoundedBox>
-        <group ref={fore} position={[0, 0.56, 0]}>
+        <group ref={fore} position={[0, 0.78, 0]}>
           <mesh>
-            <sphereGeometry args={[0.085, 16, 16]} />
+            <sphereGeometry args={[0.105, 16, 16]} />
             <meshPhysicalMaterial {...graphite} />
           </mesh>
-          <RoundedBox args={[0.56, 0.1, 0.1]} radius={0.04} position={[-0.28, 0, 0]} castShadow>
+          <RoundedBox args={[0.78, 0.12, 0.12]} radius={0.05} position={[-0.39, 0, 0]} castShadow>
             <meshPhysicalMaterial {...powder(0.5)} />
           </RoundedBox>
-          <mesh ref={tip} position={[-0.56, -0.04, 0]}>
-            <cylinderGeometry args={[0.04, 0.05, 0.08, 16]} />
+          <mesh ref={tip} position={[-0.78, -0.05, 0]}>
+            <cylinderGeometry args={[0.05, 0.06, 0.1, 16]} />
             <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.1} />
           </mesh>
         </group>
@@ -442,7 +458,7 @@ function BriefPrinter({ m }) {
     const a = machineActivity(clock.elapsedTime, m)
     if (paper.current) {
       const slide = (clock.elapsedTime * 0.5) % 1
-      paper.current.position.z = 1.05 + slide * 0.4
+      paper.current.position.z = 1.3 + slide * 0.42
       paper.current.material.opacity = a * (slide < 0.85 ? 0.95 : (1 - slide) * 6)
       paper.current.visible = a > 0.05
     }
@@ -451,25 +467,25 @@ function BriefPrinter({ m }) {
   })
   return (
     <group>
-      <RoundedBox args={[1.2, 0.28, 0.66]} radius={0.1} position={[0, 3.0, 0.35]} castShadow>
-        <meshPhysicalMaterial {...powder(0.52)} />
-      </RoundedBox>
-      <mesh position={[0, 2.96, 0.69]}>
-        <boxGeometry args={[0.9, 0.03, 0.02]} />
+      {/* front paper slot in the low printer face */}
+      <mesh position={[0.55, 2.0, 1.265]}>
+        <boxGeometry args={[0.86, 0.035, 0.02]} />
         <meshStandardMaterial color="#1B1B1F" roughness={0.8} />
       </mesh>
-      {/* brushed output tray */}
-      <RoundedBox args={[0.95, 0.05, 0.52]} radius={0.02} position={[0, 2.85, 1.08]}
-                  rotation={[0.14, 0, 0]} castShadow>
+      {/* brushed output tray under the slot */}
+      <RoundedBox args={[0.9, 0.045, 0.5]} radius={0.02} position={[0.55, 1.93, 1.5]}
+                  rotation={[0.12, 0, 0]} castShadow>
         <meshPhysicalMaterial {...brushedAlu} />
       </RoundedBox>
-      <mesh ref={paper} position={[0, 2.92, 1.05]} rotation={[-Math.PI / 2 + 0.14, 0, 0]}>
-        <planeGeometry args={[0.76, 0.48]} />
+      {/* the brief gliding out of the slot */}
+      <mesh ref={paper} position={[0.55, 1.99, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
+        <planeGeometry args={[0.72, 0.46]} />
         <meshStandardMaterial color="#FDFCF9" roughness={0.7} transparent opacity={0}
                               side={THREE.DoubleSide} />
       </mesh>
-      <mesh ref={lamp} position={[0, 3.2, 0.35]}>
-        <sphereGeometry args={[0.055, 16, 16]} />
+      {/* gold completion lamp on the roofline */}
+      <mesh ref={lamp} position={[0.55, 2.24, 0.9]}>
+        <sphereGeometry args={[0.05, 16, 16]} />
         <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.12} />
       </mesh>
     </group>
@@ -633,6 +649,18 @@ function Conveyor() {
           <meshPhysicalMaterial {...brushedAlu} />
         </RoundedBox>
       ))}
+      {/* tiny maintenance panels recessed in the deck face */}
+      {[-4.4, 4.4].map((px, i) => (
+        <group key={i}>
+          <RoundedBox args={[0.6, 0.14, 0.02]} radius={0.03} position={[px, 0.02, 0.955]}>
+            <meshPhysicalMaterial {...powder(0.55)} />
+          </RoundedBox>
+          <mesh position={[px + 0.24, 0.02, 0.968]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.014, 0.014, 0.01, 12]} />
+            <meshPhysicalMaterial {...stainless} roughness={0.35} />
+          </mesh>
+        </group>
+      ))}
       {/* graphite steel support legs */}
       {[-6.6, -2.2, 2.2, 6.6].map((lx, i) => (
         <group key={i}>
@@ -648,14 +676,20 @@ function Conveyor() {
   )
 }
 
+/* each station is recognizable by silhouette alone:
+   wide low gate → angular engine → tall arm tower → low printer */
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE,
+    shape: { hw: 2.3, hh: 0.74, hy: 1.88, r: 0.16 },
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH',    accent: ORANGE,
+    shape: { hw: 1.95, hh: 1.02, hy: 2.02, r: 0.07 },
     lines: ['Matching…', '247 Attendees', 'Complete ✓'], Inner: MatchEngine },
   { title: 'MEETINGS', accent: PURPLE,
+    shape: { hw: 1.45, hh: 1.55, hy: 2.28, r: 0.14 },
     lines: ['Generating…', '6 Meetings', 'Complete ✓'], Inner: MeetingArm },
   { title: 'BRIEF',    accent: GOLD,
+    shape: { hw: 2.25, hh: 0.68, hy: 1.85, r: 0.16, sw: 1.1, sx: -0.5 },
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
 
@@ -670,7 +704,7 @@ function FactoryScene() {
     <group ref={float} rotation={[0, -0.1, 0]}>
       <Conveyor />
       {STATIONS.map((st, m) => (
-        <Station key={st.title} m={m} accent={st.accent}
+        <Station key={st.title} m={m} accent={st.accent} shape={st.shape}
                  title={st.title} lines={st.lines}>
           <st.Inner m={m} />
         </Station>
@@ -723,7 +757,7 @@ export default function EventFactory3D() {
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
         <directionalLight position={[-6, 6, -8]} intensity={0.6} color="#E4DDF5" />
-        <Environment frames={1} resolution={256}>
+        <Environment frames={1} resolution={512}>
           <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
           <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
           <Lightformer intensity={1.1} position={[9, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} color="#FFEFDD" />
