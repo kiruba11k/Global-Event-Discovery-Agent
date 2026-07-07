@@ -34,6 +34,7 @@ const N_UNITS = 3
 const plastic = (rough = 0.4, coat = 0.3) => ({
   color: WHITE, roughness: rough, metalness: 0,
   clearcoat: coat, clearcoatRoughness: 0.5,
+  sheen: 0.25, sheenColor: '#FFFFFF', envMapIntensity: 0.75,
 })
 const plastic2 = { color: WHITE_2, roughness: 0.48, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.6 }
 const brushedAlu  = { color: ALU,   roughness: 0.32, metalness: 0.9,  envMapIntensity: 1.3 }
@@ -50,7 +51,24 @@ const clearGlass = {
 const purpleGlass = {
   color: ACCENT, roughness: 0.14, metalness: 0,
   transmission: 0.8, thickness: 0.6, ior: 1.42, transparent: true,
+  attenuationColor: ACCENT, attenuationDistance: 1.1,
   emissive: ACCENT, emissiveIntensity: 0.2,
+}
+
+/* deterministic unit positions — lets stations react to a passing unit */
+function unitX(elapsed, i) {
+  const t = (elapsed / CYCLE + i / N_UNITS) % 1
+  return -BELT_HALF + t * BELT_HALF * 2
+}
+function nearestUnit(elapsed, x) {
+  let d = Infinity
+  for (let i = 0; i < N_UNITS; i++) d = Math.min(d, Math.abs(unitX(elapsed, i) - x))
+  return d
+}
+/* 1 when a unit is at the station, 0 when far — smooth */
+function presence(elapsed, x, w = 1.1) {
+  const d = nearestUnit(elapsed, x)
+  return Math.max(0, 1 - (d / w) ** 2)
 }
 
 function Seam({ args, position, rotation }) {
@@ -162,9 +180,11 @@ function ScanGate({ x, phase }) {
   useFrame(({ clock }) => {
     const s = sheet.current
     if (!s) return
-    // beam slides gently across the opening
-    s.position.x = Math.sin(clock.elapsedTime * 0.55 + phase) * 0.32
-    s.material.emissiveIntensity = 0.65 + Math.sin(clock.elapsedTime * 0.8 + phase) * 0.2
+    const p = presence(clock.elapsedTime, x)
+    // beam idles softly, flares and tightens while a unit passes through
+    s.position.x = Math.sin(clock.elapsedTime * 0.55 + phase) * 0.32 * (1 - p * 0.8)
+    s.material.emissiveIntensity = 0.35 + p * 1.1 + Math.sin(clock.elapsedTime * 0.8 + phase) * 0.12
+    s.material.opacity = 0.28 + p * 0.3
   })
   return (
     <group position={[x, 0, 0]}>
@@ -174,7 +194,7 @@ function ScanGate({ x, phase }) {
           <Foot position={[0, 0.27, 0.5]} />
           <Foot position={[0, 0.27, -0.5]} />
           <RoundedBox args={[0.52, 0.14, 1.5]} radius={0.06} position={[0, 0.37, 0]} castShadow>
-            <meshPhysicalMaterial {...brushedAlu} />
+            <meshPhysicalMaterial {...anodizedAlu} />
           </RoundedBox>
           <Seam args={[0.5, 0.02, 1.44]} position={[0, 0.45, 0]} />
           <RoundedBox args={[0.5, 1.9, 1.42]} radius={0.2} position={[0, 1.43, 0]} castShadow>
@@ -212,10 +232,13 @@ function Reader({ x, phase }) {
   const head = useRef()
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
-    if (lens.current)
-      lens.current.material.emissiveIntensity = 0.45 + Math.sin(t * 0.7 + phase) * 0.16
+    const p = presence(t, 0)
+    if (lens.current) {
+      lens.current.material.emissiveIntensity = 0.25 + p * 0.9 + Math.sin(t * 0.7 + phase) * 0.1
+      lens.current.material.opacity = 0.2 + p * 0.28
+    }
     if (head.current)
-      head.current.position.y = 1.78 + Math.sin(t * 0.5 + phase) * 0.04
+      head.current.position.y = 1.78 - p * 0.1 + Math.sin(t * 0.5 + phase) * 0.03
   })
   return (
     <group position={[x, 0, -1.35]}>
@@ -224,7 +247,7 @@ function Reader({ x, phase }) {
       <Foot position={[-0.8, 0.26, -0.4]} />
       <Foot position={[0.8, 0.26, -0.4]} />
       <RoundedBox args={[2.0, 0.16, 1.15]} radius={0.07} position={[0, 0.37, 0]} castShadow>
-        <meshPhysicalMaterial {...brushedAlu} />
+        <meshPhysicalMaterial {...anodizedAlu} />
       </RoundedBox>
       <Seam args={[1.94, 0.02, 1.1]} position={[0, 0.46, 0]} />
       <RoundedBox args={[1.9, 2.9, 1.05]} radius={0.26} position={[0, 1.93, 0]} castShadow>
@@ -264,8 +287,10 @@ function Reader({ x, phase }) {
 function Grader({ x, phase }) {
   const crown = useRef()
   useFrame(({ clock }) => {
-    if (crown.current)
-      crown.current.material.emissiveIntensity = 0.35 + Math.sin(clock.elapsedTime * 0.6 + phase) * 0.14
+    if (crown.current) {
+      const p = presence(clock.elapsedTime, STATION_X[2])
+      crown.current.material.emissiveIntensity = 0.25 + p * 0.7 + Math.sin(clock.elapsedTime * 0.6 + phase) * 0.1
+    }
   })
   const discs = [
     { r: 1.0,  h: 0.5,  y: 0.63, m: plastic(0.44, 0.2) },
@@ -280,7 +305,7 @@ function Grader({ x, phase }) {
       <Foot position={[0, 0.26, -0.95]} />
       <mesh position={[0, 0.35, 0]} castShadow>
         <cylinderGeometry args={[1.08, 1.12, 0.12, 48]} />
-        <meshPhysicalMaterial {...brushedAlu} />
+        <meshPhysicalMaterial {...anodizedAlu} />
       </mesh>
       {discs.map((d, i) => (
         <mesh key={i} position={[0, d.y, 0]} castShadow>
@@ -420,7 +445,7 @@ function FactoryScene() {
     const g = float.current
     if (!g) return
     g.position.y = Math.sin(clock.elapsedTime * 0.45) * 0.05
-    g.rotation.y = -0.1 + Math.sin(clock.elapsedTime * 0.1) * 0.02
+    g.rotation.y = -0.12 + Math.sin(clock.elapsedTime * 0.08) * 0.015
   })
   return (
     <group ref={float} rotation={[0, -0.1, 0]}>
@@ -432,8 +457,10 @@ function FactoryScene() {
         <Unit key={i} offset={i / N_UNITS} />
       ))}
       <OutputPlinth />
-      <ContactShadows position={[0, -0.44, 0]} opacity={0.3} scale={24}
-                      blur={3} far={5} resolution={512} color="#39304A" />
+      <ContactShadows position={[0, -0.44, 0]} opacity={0.34} scale={18}
+                      blur={1.6} far={3.4} resolution={1024} color="#332B44" />
+      <ContactShadows position={[0, -0.46, 0]} opacity={0.16} scale={28}
+                      blur={5} far={6} resolution={512} color="#39304A" />
     </group>
   )
 }
@@ -454,7 +481,7 @@ export default function EventFactory3D() {
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [0.3, 2.6, 12.2], fov: 26 }}
+        camera={{ position: [0.55, 2.55, 12.2], fov: 26 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping

@@ -1,4 +1,4 @@
-import{r as et,g as Gy,j as Bn}from"./index-CxFSAJ3l.js";/**
+import{r as et,g as Gy,j as Bn}from"./index-BI5h74Iu.js";/**
  * @license
  * Copyright 2010-2026 Three.js Authors
  * SPDX-License-Identifier: MIT
