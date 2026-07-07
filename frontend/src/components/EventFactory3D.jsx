@@ -427,7 +427,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       {/* processing head — the station's real product color; the body
           itself warms up with a soft emissive wash while working */}
       <RoundedBox args={[hw, hh, 2.52]} radius={r} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.48)}
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.4)}
                               emissive={accent} emissiveIntensity={0.02} />
       </RoundedBox>
       <Seam args={[hw - 0.06, 0.02, 2.46]} position={[0, top, 0]} />
@@ -963,7 +963,7 @@ function FactoryScene() {
       ))}
       {/* radial shadow pooled on the platform, plus a wide soft halo
           that melts the base into the page */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.33} scale={18}
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.4} scale={18}
                       blur={2.2} far={3.6} resolution={1024} color="#3A3630" />
       <ContactShadows position={[0, -0.8, 0]} opacity={0.08} scale={30}
                       blur={6.5} far={5} resolution={512} color="#443C33" />
@@ -975,9 +975,9 @@ function FactoryScene() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.35 + Math.sin(clock.elapsedTime * 0.5) * 0.01
+    if (ref.current) ref.current.intensity = 0.25 + Math.sin(clock.elapsedTime * 0.5) * 0.008
   })
-  return <ambientLight ref={ref} intensity={0.35} color="#FFFDF9" />
+  return <ambientLight ref={ref} intensity={0.25} color="#FFFDF9" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
@@ -1034,19 +1034,19 @@ export default function EventFactory3D() {
         {/* dominant sun from top-front-right: bright top highlights,
             deep soft drop shadows; frustum tightly bounds the line */}
         <directionalLight
-          position={[5, 10, 5]} intensity={1.6} color="#FFEEDA"
+          position={[6, 12, 6]} intensity={2.4} color="#FFEEDA"
           castShadow shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0005} shadow-normalBias={0.02}
           shadow-camera-left={-8} shadow-camera-right={8}
           shadow-camera-top={6} shadow-camera-bottom={-4}
         />
         <directionalLight position={[-6, 6, -8]} intensity={0.35} color="#DDE4F4" />
-        <hemisphereLight args={['#FFFDF9', '#EFE3CE', 0.3]} />
+        <hemisphereLight args={['#FFFDF9', '#EFE3CE', 0.22]} />
         <Environment frames={1} resolution={512}>
-          <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
-          <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
-          <Lightformer intensity={1.1} position={[9, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} color="#FFEFDD" />
-          <Lightformer intensity={0.7} position={[0, -4, 8]} scale={[16, 3, 1]} color="#F4F0E8" />
+          <Lightformer intensity={1.8} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
+          <Lightformer intensity={0.9} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
+          <Lightformer intensity={0.7} position={[9, 5, 3]} rotation-y={-Math.PI / 3} scale={[8, 4, 1]} color="#FFEFDD" />
+          <Lightformer intensity={0.45} position={[0, -4, 8]} scale={[16, 3, 1]} color="#F4F0E8" />
         </Environment>
         <group position={[0, -1.15, 0]}>
           <FactoryScene />
