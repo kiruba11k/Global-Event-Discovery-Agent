@@ -87,12 +87,15 @@ const cartonTex = (() => {
 })()
 
 /* ── materials: soft matte clay, layered — no default-material look ── */
-const clay = (color, rough = 0.72) => ({
-  color, roughness: rough, metalness: 0.03,
+const clay = (color, rough = 0.65) => ({
+  // dense premium matte clay: zero metalness, a strong warm sheen layer
+  // gives the soft fresnel edge-brightening of subsurface plastic
+  color, roughness: rough, metalness: 0,
   roughnessMap: noiseTex || undefined,
-  sheen: 0.35, sheenColor: '#FFF8EC', envMapIntensity: 0.5,
+  sheen: 0.55, sheenColor: '#FFF9EE', sheenRoughness: 0.6,
+  envMapIntensity: 0.45,
 })
-const powder = (rough = 0.72) => clay(BODY_C, rough)
+const powder = (rough = 0.65) => clay(BODY_C, rough)
 const panelClay = clay('#E7DED2', 0.68)
 const coverClay = clay('#EAE3D8', 0.7)
 const graphite = {
@@ -101,7 +104,7 @@ const graphite = {
 }
 const support    = { color: SUPPORT, roughness: 0.65, metalness: 0.05, roughnessMap: noiseTex || undefined }
 const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapIntensity: 0.85 }
-const brushedAlu = { color: '#B9B0A0', roughness: 0.44, metalness: 0.5, envMapIntensity: 0.85 }  // warm aluminum
+const brushedAlu = { color: '#B9B0A0', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.7 }  // warm soft aluminum
 const stainless  = { color: '#9FA0A2', roughness: 0.4, metalness: 0.6, envMapIntensity: 0.9 }   // satin steel
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
 const beltRubber = { color: '#63665C', roughness: 0.95, metalness: 0 }  // dark olive rubber
@@ -116,7 +119,7 @@ const smokedGlass = {
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
-  color: c, roughness: 0.5, metalness: 0.1, envMapIntensity: 0.7,
+  color: c, roughness: 0.55, metalness: 0.05, envMapIntensity: 0.4,
 })
 
 /* ── the production schedule ─────────────────────────────────────────
@@ -409,7 +412,7 @@ function Station({ m, accent, accent2, title, lines, shape, hero, stats, body, w
       ))}
       {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.1} position={[0, 0.92, s * 1.0]} castShadow>
+        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.15} position={[0, 0.92, s * 1.0]} castShadow>
           <meshPhysicalMaterial {...clay(walls, 0.66)} />
         </RoundedBox>
       ))}
@@ -568,10 +571,10 @@ function MatchScoreCore({ m }) {
     <group position={[0, 3.0, 0]}>
       {/* angular chamfer slabs flanking the dome */}
       {[-1, 1].map(s => (
-        <mesh key={s} position={[s * 0.78, 0.05, 0]} rotation={[0, 0, s * 0.4]} castShadow>
-          <boxGeometry args={[0.6, 0.09, 2.0]} />
+        <RoundedBox key={s} args={[0.6, 0.09, 2.0]} radius={0.035} position={[s * 0.78, 0.05, 0]}
+                    rotation={[0, 0, s * 0.4]} castShadow>
           <meshPhysicalMaterial {...graphite} />
-        </mesh>
+        </RoundedBox>
       ))}
       <mesh castShadow position={[0, 0.06, 0]}>
         <sphereGeometry args={[0.46, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
@@ -904,7 +907,7 @@ const STATIONS = [
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
   { title: 'MATCH & SCORE', accent: ORANGE, accent2: PURPLE, hero: true,
     body: '#E77B60', walls: '#F8DCD2',     // warm coral hero
-    shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.09, bw: 2.5, sw: 1.7 },
+    shape: { hw: 2.9, hh: 1.5, hy: 2.25, r: 0.16, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
   { title: 'BRIEF & DELIVER', accent: GOLD,
@@ -920,17 +923,17 @@ function Platform() {
   return (
     <group position={[0, -0.72, 0]}>
       <RoundedBox args={[13.4, 0.07, 4.2]} radius={0.035} receiveShadow>
-        <meshPhysicalMaterial color="#EEE7DB" roughness={0.66} metalness={0.02}
-                              envMapIntensity={0.3} />
+        <meshPhysicalMaterial color="#F4F6F9" roughness={0.95} metalness={0}
+                              envMapIntensity={0.2} />
       </RoundedBox>
       {/* whisper of a reflection in the floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
         <planeGeometry args={[13.0, 3.9]} />
         <MeshReflectorMaterial
           resolution={512} blur={[320, 110]} mixBlur={1}
-          mixStrength={0.2} roughness={0.8} depthScale={0.5}
+          mixStrength={0.14} roughness={0.92} depthScale={0.5}
           minDepthThreshold={0.4} maxDepthThreshold={1.4}
-          color="#EFE8DC" metalness={0.02} transparent opacity={0.55}
+          color="#F4F6F9" metalness={0} transparent opacity={0.4}
         />
       </mesh>
     </group>
@@ -972,9 +975,9 @@ function FactoryScene() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.62 + Math.sin(clock.elapsedTime * 0.5) * 0.01
+    if (ref.current) ref.current.intensity = 0.5 + Math.sin(clock.elapsedTime * 0.5) * 0.01
   })
-  return <ambientLight ref={ref} intensity={0.62} color="#FFF6E8" />
+  return <ambientLight ref={ref} intensity={0.5} color="#FFFDF9" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
@@ -1026,14 +1029,15 @@ export default function EventFactory3D() {
         {/* faint atmospheric depth — distant metal melts toward the page tone */}
         <fog attach="fog" args={['#F2E9DA', 17, 34]} />
         <AmbientPulse />
+        {/* large soft sun, high at ~45° — shadows melt into the floor */}
         <directionalLight
-          position={[4, 10, 7]} intensity={1.1} color="#FFEEDA"
-          castShadow shadow-mapSize={[2048, 2048]} shadow-radius={28}
+          position={[7, 10, 7]} intensity={1.05} color="#FFEEDA"
+          castShadow shadow-mapSize={[2048, 2048]} shadow-radius={42}
           shadow-camera-left={-10} shadow-camera-right={10}
           shadow-camera-top={10} shadow-camera-bottom={-10}
         />
         <directionalLight position={[-6, 6, -8]} intensity={0.45} color="#DDE4F4" />
-        <hemisphereLight args={['#FFF4E0', '#E6D9C4', 0.32]} />
+        <hemisphereLight args={['#FFFDF9', '#EFE3CE', 0.4]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={3} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF7EC" />
           <Lightformer intensity={1.5} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} />
