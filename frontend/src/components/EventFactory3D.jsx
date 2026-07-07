@@ -718,17 +718,32 @@ function FactoryScene() {
   )
 }
 
-/* fixed hero camera — always frames the entire line, first station to
-   last, with generous whitespace; distance adapts to viewport aspect */
+/* cinematic hero camera — the line fills ~90% of the frame edge-to-
+   edge, first and last stations always fully visible. 32° lens for a
+   product-photography look, aimed at the center of the line, slightly
+   lowered, with a barely-perceptible idle drift. No orbit controls. */
+const CAM_FOV = 32
+const LOOK_AT = new THREE.Vector3(0, 0.45, 0)   // between stations 2 & 3
 function ResponsiveCamera() {
   const { camera, size } = useThree()
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    if (camera.fov !== CAM_FOV) { camera.fov = CAM_FOV; camera.updateProjectionMatrix() }
     const aspect = size.width / Math.max(size.height, 1)
-    const vfov = THREE.MathUtils.degToRad(26)
+    const vfov = THREE.MathUtils.degToRad(CAM_FOV)
     const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect)
-    // half-width of the full line (+ margin) must fit the horizontal fov
-    const targetZ = Math.max(9.4 / Math.tan(hfov / 2), 11)
+    // tight fit: conveyor half-width + a small margin must fill the
+    // horizontal fov; the line's height must fit the vertical fov
+    // +1.7 compensates for the conveyor's near edge sitting in front of
+    // the fit plane — keeps the end caps inside the frame at all aspects
+    const fitW = 8.45 / Math.tan(hfov / 2) + 1.7
+    const fitH = 2.55 / Math.tan(vfov / 2)
+    const targetZ = Math.max(fitW, fitH, 8.5)
     camera.position.z += (targetZ - camera.position.z) * 0.08
+    // subtle idle drift — a living frame, a pixel or two of motion
+    const t = clock.elapsedTime
+    camera.position.x = 0.15 + Math.sin(t * 0.23) * 0.045
+    camera.position.y = 2.1 + Math.sin(t * 0.17 + 1.7) * 0.035
+    camera.lookAt(LOOK_AT)
   })
   return null
 }
@@ -739,7 +754,7 @@ export default function EventFactory3D() {
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [0.4, 2.5, 14], fov: 26 }}
+        camera={{ position: [0.35, 2.1, 11.5], fov: 32 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
