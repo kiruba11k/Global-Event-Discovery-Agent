@@ -127,11 +127,11 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // deep slate smoked glass — smartphone-screen finish; inner neon UI
-  // transmits through from behind
-  color: '#160B2E', roughness: 0.1, metalness: 0,
-  transmission: 0.9, thickness: 2.0, ior: 1.5, transparent: true,
-  clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 1.2,
+  // liquid obsidian OLED glass: ultra-gloss, mirrors the teal/magenta
+  // studio lights, with a hint of the bright page showing through
+  color: '#0B0D17', roughness: 0.05, metalness: 0.2,
+  transmission: 0.4, opacity: 0.8, thickness: 1.2, ior: 1.5, transparent: true,
+  clearcoat: 1.0, clearcoatRoughness: 0.02, envMapIntensity: 1.4,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -768,17 +768,24 @@ function Unit({ index }) {
 
   return (
     <group ref={group} position={[START_X, 0.72, 0]}>
-      {/* stages 0–2: a premium shipping carton, accruing marks */}
+      {/* stages 0–2: a glowing data capsule, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[1.0, 0.76, 1.0]} radius={0.2} smoothness={6} castShadow>
-          <meshPhysicalMaterial color="#FFFFFF" map={cartonTex} roughness={0.78} metalness={0}
-                                roughnessMap={noiseTex || undefined}
-                                sheen={0.3} sheenColor="#FFEAC9" />
+          <meshPhysicalMaterial color="#2B1A4A" roughness={0.2} metalness={0}
+                                transmission={0.7} thickness={0.8} ior={1.42} transparent
+                                clearcoat={0.6} clearcoatRoughness={0.15} />
         </RoundedBox>
-        {/* carton fold line */}
+        {/* active processing core glowing inside the glass shell */}
+        <mesh>
+          <boxGeometry args={[0.4, 0.32, 0.4]} />
+          <meshStandardMaterial color="#00F2FE" emissive="#00F2FE"
+                                emissiveIntensity={2.5} toneMapped={false} />
+        </mesh>
+        {/* neon frame seam */}
         <mesh position={[0, 0.36, 0]}>
-          <boxGeometry args={[0.88, 0.02, 0.88]} />
-          <meshStandardMaterial color={CARTON_E} roughness={0.85} />
+          <boxGeometry args={[0.88, 0.016, 0.88]} />
+          <meshStandardMaterial color="#00F2FE" emissive="#00F2FE"
+                                emissiveIntensity={1.4} toneMapped={false} />
         </mesh>
         {/* stage 1: blue discovery ring */}
         <mesh ref={blueEdge} visible={false} position={[0, -0.35, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -949,8 +956,8 @@ function FactoryScene() {
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.45} scale={18}
-                      blur={2.5} far={3.6} resolution={1024} color="#2A1548" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.4} scale={18}
+                      blur={2.8} far={3.6} resolution={1024} color="#2A1548" />
       <ContactShadows position={[0, -0.76, 0]} opacity={0.06} scale={28}
                       blur={8} far={5} resolution={512} color="#2A1548" />
     </group>
@@ -997,9 +1004,9 @@ function DataCapsules() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.3 + Math.sin(clock.elapsedTime * 0.5) * 0.008
+    if (ref.current) ref.current.intensity = 0.38 + Math.sin(clock.elapsedTime * 0.5) * 0.008
   })
-  return <ambientLight ref={ref} intensity={0.3} color="#120024" />
+  return <ambientLight ref={ref} intensity={0.38} color="#1A0A30" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
@@ -1078,7 +1085,7 @@ export default function EventFactory3D() {
         />
         {/* magenta rim from rear-right: pink silhouette on chamfers/legs */}
         <directionalLight position={[8, 6, -6]} intensity={3.4} color="#FF007A" />
-        <hemisphereLight args={['#2A0D4E', '#120024', 0.35]} />
+        <hemisphereLight args={['#3A1A63', '#1A0A30', 0.45]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={1.6} position={[0, 8, -5]} scale={[18, 8, 1]} color="#7B4DFF" />
           <Lightformer intensity={0.9} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} color="#FF3D9A" />
