@@ -32,23 +32,23 @@ import { EffectComposer, Bloom, BrightnessContrast, HueSaturation } from '@react
 import * as THREE from 'three'
 
 /* ── palette: warm pastel claymorphism ── */
-const BODY_C   = '#4A32A8'   // deep violet structural housings
-const PANEL_C  = '#3E2A85'   // deep-set panels
-const DETAIL_C = '#2E1B5E'   // deep chassis seams
-const FRAME_C  = '#241245'   // midnight violet frames
+const BODY_C   = '#2C2B67'   // Deep Indigo · upper chassis modules
+const PANEL_C  = '#2C2B67'   // Deep Indigo panels
+const DETAIL_C = '#1C2340'   // Midnight Navy seams
+const FRAME_C  = '#1C2340'   // Midnight Navy frames
 const CHAMPAGNE = '#FFB347'  // amber warm trim pops
-const SUPPORT  = '#3A2470'   // velvet purple pedestals
-const RAIL_C   = '#5A48A6'   // violet satin rails
+const SUPPORT  = '#1C2340'   // Midnight Navy base structure
+const RAIL_C   = '#5A3EBF'   // Royal Purple accents
 const RUBBER_C = '#1E1038'   // deep violet rubber
 const CARTON   = '#C79D6A'   // premium shipping carton
 const CARTON_E = '#B3834F'   // carton edges
 /* pastel accents — trims, LEDs, glow, progress bars only */
-const BLUE    = '#00D2FF'    // vibrant cyan · discover
-const EMERALD = '#00F2A0'    // neon mint · score marks
-const ORANGE  = '#FF007A'    // hot magenta · match
-const PURPLE  = '#B98BFF'    // electric lavender
-const GOLD    = '#FFB347'    // amber gold · brief
-const LED_IDLE = '#FF6A88'   // coral idle indicator
+const BLUE    = '#26D8FF'    // Cyan Light accent
+const EMERALD = '#26D8FF'    // cyan score marks
+const ORANGE  = '#FF4FCB'    // Neon Pink accent
+const PURPLE  = '#9B5CFF'    // Purple Glow
+const GOLD    = '#9B5CFF'    // purple · brief accents
+const LED_IDLE = '#FF4FCB'   // Neon Pink idle LED
 
 /* micro roughness variation — nothing reads mathematically perfect */
 const noiseTex = (() => {
@@ -100,13 +100,13 @@ const cartonTex = (() => {
 })()
 
 /* ── materials: soft matte clay, layered — no default-material look ── */
-const clay = (color, rough = 0.65) => ({
-  // dense premium matte clay: zero metalness, a strong warm sheen layer
-  // gives the soft fresnel edge-brightening of subsurface plastic
-  color, roughness: rough, metalness: 0,
+const clay = (color, rough = 0.35) => ({
+  // satin polymer: catches light softly, never heavy-metallic
+  color, roughness: rough, metalness: 0.08,
+  clearcoat: 0.15, clearcoatRoughness: 0.1,
   roughnessMap: noiseTex || undefined,
-  sheen: 0.7, sheenColor: '#C9B8FF', sheenRoughness: 0.5,
-  envMapIntensity: 0.45,
+  sheen: 0.4, sheenColor: '#C9B8FF', sheenRoughness: 0.5,
+  envMapIntensity: 0.5,
 })
 const powder = (rough = 0.65) => clay(BODY_C, rough)
 const panelClay = clay(PANEL_C, 0.68)
@@ -115,22 +115,21 @@ const graphite = {
   // warm matte frame — reads as tinted polymer, not metal
   color: FRAME_C, roughness: 0.6, metalness: 0.08, envMapIntensity: 0.55,
 }
-const support    = { color: SUPPORT, roughness: 0.65, metalness: 0.05, roughnessMap: noiseTex || undefined }
+const support    = { color: SUPPORT, roughness: 0.35, metalness: 0.08, clearcoat: 0.15, clearcoatRoughness: 0.1, roughnessMap: noiseTex || undefined }
 const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapIntensity: 0.85 }
-const brushedAlu = { color: '#3E2A85', roughness: 0.6, metalness: 0.25, envMapIntensity: 0.7 }  // violet chassis
-const stainless  = { color: '#C8BFF5', roughness: 0.35, metalness: 0.7, envMapIntensity: 1.1 }  // chroma steel
+const brushedAlu = { color: '#1C2340', roughness: 0.35, metalness: 0.08, clearcoat: 0.15, clearcoatRoughness: 0.1, envMapIntensity: 0.6 }  // midnight navy chassis
+const stainless  = { color: '#BFC5D2', roughness: 0.35, metalness: 0.6, envMapIntensity: 1.0 }  // soft titanium
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
-const beltRubber = { color: '#22252C', roughness: 0.55, metalness: 0.4 }  // matte titanium track
-const rollerSatin = { color: '#8B7BD8', roughness: 0.3, metalness: 0.6, envMapIntensity: 0.9 }
+const beltRubber = { color: '#262938', roughness: 0.35, metalness: 0.08 }  // charcoal satin track
+const rollerSatin = { color: '#BFC5D2', roughness: 0.3, metalness: 0.6, envMapIntensity: 0.9 }
 const frosted = {
   color: '#FFFFFF', roughness: 0.45, metalness: 0,
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // lightweight translucent slate-indigo glass — the bright page reads
-  // straight through; no dense dark slabs anywhere
-  color: '#25293E', roughness: 0.12, metalness: 0,
-  transmission: 0.75, thickness: 0.5, ior: 1.5, transparent: true,
+  // premium light glass — 88% transparent, reflects the cream canvas
+  color: '#EAF6FF', roughness: 0.15, metalness: 0,
+  transmission: 0.88, thickness: 0.5, ior: 1.5, transparent: true,
   clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.1,
 }
 /* matte accent trim in a station's pastel */
@@ -426,7 +425,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       glow.current.material.emissiveIntensity = a * 1.1
       glow.current.material.opacity = a * 0.5
     }
-    if (bounce.current) bounce.current.intensity = 0.08 + a * 0.5
+    if (bounce.current) bounce.current.intensity = 0.1 + a * 0.25
     if (heroGlow.current) heroGlow.current.material.opacity = 0.03 + a * 0.16
     if (magGlow.current) magGlow.current.material.opacity = 0.09 + a * 0.22
     // the colored body itself breathes with light while processing
@@ -438,16 +437,14 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
     <group position={[MX[m], 0, 0]}>
       {/* ultra-slim floating panel — smoky frosted glass blade */}
       <RoundedBox args={[hw, hh, 2.1]} radius={r} smoothness={10} position={[0, hy, 0]} castShadow>
-        <meshPhysicalMaterial ref={headMat} color={body} roughness={0.2} metalness={0}
-                              transmission={0.7} thickness={1.0} ior={1.45} transparent
-                              clearcoat={1.0} clearcoatRoughness={0.1}
-                              sheen={0.6} sheenColor="#C9B8FF"
+        <meshPhysicalMaterial ref={headMat} {...clay(body, 0.35)}
                               emissive={accent} emissiveIntensity={0.05} />
       </RoundedBox>
       {/* titanium edge frame under the blade */}
       <RoundedBox args={[hw - 0.06, 0.03, 2.04]} radius={0.015} position={[0, hy - hh / 2 - 0.02, 0]}>
-        <meshPhysicalMaterial color="#4A4D55" roughness={0.35} metalness={0.85}
-                              roughnessMap={noiseTex || undefined} envMapIntensity={1.1} />
+        <meshPhysicalMaterial color="#8B5CF6" roughness={0.35} metalness={0.08}
+                              clearcoat={0.15} clearcoatRoughness={0.1}
+                              roughnessMap={noiseTex || undefined} envMapIntensity={0.7} />
       </RoundedBox>
       {/* microscopic suspension wires down to the track rails */}
       {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([fx, fz], i) => {
@@ -455,8 +452,8 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
         return (
           <mesh key={i} position={[fx * (hw / 2 - 0.3), (0.34 + hb) / 2, fz * 0.62]}>
             <cylinderGeometry args={[0.008, 0.008, hb - 0.34, 8]} />
-            <meshPhysicalMaterial color="#7A7D86" roughness={0.3} metalness={0.9}
-                                  envMapIntensity={1.2} />
+            <meshPhysicalMaterial color="#BFC5D2" roughness={0.3} metalness={0.6}
+                                  envMapIntensity={1.0} />
           </mesh>
         )
       })}
@@ -464,7 +461,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       <mesh position={[0, hy - hh / 2 + 0.03, 1.06]}>
         <boxGeometry args={[hw - 0.2, 0.012, 0.012]} />
         <meshStandardMaterial color={glowColor} emissive={glowColor}
-                              emissiveIntensity={3.8} toneMapped={false} />
+                              emissiveIntensity={2.0} toneMapped={false} />
       </mesh>
       {/* magnetic hover glow pooled on the belt below */}
       <mesh ref={magGlow} position={[0, 0.36, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -481,9 +478,9 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       </mesh>
       {/* accent bounce + rear neon wash */}
       <pointLight ref={bounce} position={[0, 0.8, 2.1]} color={glowColor}
-                  intensity={0.1} distance={3.6} decay={2} />
+                  intensity={0.12} distance={3.6} decay={2} />
       <pointLight position={[0, 0.5, -1.7]} color={glowColor}
-                  intensity={0.35} distance={4.5} decay={2} />
+                  intensity={0.3} distance={4.5} decay={2} />
       {/* hero station: soft accent underglow beneath the base */}
       {hero && (
         <mesh ref={heroGlow} position={[0, -0.62, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -771,7 +768,7 @@ function Unit({ index }) {
       {/* stages 0–2: a glowing data capsule, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[1.0, 0.76, 1.0]} radius={0.2} smoothness={6} castShadow>
-          <meshPhysicalMaterial color="#4B32A4" roughness={0.2} metalness={0}
+          <meshPhysicalMaterial color="#5A3EBF" roughness={0.2} metalness={0}
                                 transmission={0.72} thickness={0.8} ior={1.42} transparent
                                 clearcoat={0.6} clearcoatRoughness={0.15} />
         </RoundedBox>
@@ -838,7 +835,7 @@ function Conveyor() {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const g = c.getContext('2d')
-    g.fillStyle = '#22252C'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = '#262938'; g.fillRect(0, 0, 256, 64)
     g.fillStyle = 'rgba(255,255,255,0.07)'
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
     const t = new THREE.CanvasTexture(c)
@@ -876,7 +873,7 @@ function Conveyor() {
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[13.1, 0.02, 1.12]} />
-        <meshStandardMaterial color="#15171C" roughness={0.85} />
+        <meshStandardMaterial color="#1C2340" roughness={0.6} />
       </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.9, 0.02, 0]} castShadow>
@@ -914,18 +911,18 @@ function Conveyor() {
    Brief. The center station is the hero: larger, taller, wider display,
    soft accent underglow. Sides stay lower, wider, quieter. */
 const STATIONS = [
-  { title: 'DISCOVER', accent: BLUE, neon: '#00F2FE',
-    body: '#512BD4', walls: '#3E2A85',     // ultra-violet over deep indigo
+  { title: 'DISCOVER', accent: BLUE, neon: '#2EE6FF',
+    body: '#2C2B67', walls: '#2C2B67',     // Deep Indigo module
     shape: { hw: 3.0, hh: 0.28, hy: 1.42, r: 0.09, sw: 1.3 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
-  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#00F2FE', neon: '#FF007A', hero: true,
-    body: '#6E00FF', walls: '#43289A',     // velvet purple hero core
+  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#00F2FE', neon: '#FF4BC8', hero: true,
+    body: '#2C2B67', walls: '#2C2B67',     // Deep Indigo hero module
     shape: { hw: 2.9, hh: 0.44, hy: 1.56, r: 0.1, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
-  { title: 'BRIEF & DELIVER', accent: '#FF6A88', neon: '#FF5C86',
-    body: '#5B2EC8', walls: '#3A2470',     // deep violet over midnight purple
+  { title: 'BRIEF & DELIVER', accent: '#9B5CFF', neon: '#9B5CFF',
+    body: '#2C2B67', walls: '#2C2B67',     // Deep Indigo module
     shape: { hw: 2.9, hh: 0.26, hy: 1.41, r: 0.09, sw: 1.2, sx: -0.6 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
@@ -957,9 +954,9 @@ function FactoryScene() {
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
       <ContactShadows position={[0, -0.66, 0]} opacity={0.18} scale={18}
-                      blur={3.8} far={3.6} resolution={1024} color="#2A1548" />
+                      blur={4.0} far={3.6} resolution={1024} color="#1C2340" />
       <ContactShadows position={[0, -0.76, 0]} opacity={0.04} scale={28}
-                      blur={10} far={5} resolution={512} color="#2A1548" />
+                      blur={10} far={5} resolution={512} color="#1C2340" />
     </group>
   )
 }
@@ -970,7 +967,7 @@ function DataCapsules() {
   const refs = useRef([])
   const N = 8
   const SPAN = END_X - START_X
-  const colors = useMemo(() => ['#FF6A88', '#FFB347', '#00F2FE', '#FF6A88'], [])
+  const colors = useMemo(() => ['#FF4FCB', '#9B5CFF', '#26D8FF', '#FF4FCB'], [])
   useFrame(({ clock }) => {
     refs.current.forEach((c, i) => {
       if (!c) return
