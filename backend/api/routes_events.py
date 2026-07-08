@@ -957,6 +957,41 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
 
 # ══════════════════════════════════════════════════════════════════════
+# POST /api/parse-icp  —  LLM-based universal buyer-text parsing
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/parse-icp")
+async def parse_icp(payload: dict):
+    """
+    Parse a free-text buyer description ("Head of Perioperative Services
+    at ambulatory surgery centers") into canonical industries + personas
+    via LLM, covering any designation instead of a hardcoded keyword map.
+
+    Degrades gracefully: {"source": "rules"} tells the frontend to keep
+    its local keyword-parse result. Never returns an error to the UI.
+    """
+    text = str(payload.get("text", "") or "").strip()
+    if len(text) < 4:
+        return {"source": "rules"}
+    try:
+        from relevance.icp_parser import parse_icp_text
+        result = await parse_icp_text(text)
+    except Exception as exc:
+        logger.warning(f"parse-icp failed (non-fatal): {exc}")
+        result = None
+    if result is None:
+        return {"source": "rules"}
+    return {
+        "source":         "llm",
+        "industries":     result.industries,
+        "personas":       result.personas,
+        "extra_keywords": result.extra_keywords,
+        "seniority":      result.seniority,
+        "confidence":     result.confidence,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
 # GET /api/geo-hint  —  live event counts per geo + neighbour suggestions
 # ══════════════════════════════════════════════════════════════════════
 

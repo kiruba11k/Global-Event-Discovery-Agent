@@ -25,6 +25,22 @@ class ICPProfile(BaseModel):
     # ── Client names — optional social-proof list ─────────────
     client_names: List[str] = []   # company names the user has served
 
+    # ── Free-text buyer description (verbatim form input) ─────
+    # Used by the scorer's context pass; previously sent by the
+    # frontend but silently dropped by pydantic (undeclared field).
+    buyer_description: str = ""
+
+    # ── LLM-parsed niche keywords outside the canonical taxonomy ─
+    # e.g. ["ambulatory surgery", "clinical operations"] — scored as
+    # free-text evidence so long-tail ICPs still match events.
+    extra_keywords: List[str] = []
+
+    # ── Meeting-potential calculator inputs (from ICP form) ────
+    # Also previously dropped by pydantic; getattr() fell back to
+    # defaults, so the user's answers never affected the output.
+    differentiator_score: int = 5          # 1-10 slider
+    client_count_range:   str = "11-50"    # "0-10"|"11-50"|"51-200"|"201-500"|"500+"
+
 
 class CompanyContext(BaseModel):
     """Optional enriched context from saved company profile + deck."""

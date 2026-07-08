@@ -61,6 +61,15 @@ export const api = {
       method: 'POST',
       body:   JSON.stringify(payload),
     }),
+  // ── LLM ICP parse - universal buyer-text parsing ──────
+  // Returns {source:'llm', industries, personas, extra_keywords, ...}
+  // or {source:'rules'} when the caller should keep its local parse.
+  parseIcp: (text) =>
+    request('/parse-icp', {
+      method: 'POST',
+      body:   JSON.stringify({ text }),
+    }),
+
   // ── Geo hint - live event counts + neighbour suggestions ─
   geoHint: (geos = [], industries = []) =>
     request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}`),
