@@ -133,11 +133,10 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // realistic OLED: deep sea-black glass, mostly dark until active,
-  // with a tempered-glass clearcoat catching soft reflections
-  color: '#071B28', roughness: 0.12, metalness: 0,
-  transmission: 0.22, opacity: 0.96, thickness: 0.5, ior: 1.5, transparent: true,
-  clearcoat: 1.0, clearcoatRoughness: 0.08, envMapIntensity: 1.5,
+  // warm slate-gray OLED glass — soft reflections, never black
+  color: '#545D73', roughness: 0.18, metalness: 0,
+  transmission: 0.3, opacity: 0.95, thickness: 0.5, ior: 1.5, transparent: true,
+  clearcoat: 0.7, clearcoatRoughness: 0.15, envMapIntensity: 1.3,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -273,8 +272,8 @@ function drawScreen(g, title, line, accent, caret, prog, accent2) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
   const bg = g.createLinearGradient(0, 4, 0, 212)
-  bg.addColorStop(0, 'rgba(7,27,40,0.96)')
-  bg.addColorStop(1, 'rgba(14,110,131,0.85)')
+  bg.addColorStop(0, 'rgba(84,93,115,0.96)')
+  bg.addColorStop(1, 'rgba(99,110,136,0.92)')
   g.fillStyle = bg; g.fill()
   // holographic matrix dots
   g.fillStyle = accent + '22'
@@ -294,18 +293,18 @@ function drawScreen(g, title, line, accent, caret, prog, accent2) {
   // header row
   g.textAlign = 'left'
   g.font = '600 24px "Helvetica Neue", Arial, sans-serif'
-  g.fillStyle = 'rgba(255,255,255,0.5)'
+  g.fillStyle = 'rgba(255,255,255,0.85)'
   g.fillText(title.split('').join(' '), 36, 54)
   g.beginPath(); g.arc(478, 46, 6, 0, Math.PI * 2); g.fillStyle = accent; g.fill()
   // status card
   g.beginPath(); g.roundRect(28, 74, 336, 78, 14); g.closePath()
-  g.fillStyle = 'rgba(255,255,255,0.055)'; g.fill()
+  g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill()
   g.font = '500 32px "Helvetica Neue", Arial, sans-serif'
   g.fillStyle = accent
   g.fillText(line + (caret ? '▎' : ''), 46, 124)
   // live waveform card on the right
   g.beginPath(); g.roundRect(376, 74, 108, 78, 14); g.closePath()
-  g.fillStyle = 'rgba(255,255,255,0.055)'; g.fill()
+  g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill()
   g.strokeStyle = (accent2 || accent) + 'AA'; g.lineWidth = 2.5
   g.beginPath()
   for (let i = 0; i <= 22; i++) {
@@ -439,7 +438,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
     return {
       top:    c(new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.15)),
       front:  c(new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.05)),
-      bottom: c(new THREE.Color(body).lerp(new THREE.Color('#000000'), 0.1)),
+      bottom: c(new THREE.Color(body).lerp(new THREE.Color('#545D73'), 0.35)),
     }
   }, [body])
   const top = hy + hh / 2
@@ -512,7 +511,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       {/* soft AO pool where the module meets the track below */}
       <mesh position={[0, 0.345, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[hw + 0.3, 1.9]} />
-        <meshBasicMaterial map={glowTex} color="#4A4550" transparent opacity={0.1}
+        <meshBasicMaterial map={glowTex} color="#6A6478" transparent opacity={0.08}
                            depthWrite={false} />
       </mesh>
       {/* magnetic hover glow pooled on the belt below */}
@@ -584,7 +583,7 @@ function ScannerGate({ m }) {
       {[-1.0, -0.5, 0, 0.5, 1.0].map((ox, i) => (
         <mesh key={i} position={[ox, 1.62, 0.22]}>
           <sphereGeometry args={[0.042, 16, 16]} />
-          <meshPhysicalMaterial color="#0E1524" roughness={0.1} metalness={0.4}
+          <meshPhysicalMaterial color="#545D73" roughness={0.25} metalness={0.2}
                                 emissive={BLUE} emissiveIntensity={0.4} />
         </mesh>
       ))}
@@ -680,7 +679,7 @@ function BriefPrinter({ m }) {
       {/* front paper slot in the low printer face */}
       <mesh position={[0.7, 1.44, 1.055]}>
         <boxGeometry args={[1.0, 0.035, 0.02]} />
-        <meshStandardMaterial color="#55564F" roughness={0.9} />
+        <meshStandardMaterial color="#6C7596" roughness={0.9} />
       </mesh>
       {/* champagne output tray under the slot */}
       <RoundedBox args={[1.04, 0.035, 0.5]} radius={0.02} position={[0.7, 1.37, 1.3]}
@@ -867,7 +866,7 @@ function Unit({ index }) {
       {/* stage 3: elegant dark executive brief with gold seal */}
       <group ref={brief} visible={false}>
         <RoundedBox args={[0.82, 1.04, 0.09]} radius={0.05} position={[0, 0.16, 0]} castShadow>
-          <meshPhysicalMaterial color="#2E2E36" roughness={0.5} clearcoat={0.25}
+          <meshPhysicalMaterial color="#636E88" roughness={0.55} clearcoat={0.1}
                                 clearcoatRoughness={0.3} />
         </RoundedBox>
         <mesh position={[0, 0.48, 0.055]} rotation={[Math.PI / 2, 0, 0]}>
@@ -1012,8 +1011,8 @@ function FactoryScene() {
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.17} scale={18}
-                      blur={4.2} far={3.6} resolution={1024} color="#8A8090" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.12} scale={18}
+                      blur={4.4} far={3.6} resolution={1024} color="#948C96" />
       <ContactShadows position={[0, -0.76, 0]} opacity={0.04} scale={28}
                       blur={10} far={5} resolution={512} color="#9A9088" />
     </group>
@@ -1060,9 +1059,9 @@ function DataCapsules() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.55 + Math.sin(clock.elapsedTime * 0.5) * 0.006
+    if (ref.current) ref.current.intensity = 0.62 + Math.sin(clock.elapsedTime * 0.5) * 0.006
   })
-  return <ambientLight ref={ref} intensity={0.55} color="#FFF4E6" />
+  return <ambientLight ref={ref} intensity={0.62} color="#F8ECDD" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
@@ -1133,17 +1132,17 @@ export default function EventFactory3D() {
             deep soft drop shadows; frustum tightly bounds the line */}
         {/* large warm key from the upper left */}
         <directionalLight
-          position={[-7, 11, 5]} intensity={1.7} color="#FFEEDD"
+          position={[-7, 11, 5]} intensity={1.35} color="#FFEEDD"
           castShadow shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0005} shadow-normalBias={0.02}
           shadow-camera-left={-9} shadow-camera-right={9}
           shadow-camera-top={6} shadow-camera-bottom={-4}
         />
         {/* large soft warm fill from the right */}
-        <directionalLight position={[8, 7, 5]} intensity={0.9} color="#FFF4E8" />
+        <directionalLight position={[8, 7, 5]} intensity={1.05} color="#FFF4E8" />
         {/* whisper of pink rim from rear-right */}
         <directionalLight position={[8, 6, -6]} intensity={0.6} color="#F2A9D2" />
-        <hemisphereLight args={['#FFF8F0', '#E4DCCC', 0.6]} />
+        <hemisphereLight args={['#FFF8F0', '#F4EEE5', 0.68]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={2.2} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF8F0" />
           <Lightformer intensity={1.1} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} color="#FFEFDF" />
