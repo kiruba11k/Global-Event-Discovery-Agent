@@ -111,6 +111,7 @@ const clay = (color, rough = 0.35) => ({
 const paintedMetal = (color) => ({
   color, roughness: 0.28, metalness: 0.12,
   clearcoat: 0.15, clearcoatRoughness: 0.12,
+  anisotropy: 0.5, anisotropyRotation: Math.PI / 5,
   roughnessMap: noiseTex || undefined, envMapIntensity: 0.55,
 })
 const powder = (rough = 0.65) => clay(BODY_C, rough)
@@ -122,8 +123,8 @@ const graphite = {
 }
 const support    = { color: SUPPORT, roughness: 0.35, metalness: 0.08, clearcoat: 0.15, clearcoatRoughness: 0.1, roughnessMap: noiseTex || undefined }
 const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapIntensity: 0.85 }
-const brushedAlu = { color: '#1C2340', roughness: 0.35, metalness: 0.08, clearcoat: 0.15, clearcoatRoughness: 0.1, envMapIntensity: 0.6 }  // midnight navy chassis
-const stainless  = { color: '#C7CCD6', roughness: 0.22, metalness: 0.65, envMapIntensity: 0.9 }  // support rods
+const brushedAlu = { color: '#1F2745', roughness: 0.3, metalness: 0.25, clearcoat: 0.1, clearcoatRoughness: 0.15, anisotropy: 0.4, roughnessMap: noiseTex || undefined, envMapIntensity: 0.65 }  // painted alu frame
+const stainless  = { color: '#C7CCD6', roughness: 0.22, metalness: 0.65, anisotropy: 0.6, roughnessMap: noiseTex || undefined, envMapIntensity: 0.9 }  // brushed rods
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
 const beltRubber = { color: '#262C42', roughness: 0.45, metalness: 0.08 }  // navy industrial track
 const rollerSatin = { color: '#C7CCD6', roughness: 0.22, metalness: 0.65, envMapIntensity: 0.9 }
@@ -433,6 +434,9 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
   const heroGlow = useRef()
   const magGlow = useRef()
   const { hw, hh, hy, r = 0.2, sw, sx = 0 } = shape
+  const topTint = useMemo(
+    () => '#' + new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.13).getHexString(),
+    [body])
   const top = hy + hh / 2
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
@@ -470,11 +474,29 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
           </mesh>
         )
       })}
-      {/* laser fiber-optic line along the blade's lower edge */}
-      <mesh position={[0, hy - hh / 2 + 0.03, 1.06]}>
-        <boxGeometry args={[hw - 0.2, 0.012, 0.012]} />
-        <meshStandardMaterial color={glowColor} emissive={glowColor}
-                              emissiveIntensity={1.1} toneMapped={false} />
+      {/* top inlay panel — breaks the large flat surface, ~13% lighter */}
+      <RoundedBox args={[hw - 0.5, 0.022, 1.46]} radius={0.011} position={[0, top + 0.004, 0]}>
+        <meshPhysicalMaterial {...clay(topTint, 0.32)} />
+      </RoundedBox>
+      {[-1, 1].map(sgn => (
+        <mesh key={sgn} position={[0, top + 0.002, sgn * 0.78]}>
+          <boxGeometry args={[hw - 0.3, 0.006, 0.008]} />
+          <meshStandardMaterial color={DETAIL_C} roughness={0.9} />
+        </mesh>
+      ))}
+      {/* embedded LED light modules along the lower edge (not a strip) */}
+      {[-2, -1, 0, 1, 2].map(i => (
+        <mesh key={i} position={[i * ((hw - 0.6) / 4), hy - hh / 2 + 0.03, 1.06]}>
+          <boxGeometry args={[0.16, 0.02, 0.014]} />
+          <meshStandardMaterial color={glowColor} emissive={glowColor}
+                                emissiveIntensity={1.1} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* soft AO pool where the module meets the track below */}
+      <mesh position={[0, 0.345, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[hw + 0.3, 1.9]} />
+        <meshBasicMaterial map={glowTex} color="#000000" transparent opacity={0.14}
+                           depthWrite={false} />
       </mesh>
       {/* magnetic hover glow pooled on the belt below */}
       <mesh ref={magGlow} position={[0, 0.36, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -966,8 +988,8 @@ function FactoryScene() {
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.18} scale={18}
-                      blur={4.0} far={3.6} resolution={1024} color="#1C2340" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.24} scale={18}
+                      blur={3.6} far={3.6} resolution={1024} color="#1C2340" />
       <ContactShadows position={[0, -0.76, 0]} opacity={0.04} scale={28}
                       blur={10} far={5} resolution={512} color="#1C2340" />
     </group>
@@ -1095,7 +1117,7 @@ export default function EventFactory3D() {
         />
         {/* subtle pink rim from rear-right, catching chamfers only */}
         <directionalLight position={[8, 6, -6]} intensity={1.4} color="#FF5DBD" />
-        <hemisphereLight args={['#F3E7D8', '#1A2038', 0.35]} />
+        <hemisphereLight args={['#F6ECDD', '#1A2038', 0.46]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={1.5} position={[0, 8, -5]} scale={[18, 8, 1]} color="#FFF4E4" />
           <Lightformer intensity={0.6} position={[-9, 4, 2]} rotation-y={Math.PI / 3} scale={[10, 5, 1]} color="#BFE9F5" />
