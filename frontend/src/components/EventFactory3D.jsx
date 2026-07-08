@@ -127,11 +127,11 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // liquid obsidian OLED glass: ultra-gloss, mirrors the teal/magenta
-  // studio lights, with a hint of the bright page showing through
-  color: '#0B0D17', roughness: 0.05, metalness: 0.2,
-  transmission: 0.4, opacity: 0.8, thickness: 1.2, ior: 1.5, transparent: true,
-  clearcoat: 1.0, clearcoatRoughness: 0.02, envMapIntensity: 1.4,
+  // premium smoked glassmorphism: tinted indigo frosted panel that
+  // lets the bright page glow through — zero black in the scene
+  color: '#2C314D', roughness: 0.15, metalness: 0,
+  transmission: 0.6, thickness: 0.8, ior: 1.5, transparent: true,
+  clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.1,
 }
 /* matte accent trim in a station's pastel */
 const anodizedAccent = (c) => ({
@@ -266,7 +266,7 @@ function Led({ position, color, m }) {
 function drawScreen(g, title, line, accent, caret, prog, accent2) {
   g.clearRect(0, 0, 512, 216)
   g.beginPath(); g.roundRect(4, 4, 504, 208, 30); g.closePath()
-  g.fillStyle = 'rgba(14,15,22,0.98)'; g.fill()
+  g.fillStyle = 'rgba(30,34,56,0.94)'; g.fill()
   // holographic matrix dots
   g.fillStyle = accent + '22'
   for (let dy = 28; dy < 216; dy += 24)
@@ -353,7 +353,7 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
     <group position={[sx, sy, 1.28]}>
       {/* hairline trim — near-zero bezel, edge-to-edge glass */}
       <RoundedBox args={[sw + 0.02, 0.62 * k + 0.02, 0.04]} radius={0.07} position={[0, 0, -0.042]}>
-        <meshPhysicalMaterial {...graphite} roughness={0.3} metalness={0.6} />
+        <meshPhysicalMaterial {...stainless} roughness={0.3} />
       </RoundedBox>
       {/* inner holographic UI — light emits from within the shell */}
       <mesh ref={mesh} position={[0, 0, -0.034]}>
@@ -771,8 +771,8 @@ function Unit({ index }) {
       {/* stages 0–2: a glowing data capsule, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[1.0, 0.76, 1.0]} radius={0.2} smoothness={6} castShadow>
-          <meshPhysicalMaterial color="#2B1A4A" roughness={0.2} metalness={0}
-                                transmission={0.7} thickness={0.8} ior={1.42} transparent
+          <meshPhysicalMaterial color="#4B32A4" roughness={0.2} metalness={0}
+                                transmission={0.72} thickness={0.8} ior={1.42} transparent
                                 clearcoat={0.6} clearcoatRoughness={0.15} />
         </RoundedBox>
         {/* active processing core glowing inside the glass shell */}
@@ -956,10 +956,10 @@ function FactoryScene() {
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.4} scale={18}
-                      blur={2.8} far={3.6} resolution={1024} color="#2A1548" />
-      <ContactShadows position={[0, -0.76, 0]} opacity={0.06} scale={28}
-                      blur={8} far={5} resolution={512} color="#2A1548" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.28} scale={18}
+                      blur={3.4} far={3.6} resolution={1024} color="#2A1548" />
+      <ContactShadows position={[0, -0.76, 0]} opacity={0.05} scale={28}
+                      blur={9} far={5} resolution={512} color="#2A1548" />
     </group>
   )
 }
