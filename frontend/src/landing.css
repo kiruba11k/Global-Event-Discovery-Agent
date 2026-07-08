@@ -1580,10 +1580,4 @@
    gradient pocket (cool grey melting to transparent) sits behind it so
    the chroma hardware pops — it fades out before the edges, so no
    visible rectangle. */
-.ef3d-canvas {
-  position: relative;
-  background: radial-gradient(75% 85% at 50% 46%,
-              rgba(244, 245, 246, 0.9) 0%,
-              rgba(243, 241, 236, 0.35) 52%,
-              rgba(243, 241, 236, 0) 74%);
-}
+.ef3d-canvas { position: relative; background: transparent; }

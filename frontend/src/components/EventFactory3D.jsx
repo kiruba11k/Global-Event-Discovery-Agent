@@ -127,10 +127,10 @@ const frosted = {
   transmission: 0.85, thickness: 0.8, ior: 1.45, transparent: true,
 }
 const smokedGlass = {
-  // premium smoked glassmorphism: tinted indigo frosted panel that
-  // lets the bright page glow through — zero black in the scene
-  color: '#2C314D', roughness: 0.15, metalness: 0,
-  transmission: 0.6, thickness: 0.8, ior: 1.5, transparent: true,
+  // lightweight translucent slate-indigo glass — the bright page reads
+  // straight through; no dense dark slabs anywhere
+  color: '#25293E', roughness: 0.12, metalness: 0,
+  transmission: 0.75, thickness: 0.5, ior: 1.5, transparent: true,
   clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.1,
 }
 /* matte accent trim in a station's pastel */
@@ -731,7 +731,7 @@ function Unit({ index }) {
     if (!g) return
     const s = unitState(unitTime(clock.elapsedTime, index))
     g.position.x = s.x
-    g.position.y = 0.72
+    g.position.y = 0.88   // lifted +0.16: rests flat on the belt surface
 
     // smooth grow-in after each transformation
     if (s.stage !== prev.current.stage) prev.current = { stage: s.stage, at: clock.elapsedTime }
@@ -767,7 +767,7 @@ function Unit({ index }) {
   )
 
   return (
-    <group ref={group} position={[START_X, 0.72, 0]}>
+    <group ref={group} position={[START_X, 0.88, 0]}>
       {/* stages 0–2: a glowing data capsule, accruing marks */}
       <group ref={cube}>
         <RoundedBox args={[1.0, 0.76, 1.0]} radius={0.2} smoothness={6} castShadow>
@@ -956,10 +956,10 @@ function FactoryScene() {
           that melts the base into the page */}
       {/* web-blended grounding: soft contact shadows melt straight into
           the page background — no 3D floor plate */}
-      <ContactShadows position={[0, -0.66, 0]} opacity={0.28} scale={18}
-                      blur={3.4} far={3.6} resolution={1024} color="#2A1548" />
-      <ContactShadows position={[0, -0.76, 0]} opacity={0.05} scale={28}
-                      blur={9} far={5} resolution={512} color="#2A1548" />
+      <ContactShadows position={[0, -0.66, 0]} opacity={0.18} scale={18}
+                      blur={3.8} far={3.6} resolution={1024} color="#2A1548" />
+      <ContactShadows position={[0, -0.76, 0]} opacity={0.04} scale={28}
+                      blur={10} far={5} resolution={512} color="#2A1548" />
     </group>
   )
 }
@@ -987,7 +987,7 @@ function DataCapsules() {
     <group>
       {Array.from({ length: N }, (_, i) => (
         <mesh key={i} ref={el => (refs.current[i] = el)}
-              position={[START_X, 0.42, 0.34]} rotation={[0, 0, Math.PI / 2]}>
+              position={[START_X, 0.47, 0.34]} rotation={[0, 0, Math.PI / 2]}>
           <capsuleGeometry args={[0.065, 0.17, 6, 14]} />
           <meshPhysicalMaterial color="#EBE4FF" roughness={0.12} metalness={0}
                                 transmission={0.65} thickness={0.4} ior={1.4}
@@ -1059,7 +1059,7 @@ export default function EventFactory3D() {
       <Canvas
         dpr={[1, 2]}
         camera={{ position: [0.35, 2.1, 11.5], fov: 32 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.1
