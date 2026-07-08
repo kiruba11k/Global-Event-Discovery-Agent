@@ -1,5 +1,5 @@
 /*
-  theme.css — LeadStrategus design system (light, editorial, warm)
+  theme.css - LeadStrategus design system (light, editorial, warm)
 
   Concept: "Field Guide for the Trade-Show Floor"
   Three product pillars, each with its own accent:
@@ -25,11 +25,11 @@
   --line-strong:  #1E2B33;   /* ink borders for emphatic cards */
 
   /* Pillar accents */
-  --c-find:       #0E7C6B;   /* deep teal   — step 1 discover  */
+  --c-find:       #0E7C6B;   /* deep teal   - step 1 discover  */
   --c-find-soft:  #DCF2EC;
-  --c-meet:       #E85D3D;   /* terracotta coral — step 2 meetings */
+  --c-meet:       #E85D3D;   /* terracotta coral - step 2 meetings */
   --c-meet-soft:  #FCE7DF;
-  --c-talk:       #D99000;   /* golden amber — step 3 talking points */
+  --c-talk:       #D99000;   /* golden amber - step 3 talking points */
   --c-talk-soft:  #FCF0D4;
 
   /* Functional */

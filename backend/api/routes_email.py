@@ -1,5 +1,5 @@
 """
-Email Report — POST /api/email-report
+Email Report - POST /api/email-report
 Flow:
   1. Frontend sends events + company context in request body
   2. Backend generates PDF from HTML template (in memory only)
@@ -73,8 +73,8 @@ PRICING_MATRIX = {
 
 DEAL_LABELS = {
     "low": "Low (< $10K)",
-    "medium": "Medium ($10K–$25K)",
-    "high": "High ($25K–$75K)",
+    "medium": "Medium ($10K-$25K)",
+    "high": "High ($25K-$75K)",
     "enterprise": "Enterprise (> $75K)",
 }
 
@@ -120,7 +120,7 @@ def _build_html(request: EmailReportRequest) -> str:
                 pkg_rows += f"""
                 <tr>
                   <td style="padding:5px 10px;font-size:12px;color:#374151;">{m} meetings</td>
-                  <td style="padding:5px 10px;font-size:12px;font-weight:700;color:#3b82f6;">₹{prices.get(m, "—")}L</td>
+                  <td style="padding:5px 10px;font-size:12px;font-weight:700;color:#3b82f6;">₹{prices.get(m, "-")}L</td>
                 </tr>"""
 
             pricing_section = ""
@@ -164,9 +164,9 @@ def _build_html(request: EmailReportRequest) -> str:
             </div>""")
         return "".join(cards)
 
-    industries_str  = ", ".join(p.target_industries[:5]) if p.target_industries else "—"
-    personas_str    = ", ".join(p.target_personas[:5])   if p.target_personas   else "—"
-    geographies_str = ", ".join(p.target_geographies)    if p.target_geographies else "—"
+    industries_str  = ", ".join(p.target_industries[:5]) if p.target_industries else "-"
+    personas_str    = ", ".join(p.target_personas[:5])   if p.target_personas   else "-"
+    geographies_str = ", ".join(p.target_geographies)    if p.target_geographies else "-"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -277,7 +277,7 @@ def _build_html(request: EmailReportRequest) -> str:
   <div class="icp-box">
     <div>
       <div class="icp-item-label">Company</div>
-      <div class="icp-item-value">{p.company_name or "—"}</div>
+      <div class="icp-item-value">{p.company_name or "-"}</div>
     </div>
     <div>
       <div class="icp-item-label">Target Industries</div>
@@ -303,13 +303,13 @@ def _build_html(request: EmailReportRequest) -> str:
 
   <!-- Cashback guarantee -->
   <div class="cashback-box">
-    🛡 LeadStrategus Cashback Guarantee — If we don't deliver the promised meetings at any event below, you receive a full cashback. No questions asked.
+    🛡 LeadStrategus Cashback Guarantee - If we don't deliver the promised meetings at any event below, you receive a full cashback. No questions asked.
   </div>
 
   <!-- GO Events -->
   <div class="section-heading">
     <div class="verdict-dot-go"></div>
-    GO — Strong Matches ({len(go_events)} events)
+    GO - Strong Matches ({len(go_events)} events)
   </div>
   {event_cards(go_events)}
 
@@ -317,7 +317,7 @@ def _build_html(request: EmailReportRequest) -> str:
   <div style="margin-top:32px;">
     <div class="section-heading">
       <div class="verdict-dot-consider"></div>
-      CONSIDER — Worth Evaluating ({len(con_events)} events)
+      CONSIDER - Worth Evaluating ({len(con_events)} events)
     </div>
     {event_cards(con_events)}
   </div>
@@ -338,7 +338,7 @@ def _build_html(request: EmailReportRequest) -> str:
 <!-- ══════════ FOOTER ══════════ -->
 <div class="footer">
   <span>© {datetime.utcnow().year} <strong>LeadStrategus</strong> · Event Intelligence · leadstrategus.com</span>
-  <span>Confidential — prepared for <strong>{p.company_name or "your company"}</strong></span>
+  <span>Confidential - prepared for <strong>{p.company_name or "your company"}</strong></span>
 </div>
 
 </body>
@@ -359,14 +359,14 @@ def _generate_pdf(html: str) -> bytes:
         logger.info(f"PDF generated via WeasyPrint: {len(pdf_bytes):,} bytes")
         return pdf_bytes
     except Exception as e:
-        logger.warning(f"WeasyPrint failed ({e}) — falling back to fpdf2")
+        logger.warning(f"WeasyPrint failed ({e}) - falling back to fpdf2")
         return _generate_pdf_fpdf(html)
 
 
 def _generate_pdf_fpdf(html: str) -> bytes:
     """
     Pure-Python fallback: generate a simpler PDF using fpdf2.
-    No system dependencies needed — always works on Render free tier.
+    No system dependencies needed - always works on Render free tier.
     """
     from fpdf import FPDF
     from html import unescape
@@ -381,7 +381,7 @@ def _generate_pdf_fpdf(html: str) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "LeadStrategus — Event Intelligence Report", ln=True)
+    pdf.cell(0, 10, "LeadStrategus - Event Intelligence Report", ln=True)
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(0, 5, clean[:8000])
 
@@ -398,7 +398,7 @@ def _send_email(to: str, pdf_bytes: bytes, company_name: str) -> None:
             raise ValueError("RESEND_API_KEY not configured in .env")
 
         from_addr = settings.resend_from_email or "reports@leadstrategus.com"
-        subject   = f"LeadStrategus Event Intelligence Report — {company_name or 'Your Company'}"
+        subject   = f"LeadStrategus Event Intelligence Report - {company_name or 'Your Company'}"
 
         # Encode PDF as base64 for attachment
         pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -431,7 +431,7 @@ and pipeline projections based on your ICP.</p>
         }
         resend.Emails.send(params)
         logger.info(f"Email sent to {to} via Resend ({len(pdf_bytes):,} byte PDF).")
-        # pdf_bytes goes out of scope immediately — GC'd, never written to disk
+        # pdf_bytes goes out of scope immediately - GC'd, never written to disk
 
     except Exception as e:
         logger.error(f"Resend send failed: {e}")
@@ -465,11 +465,11 @@ async def email_report(request: EmailReportRequest):
         # 2. Convert to PDF in memory (WeasyPrint → fpdf2 fallback)
         pdf_bytes = _generate_pdf(html)
 
-        # 3. Send via Resend — pdf_bytes freed immediately after
+        # 3. Send via Resend - pdf_bytes freed immediately after
         company_name = request.profile.company_name or "your company"
         _send_email(request.email, pdf_bytes, company_name)
 
-        # 4. pdf_bytes goes out of scope here — no storage, no disk write
+        # 4. pdf_bytes goes out of scope here - no storage, no disk write
         del pdf_bytes
 
         return {

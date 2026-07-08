@@ -166,6 +166,21 @@ def _within_dates(event, date_from, date_to) -> bool:
     return True
 
 
+_VERDICT_RANK = {"GO": 0, "CONSIDER": 1, "SKIP": 2}
+
+
+def _sort_ranked(ranked: list) -> list:
+    """
+    Final display order: GO events always above CONSIDER, CONSIDER above
+    SKIP, then by relevance score within each tier. Sorting by raw score
+    alone let a CONSIDER event sit at #1 above a GO event.
+    """
+    return sorted(
+        ranked,
+        key=lambda r: (_VERDICT_RANK.get(r.fit_verdict, 3), -(r.relevance_score or 0)),
+    )
+
+
 def _apply_result_mix(ranked: Iterable) -> list:
     """
     Always return exactly RESULT_LIMIT (6) events.
@@ -551,7 +566,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         company_ctx=company_ctx, enrichments={},
         deal_size_category=deal_size,
     )
-    ranked.sort(key=lambda r: -r.relevance_score)
+    ranked = _sort_ranked(ranked)
 
     # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
     ranked = _apply_result_mix(ranked)
@@ -619,8 +634,9 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             company_ctx=company_ctx, enrichments=enrichments,
             deal_size_category=deal_size,
         )
-        ranked.sort(key=lambda r: -r.relevance_score)
-        ranked = ranked[:RESULT_LIMIT]
+        # Verdict-aware order + result mix must be reapplied here too —
+        # a raw score sort after re-ranking put CONSIDER events above GO.
+        ranked = _apply_result_mix(_sort_ranked(ranked))
         _last_results[profile_id] = ranked
 
     # ── Step 10: Calculate 5-factor fit scores + ICP counts ──────────
@@ -713,7 +729,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             r.fit_verdict = "CONSIDER"
             note = (r.verdict_notes or "").strip()
             r.verdict_notes = (
-                "Closest match by rule-based scoring — no strong ICP fit found "
+                "Closest match by rule-based scoring - no strong ICP fit found "
                 "in this geography/date window, so treat as a starting point. "
                 + note
             ).strip()
@@ -868,7 +884,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
                         )
                     else:
                         region_fallback_note = (
-                            f"Limited events in {', '.join(non_global_geos)} — "
+                            f"Limited events in {', '.join(non_global_geos)} - "
                             f"showing best global matches to complete your ranking."
                         )
 

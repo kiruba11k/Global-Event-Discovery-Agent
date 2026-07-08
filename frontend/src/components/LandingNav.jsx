@@ -1,5 +1,5 @@
 /*
-  LandingNav.jsx — light pill nav, framer-motion entrance
+  LandingNav.jsx - light pill nav, framer-motion entrance
 */
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -106,7 +106,7 @@ export default function LandingNav({ onScrollToForm }) {
               Services
             </a>
             <button className="ld-nav-mobile-cta" onClick={() => go({ form: true })}>
-              Rank my shows — free
+              Rank my shows - free
             </button>
           </motion.div>
         )}

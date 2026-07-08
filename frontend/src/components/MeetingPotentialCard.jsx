@@ -5,9 +5,9 @@
   Used in ShowRankingPage (compact) and ShowDeepDivePage (expanded).
 
   Props:
-    data       object  — event.meeting_potential from API
-    eventName  string  — for copy
-    compact    bool    — compact mode for ranking list rows
+    data       object  - event.meeting_potential from API
+    eventName  string  - for copy
+    compact    bool    - compact mode for ranking list rows
 */
 
 import '../meeting-potential.css'
@@ -30,7 +30,7 @@ function FunnelRow({ label, value, source, accent }) {
   if (value === null || value === undefined) return (
     <div className="mp-funnel-row mp-funnel-unknown">
       <span className="mp-funnel-label">{label}</span>
-      <span className="mp-funnel-value mp-funnel-na">—</span>
+      <span className="mp-funnel-value mp-funnel-na">-</span>
       <span className="mp-funnel-source">{source}</span>
     </div>
   )

@@ -1,5 +1,5 @@
 /*
-  cityCoords.js — lat/lng lookup for placing DB event locations on the
+  cityCoords.js - lat/lng lookup for placing DB event locations on the
   hero globe. The DB stores city + country but no coordinates, so we
   match against ~90 major tradeshow cities, then fall back to the
   country's main hub. Unmatched locations simply don't render a marker.

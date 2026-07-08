@@ -1,5 +1,5 @@
 /*
-  SocialProof.jsx — "sound familiar?" pain-quote wall, light postcard style
+  SocialProof.jsx - "sound familiar?" pain-quote wall, light postcard style
 */
 import { motion } from 'framer-motion'
 import '../landing.css'
@@ -33,7 +33,7 @@ export default function SocialProof() {
             Most tradeshow budgets buy <em>hope, not meetings.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
-            Every quote below is a meeting that should have happened — and the intel
+            Every quote below is a meeting that should have happened - and the intel
             that would have made it.
           </p>
         </div>
@@ -49,7 +49,7 @@ export default function SocialProof() {
             >
               <div className="ld-quote-mark" aria-hidden="true">“</div>
               <blockquote className="ld-quote-text">{q.text}</blockquote>
-              <figcaption className="ld-quote-role">— {q.role}</figcaption>
+              <figcaption className="ld-quote-role">- {q.role}</figcaption>
             </motion.figure>
           ))}
         </div>

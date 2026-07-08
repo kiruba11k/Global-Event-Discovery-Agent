@@ -1,7 +1,7 @@
 """
-relevance/meeting_calculator.py  —  Meeting potential + ROI calculator
+relevance/meeting_calculator.py  -  Meeting potential + ROI calculator
 
-All constants are driven by the spec logic, not arbitrary — each has a
+All constants are driven by the spec logic, not arbitrary - each has a
 documented rationale. The key insight: we only calculate what we can
 infer from real data. Where data is missing, we return None and say so.
 
@@ -16,7 +16,7 @@ From ICP form (4 original fields + 2 new qualification fields):
   avg_deal_size_category→  deal value in INR/USD, break-even math
   work_email            →  lead capture (not used in calc)
 
-  differentiator_score  →  1–10 user self-rating of competitive positioning
+  differentiator_score  →  1-10 user self-rating of competitive positioning
                             Maps to "response probability" in meeting calc
   client_count_range    →  "0-10" | "11-50" | "51-200" | "201-500" | "500+"
                             Maps to "market proof" and "positioning ease"
@@ -43,9 +43,9 @@ MEETING CONVERSION
 
   Conversion % = f(differentiator_score, client_count_range)
 
-  Differentiator 8–10 + Strong proof (201+)  →  8–10% of reachable ICPs
-  Differentiator 5–7  + Moderate proof        →  5–7%
-  Differentiator 1–4  + Low proof (0–50)      →  2–4%
+  Differentiator 8-10 + Strong proof (201+)  →  8-10% of reachable ICPs
+  Differentiator 5-7  + Moderate proof        →  5-7%
+  Differentiator 1-4  + Low proof (0-50)      →  2-4%
 
   Blended: weight differentiator 60%, proof 40%.
 
@@ -56,8 +56,8 @@ PRICING (INR)
   Driven by estimated meetings, not fixed tiers.
   Low confidence → manual review, no auto-price.
 
-  3–5   meetings →  ₹5L package
-  6–10  meetings →  ₹7L package
+  3-5   meetings →  ₹5L package
+  6-10  meetings →  ₹7L package
   10+   meetings →  Custom (contact us)
   < 3   meetings →  Manual review recommended
   Confidence low →  Manual review recommended
@@ -80,11 +80,11 @@ from typing import Optional
 
 # ── Deal size → INR midpoint (for ROI calculation) ────────────────
 # INR midpoints based on deal category labels.
-# These are not guesses — they're the midpoints of the stated bracket ranges.
+# These are not guesses - they're the midpoints of the stated bracket ranges.
 DEAL_INR_MIDPOINTS: dict[str, int] = {
-    "medium":     3_000_000,   # $10K–$50K → ~₹25L midpoint
-    "high":       6_000_000,   # $50K–$100K → ~₹60L midpoint
-    "enterprise": 25_000_000,  # $100K–$500K → ~₹250L midpoint
+    "medium":     3_000_000,   # $10K-$50K → ~₹25L midpoint
+    "high":       6_000_000,   # $50K-$100K → ~₹60L midpoint
+    "enterprise": 25_000_000,  # $100K-$500K → ~₹250L midpoint
     "strategic":  75_000_000,  # $500K+ → ~₹750L midpoint
 }
 
@@ -92,11 +92,11 @@ DEAL_INR_MIDPOINTS: dict[str, int] = {
 # Driven by meeting count range, not arbitrary tiers.
 PRICING_PACKAGES = [
     # (min_meetings, max_meetings, package_name, price_inr, label)
-    (10, 999, "Flagship Event",  None,       "Custom — contact us"),
-    (6,  9,   "Growth Pack",     700_000,    "₹7L for 6–10 meetings"),
-    (3,  5,   "Starter Pack",    500_000,    "₹5L for 3–5 meetings"),
-    (1,  2,   "Manual Review",   None,       "Manual review recommended — thin audience"),
-    (0,  0,   "Manual Review",   None,       "Manual review recommended — insufficient data"),
+    (10, 999, "Flagship Event",  None,       "Custom - contact us"),
+    (6,  9,   "Growth Pack",     700_000,    "₹7L for 6-10 meetings"),
+    (3,  5,   "Starter Pack",    500_000,    "₹5L for 3-5 meetings"),
+    (1,  2,   "Manual Review",   None,       "Manual review recommended - thin audience"),
+    (0,  0,   "Manual Review",   None,       "Manual review recommended - insufficient data"),
 ]
 
 # ── Audience funnel ratios (documented, not arbitrary) ────────────
@@ -117,19 +117,19 @@ FIT_GRADE_RELEVANCE: dict[str, float] = {
 # ── Differentiator score → positioning tier ──────────────────────
 def _differentiator_tier(score: int) -> tuple[str, str]:
     """Returns (tier_key, description)."""
-    if   score >= 8: return "strong",   "Easy to position — strong competitive differentiation"
-    elif score >= 5: return "moderate", "Standard effort — clear but not unique positioning"
-    else:            return "weak",     "Hard to position — needs tighter ICP + stronger messaging"
+    if   score >= 8: return "strong",   "Easy to position - strong competitive differentiation"
+    elif score >= 5: return "moderate", "Standard effort - clear but not unique positioning"
+    else:            return "weak",     "Hard to position - needs tighter ICP + stronger messaging"
 
 # ── Client count range → proof tier ──────────────────────────────
 def _proof_tier(range_str: str) -> tuple[str, str]:
     """Returns (tier_key, description)."""
     r = (range_str or "").strip()
-    if r in ("500+",):         return "strong",   "Strong proof — 500+ clients, enterprise-ready credibility"
-    if r in ("201-500",):      return "strong",   "Strong proof — 201–500 clients, proven at scale"
-    if r in ("51-200",):       return "moderate", "Moderate proof — 51–200 clients, usable for most outreach"
-    if r in ("11-50",):        return "early",    "Early proof — 11–50 clients, needs narrower ICP focus"
-    return                           "limited",   "Limited proof — 0–10 clients, high effort, niche positioning"
+    if r in ("500+",):         return "strong",   "Strong proof - 500+ clients, enterprise-ready credibility"
+    if r in ("201-500",):      return "strong",   "Strong proof - 201-500 clients, proven at scale"
+    if r in ("51-200",):       return "moderate", "Moderate proof - 51-200 clients, usable for most outreach"
+    if r in ("11-50",):        return "early",    "Early proof - 11-50 clients, needs narrower ICP focus"
+    return                           "limited",   "Limited proof - 0-10 clients, high effort, niche positioning"
 
 # ── Conversion % from differentiator + proof ─────────────────────
 def _meeting_conversion_pct(diff_tier: str, proof_tier: str) -> tuple[float, str]:
@@ -141,7 +141,7 @@ def _meeting_conversion_pct(diff_tier: str, proof_tier: str) -> tuple[float, str
     diff_score = {"strong": 9.0, "moderate": 6.0, "weak": 3.0}.get(diff_tier, 5.0)
     proof_score= {"strong": 9.0, "moderate": 6.0, "early": 4.0, "limited": 2.5}.get(proof_tier, 5.0)
     blended    = (diff_score * 0.60) + (proof_score * 0.40)
-    # blended is 0–10, map to conversion % range 2–10%
+    # blended is 0-10, map to conversion % range 2-10%
     conversion_pct = round((blended / 10) * 10, 1)   # max 10% conversion
     conversion_pct = max(2.0, min(conversion_pct, 10.0))
     reason = (
@@ -158,7 +158,7 @@ def _get_pricing(estimated_meetings: float, confidence: str) -> dict:
         return {
             "package_name":  "Manual Review",
             "price_inr":     None,
-            "label":         "Manual review recommended — insufficient data for auto-pricing",
+            "label":         "Manual review recommended - insufficient data for auto-pricing",
             "is_custom":     False,
             "is_manual":     True,
         }
@@ -199,16 +199,16 @@ def calculate_meeting_potential(
         event_dict:           serialised event dict (from routes_events)
         profile:              ICPProfile object
         fit_result:           output of calculate_fit_score()
-        differentiator_score: 1–10 from ICP form
+        differentiator_score: 1-10 from ICP form
         client_count_range:   "0-10" | "11-50" | "51-200" | "201-500" | "500+"
 
     Returns dict with:
-      audience_funnel      — 5-step funnel with values and rationale
-      meeting_estimate     — dict with low/mid/high and reasoning
-      pricing              — suggested package
-      roi                  — break-even analysis
-      confidence           — overall confidence level
-      positioning          — differentiator + proof tier labels
+      audience_funnel      - 5-step funnel with values and rationale
+      meeting_estimate     - dict with low/mid/high and reasoning
+      pricing              - suggested package
+      roi                  - break-even analysis
+      confidence           - overall confidence level
+      positioning          - differentiator + proof tier labels
     """
     # ── 0. Qualification signals ──────────────────────────────────
     diff_score     = max(1, min(10, int(differentiator_score or 5)))
@@ -222,7 +222,7 @@ def calculate_meeting_potential(
     confidence   = fit_result.get("confidence", "low")
 
     if total_att == 0:
-        # No attendee data — funnel is unknowable, return None values
+        # No attendee data - funnel is unknowable, return None values
         funnel = {
             "total_attendees":       {"value": None, "source": "not published yet"},
             "unique_companies":      {"value": None, "source": "derived from attendees"},
@@ -236,16 +236,16 @@ def calculate_meeting_potential(
         # Step 1: unique companies
         unique_companies = max(1, round(total_att * COMPANY_RATIO / 10) * 10)
 
-        # Step 2: relevant companies — driven by fit grade
+        # Step 2: relevant companies - driven by fit grade
         rel_ratio       = FIT_GRADE_RELEVANCE.get(fit_grade, 0.05)
         relevant_cos    = max(1, round(unique_companies * rel_ratio / 5) * 5)
 
-        # Step 3: relevant DMs — 20% of relevant attendees
+        # Step 3: relevant DMs - 20% of relevant attendees
         # First approximate relevant attendees = relevant_cos / COMPANY_RATIO
         rel_att         = round(relevant_cos / COMPANY_RATIO)
         relevant_dms    = max(1, round(rel_att * DM_PER_COMPANY / 5) * 5)
 
-        # Step 4: reachable ICPs — 15% reachability
+        # Step 4: reachable ICPs - 15% reachability
         reachable       = max(1, round(relevant_dms * REACHABILITY_RATE / 5) * 5)
 
         funnel = {
@@ -271,7 +271,7 @@ def calculate_meeting_potential(
             "high":         None,
             "display":      "Insufficient data",
             "conversion_pct": round(conversion * 100, 1),
-            "reasoning":    "No attendee data — cannot estimate meetings. " + conv_reason,
+            "reasoning":    "No attendee data - cannot estimate meetings. " + conv_reason,
             "confidence_note": "Attendee figures not yet published for this event.",
         }
         confidence = "low"
@@ -285,9 +285,9 @@ def calculate_meeting_potential(
 
         # Confidence note explains the range to the user honestly
         if diff_tier == "strong" and proof_tier_key in ("strong",):
-            quality_note = "Strong positioning and proven track record — upper range achievable with good prep."
+            quality_note = "Strong positioning and proven track record - upper range achievable with good prep."
         elif diff_tier == "weak" or proof_tier_key in ("limited",):
-            quality_note = "Wider range reflects early-stage positioning — outreach quality determines where in range you land."
+            quality_note = "Wider range reflects early-stage positioning - outreach quality determines where in range you land."
         else:
             quality_note = "Range reflects prep quality. Top end achievable with pre-show outreach starting 4+ weeks out."
 
@@ -295,7 +295,7 @@ def calculate_meeting_potential(
             "low":          low,
             "mid":          mid,
             "high":         high,
-            "display":      f"{low}–{high} meetings",   # always show range, never single number
+            "display":      f"{low}-{high} meetings",   # always show range, never single number
             "midpoint":     mid,
             "conversion_pct": conv_pct,
             "reasoning":    conv_reason,
@@ -304,7 +304,7 @@ def calculate_meeting_potential(
         }
 
     # ── 3. Pricing ────────────────────────────────────────────────
-    # Use conservative floor (low) for pricing recommendation — anchor conservatively.
+    # Use conservative floor (low) for pricing recommendation - anchor conservatively.
     # Better to under-promise and over-deliver than the reverse.
     conservative_meetings = meeting_estimate.get("low") or meeting_estimate.get("mid") or 0
     mid_meetings = meeting_estimate.get("mid") or 0
@@ -342,13 +342,13 @@ def calculate_meeting_potential(
             ),
         }
     elif avg_deal_inr > 0 and mid_meetings > 0:
-        # Custom pricing — can't calculate ROI but show deal value context
+        # Custom pricing - can't calculate ROI but show deal value context
         deal_l = round(avg_deal_inr / 100_000)
         roi = {
             "avg_deal_inr":     avg_deal_inr,
             "avg_deal_display": f"₹{deal_l}L",
             "package_cost_inr": None,
-            "summary":          f"Custom pricing — one closed deal at ₹{deal_l}L covers most campaign costs.",
+            "summary":          f"Custom pricing - one closed deal at ₹{deal_l}L covers most campaign costs.",
         }
 
     # ── 5. Positioning assessment ─────────────────────────────────

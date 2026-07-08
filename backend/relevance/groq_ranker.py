@@ -677,6 +677,36 @@ def _is_hallucinated(
     return False
 
 
+# ── Verdict/rationale consistency guard ────────────────────────────
+# The LLM sometimes writes a rationale that says the event is NOT a fit
+# ("does not target healthcare CISOs, so relevance is limited") while
+# still returning a positive verdict. The rationale is the ground truth
+# of its own analysis — downgrade the verdict to match it.
+
+_NEGATIVE_SIGNALS = (
+    "does not target", "doesn't target", "not relevant", "relevance is limited",
+    "limited relevance", "does not align", "doesn't align", "not a fit",
+    "poor fit", "weak fit", "no clear alignment", "does not focus",
+    "unlikely to attract", "not designed for", "does not cater",
+    "little overlap", "minimal overlap", "outside your target",
+)
+
+
+def _consistent_verdict(verdict: str, notes: str) -> str:
+    n = (notes or "").lower()
+    if any(s in n for s in _NEGATIVE_SIGNALS):
+        if verdict == "GO":
+            return "CONSIDER"
+        if verdict == "CONSIDER":
+            return "SKIP"
+    return verdict
+
+
+def _clean_text(s: str) -> str:
+    """Normalise em/en dashes in user-visible text to plain hyphens."""
+    return (s or "").replace("—", "-").replace("–", "-")
+
+
 # ── Main entry ─────────────────────────────────────────────────────
 
 async def rank_with_groq(
@@ -820,7 +850,12 @@ async def rank_with_groq(
                 verdict   = tier
                 rationale = build_fallback_rationale(event, profile, detail, score, tier)
             else:
-                verdict   = gr.fit_verdict
+                verdict   = _consistent_verdict(gr.fit_verdict, gr.verdict_notes)
+                if verdict != gr.fit_verdict:
+                    logger.info(
+                        f"Verdict downgraded {gr.fit_verdict}→{verdict} "
+                        f"(negative rationale): '{event.name[:50]}'"
+                    )
                 rationale = gr.verdict_notes
                 llm_about   = gr.what_its_about or ""
                 llm_persona = gr.buyer_persona  or ""
@@ -846,19 +881,19 @@ async def rank_with_groq(
             event_name      = event.name,
             date            = (
                 event.start_date +
-                (f" – {event.end_date}"
+                (f" - {event.end_date}"
                  if event.end_date and event.end_date != event.start_date else "")
             ),
             place           = _place(event),
             event_link      = final_link,
-            what_its_about  = _description(event, ev_en, llm_about)[:200],
-            key_numbers     = _key_numbers(event, ev_en, llm_nums, llm_att),
+            what_its_about  = _clean_text(_description(event, ev_en, llm_about)[:200]),
+            key_numbers     = _clean_text(_key_numbers(event, ev_en, llm_nums, llm_att)),
             industry        = _industry(event),
-            buyer_persona   = _personas(event, ev_en, llm_persona),
-            pricing         = _pricing(event, ev_en, llm_pricing),
+            buyer_persona   = _clean_text(_personas(event, ev_en, llm_persona)),
+            pricing         = _clean_text(_pricing(event, ev_en, llm_pricing)),
             pricing_link    = final_link,
             fit_verdict     = verdict,
-            verdict_notes   = rationale,
+            verdict_notes   = _clean_text(rationale),
             sponsors        = event.sponsors or "",
             speakers_link   = event.speakers_url or "",
             agenda_link     = event.agenda_url or "",

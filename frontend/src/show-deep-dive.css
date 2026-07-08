@@ -1,8 +1,8 @@
 /*
-  show-deep-dive.css — LIGHT editorial retheme
+  show-deep-dive.css - LIGHT editorial retheme
   Imported by ShowDeepDivePage.jsx
 
-  All selectors .ddv-* — zero collision with App.css / homepage.css / ranking.css.
+  All selectors .ddv-* - zero collision with App.css / homepage.css / ranking.css.
   Uses theme.css design tokens (paper / surface / ink / line / pillar accents).
 
   Pillar accents by section:
@@ -87,7 +87,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   2. SHOW HEADER — fit & discovery (teal)
+   2. SHOW HEADER - fit & discovery (teal)
    ════════════════════════════════════════════════════════════════ */
 .ddv-header {
   background:    var(--surface);
@@ -197,7 +197,7 @@
   text-align:  center;
 }
 
-/* Grade colours — light palette (JSX passes grade-* via grade.cls;
+/* Grade colours - light palette (JSX passes grade-* via grade.cls;
    .ddv-grade-* kept for any legacy usage) */
 .ddv-grade-badge.grade-aplus, .ddv-grade-inline.grade-aplus, .ddv-grade-aplus
   { background: var(--c-find-soft); color: var(--c-find); border: 2px solid var(--c-find); }
@@ -210,7 +210,7 @@
 .ddv-grade-badge.grade-c,     .ddv-grade-inline.grade-c,     .ddv-grade-c
   { background: var(--paper-deep); color: var(--ink-faint); border: 2px solid var(--line); }
 
-/* Inline grade in stats — border only makes sense on the badge */
+/* Inline grade in stats - border only makes sense on the badge */
 .ddv-grade-inline {
   font-family:  var(--font-display);
   font-size:    clamp(28px,4vw,44px);
@@ -306,7 +306,7 @@
 .ddv-rationale     .ddv-section-eyebrow { color: #9A6700; }
 
 /* ════════════════════════════════════════════════════════════════
-   MEETING POTENTIAL — meetings (coral)
+   MEETING POTENTIAL - meetings (coral)
    ════════════════════════════════════════════════════════════════ */
 .ddv-meeting-wrap {
   padding:       48px 28px;
@@ -352,7 +352,7 @@
 .ddv-gap-reason { color: var(--ink-faint); }
 
 /* ════════════════════════════════════════════════════════════════
-   4. COMPANIES BRINGING YOUR ICPs — meetings (coral)
+   4. COMPANIES BRINGING YOUR ICPs - meetings (coral)
    ════════════════════════════════════════════════════════════════ */
 .ddv-companies {
   padding:       48px 28px;
@@ -494,7 +494,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   6. SEO INLINE ICP FORM — discovery (teal)
+   6. SEO INLINE ICP FORM - discovery (teal)
    ════════════════════════════════════════════════════════════════ */
 .ddv-seo-form {
   background:    var(--c-find-soft);
@@ -527,7 +527,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   7. CTA PANEL — outreach (amber)
+   7. CTA PANEL - outreach (amber)
    ════════════════════════════════════════════════════════════════ */
 .ddv-cta-panel {
   background:    var(--c-talk-soft);
@@ -626,7 +626,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   8. RELATED SHOWS — discovery (teal)
+   8. RELATED SHOWS - discovery (teal)
    ════════════════════════════════════════════════════════════════ */
 .ddv-related {
   padding: 32px 28px;
@@ -681,7 +681,7 @@
   .ddv-back-bar     { padding: 0 16px; }
 }
 
-/* ── Key numbers block — mono figures on cream ──────────────────── */
+/* ── Key numbers block - mono figures on cream ──────────────────── */
 .ddv-key-numbers {
   padding:       28px;
   border-bottom: 1px solid var(--line);
@@ -700,7 +700,7 @@
   margin:      6px 0 0;
 }
 
-/* ── Personas section — attendees (coral) ───────────────────────── */
+/* ── Personas section - attendees (coral) ───────────────────────── */
 .ddv-personas {
   padding:       36px 28px;
   border-bottom: 1px solid var(--line);
@@ -743,7 +743,7 @@
   letter-spacing:.03em;
 }
 
-/* ── AI rationale block — talking points (amber) ────────────────── */
+/* ── AI rationale block - talking points (amber) ────────────────── */
 .ddv-rationale {
   padding:       36px 28px;
   border-top:    1px solid var(--line);

@@ -1,5 +1,5 @@
 /*
-  HeroSection.jsx — split hero built around the three-pillar promise:
+  HeroSection.jsx - split hero built around the three-pillar promise:
   1 find the right shows · 2 meet the right ICPs · 3 tailored talking points.
   Left: serif headline + pillar chips. Right: 3D globe of tradeshow cities.
 */
@@ -39,12 +39,12 @@ export default function HeroSection({ onScrollToForm, stats }) {
 
           <motion.h1 className="ld-hero-h1" variants={rise} custom={1} initial="hidden" animate="show">
             Your buyers are already at a show.
-            <em> We tell you which one — and what to say.</em>
+            <em> We tell you which one - and what to say.</em>
           </motion.h1>
 
           <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">
             Describe your ideal customer once and we'll rank {events} tradeshows by
-            where they actually hang out — free, with the reasoning behind every pick.
+            where they actually hang out - free, with the reasoning behind every pick.
             Then our team gets you the meetings and preps your talking points.
           </motion.p>
 
@@ -61,7 +61,7 @@ export default function HeroSection({ onScrollToForm, stats }) {
 
           <motion.div className="ld-hero-actions" variants={rise} custom={4} initial="hidden" animate="show">
             <button className="ds-btn-primary" onClick={onScrollToForm}>
-              Rank my shows — it's free <ArrowRight size={17} aria-hidden="true" />
+              Rank my shows - it's free <ArrowRight size={17} aria-hidden="true" />
             </button>
             <a className="ds-btn-outline" href="#how">See how it works</a>
           </motion.div>
@@ -81,7 +81,7 @@ export default function HeroSection({ onScrollToForm, stats }) {
             <HeroGlobe locations={stats?.top_locations} />
           </Suspense>
           <div className="ld-hero-globe-caption" aria-hidden="true">
-            Live map — real upcoming shows from our index
+            Live map - real upcoming shows from our index
           </div>
         </motion.div>
       </div>

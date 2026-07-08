@@ -1,9 +1,9 @@
 /*
-  ShowRankingPage.jsx — Screen 2: Your Show Ranking
+  ShowRankingPage.jsx - Screen 2: Your Show Ranking
 
   Data policy:
   • ICP count     = est_attendees × (relevance_score/100) × 0.35, rounded to nearest 10.
-                    If est_attendees is 0/null → shows "—" (unknown), never a fake number.
+                    If est_attendees is 0/null → shows "-" (unknown), never a fake number.
   • Fit grade     = weighted formula on relevance_score + fit_verdict (A+/A/B+/B/C).
                     No hardcoded values.
   • Universe stats = derived from the actual events array returned by the API.
@@ -185,7 +185,7 @@ export default function ShowRankingPage({
   // Rows 1–3 free, rows 4–6 email-gated
   const top6 = dateFiltered.slice(0, 6)
 
-  // Universe stats — prefer API-provided universe_stats when available
+  // Universe stats - prefer API-provided universe_stats when available
   // Passed as prop from App.jsx (SearchResponse.universe_stats)
   const _apiStats = universeStats || {}
   const totalICPsAcrossShows = _apiStats.total_icps_across_shows || top6.reduce((sum, e) => {
@@ -390,7 +390,7 @@ export default function ShowRankingPage({
                 </>
               ) : (
                 <>
-                  <div className="rk-stat-num rk-stat-accent" style={{fontSize:22}}>—</div>
+                  <div className="rk-stat-num rk-stat-accent" style={{fontSize:22}}>-</div>
                   <div className="rk-stat-label">ICP count pending</div>
                   <div className="rk-stat-method">Attendee figures not yet published for these shows</div>
                 </>
@@ -524,7 +524,7 @@ export default function ShowRankingPage({
 
                 {!gated && (
                   <div className="rk-row-right">
-                    {/* Register / event link — primary action */}
+                    {/* Register / event link - primary action */}
                     {(() => {
                       const link = resolveEventLink(event)
                       return link ? (
@@ -602,7 +602,7 @@ export default function ShowRankingPage({
                 <div className="rk-dl-name">
                   The {profile?.target_industries?.[0] || 'B2B'} {profile?.target_personas?.[0] || 'decision-maker'} trade show playbook
                 </div>
-                <p className="rk-dl-desc">Your top shows by name, 90-day prep timeline, and conversation starters — built from your ICP.</p>
+                <p className="rk-dl-desc">Your top shows by name, 90-day prep timeline, and conversation starters - built from your ICP.</p>
               </div>
               <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -616,7 +616,7 @@ export default function ShowRankingPage({
               <div className="rk-dl-body">
                 <div className="rk-dl-tag rk-dl-tag--green">Pre · during · post · 1 page</div>
                 <div className="rk-dl-name">90-day trade show prep checklist</div>
-                <p className="rk-dl-desc">ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up — mapped to your nearest show.</p>
+                <p className="rk-dl-desc">ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up - mapped to your nearest show.</p>
               </div>
               <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn rk-dl-btn--green">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -731,7 +731,7 @@ export default function ShowRankingPage({
         {!unlocked && fullEventPool.length > 3 && (
           <div className="rk-detail-gate-notice">
             <button className="rk-gate-inline-btn" onClick={() => document.getElementById('rk-gate')?.scrollIntoView({ behavior: 'smooth' })}>
-              Unlock full breakdown — enter your email above
+              Unlock full breakdown - enter your email above
             </button>
           </div>
         )}

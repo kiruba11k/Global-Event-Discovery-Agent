@@ -101,12 +101,25 @@ const DEAL_BRACKETS = [
   },
 ]
 
+// ── Keyword matching with word boundaries ─────────────────────────
+// Short keywords (≤4 chars) must match as whole words so "car" never
+// fires inside "healthcare" and "ev" never fires inside "event".
+// Longer keywords are treated as prefixes/stems anchored at a word
+// start ("manufactur" → "manufacturing", "cyber" → "cybersecurity").
+function kwMatch(text, kw) {
+  const k = kw.toLowerCase()
+  if (k.endsWith(' ')) return new RegExp(`\\b${k.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s`).test(text)
+  const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (k.length <= 4) return new RegExp(`\\b${esc}s?\\b`).test(text)
+  return new RegExp(`\\b${esc}`).test(text)
+}
+
 // ── Parse buyer text → industries + personas ──────────────────────
 function parseBuyerText(text) {
   const t = text.toLowerCase()
   const industries = [], personas = []
   const industryMap = [
-    // Finance / Fintech — all stems including "financ", "financier", "fiscal"
+    // Finance / Fintech - all stems including "financ", "financier", "fiscal"
     [['fintech','finance','financ','financial','fiscal','banking','bank','payment','pay','insurance',
       'insur','insurtech','wealth','invest','capital market','regtech','blockchain','crypto',
       'lending','neobank','open banking','treasury','accounting','audit','fund','hedge fund',
@@ -171,7 +184,7 @@ function parseBuyerText(text) {
       'mobile','carrier','mvno','iot','m2m','edge computing','wi-fi'],
                                                                   'Telecommunications'],
     // Technology (broader catch-all)
-    [['tech','software','digital','it ','information technology','platform','enterprise',
+    [['tech','technolog','software','digital','it ','information technology','platform','enterprise',
       'digital transformation','b2b software','devops','api','microservice','open source',
       'low code','no code','integration'],                        'Technology'],
     // Food & Beverage
@@ -284,9 +297,9 @@ function parseBuyerText(text) {
                                                                   'Project Manager'],
   ]
   for (const [kw, ind] of industryMap)
-    if (kw.some(k => t.includes(k)) && !industries.includes(ind)) industries.push(ind)
+    if (kw.some(k => kwMatch(t, k)) && !industries.includes(ind)) industries.push(ind)
   for (const [kw, per] of personaMap)
-    if (kw.some(k => t.includes(k)) && !personas.includes(per)) personas.push(per)
+    if (kw.some(k => kwMatch(t, k)) && !personas.includes(per)) personas.push(per)
   return { industries, personas }
 }
 
@@ -451,9 +464,9 @@ export default function ICPForm({
 
   const handleSubmit = () => {
     if (!validate()) {
-      // The submit button sits below a long form — without this, a failed
+      // The submit button sits below a long form - without this, a failed
       // validation is invisible and the click looks like a dead button.
-      toast.error('Almost there — a couple of fields need attention.')
+      toast.error('Almost there - a couple of fields need attention.')
       requestAnimationFrame(() => {
         document
           .querySelector('.icp-input--error, .icp-error')
@@ -604,7 +617,7 @@ export default function ICPForm({
               </div>
             </div>
           )}
-               {/* Live geo coverage hints — shown as soon as a region is added */}
+               {/* Live geo coverage hints - shown as soon as a region is added */}
         {geos.length > 0 && !geos.includes('Global') && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }} aria-live="polite">
             {geoHintLoad && (
@@ -643,9 +656,9 @@ export default function ICPForm({
                       {geo}
                     </span>
                     <span style={{ color: '#4C5A63' }}>
-                      {isGood   && `— ${hint.count} events available in our index`}
-                      {isSparse && `— only ${hint.count} event${hint.count !== 1 ? 's' : ''} found, consider a nearby hub`}
-                      {isNone   && '— no events in our index for this region'}
+                      {isGood   && `- ${hint.count} events available in our index`}
+                      {isSparse && `- only ${hint.count} event${hint.count !== 1 ? 's' : ''} found, consider a nearby hub`}
+                      {isNone   && '- no events in our index for this region'}
                     </span>
                   </div>
                   {(isSparse || isNone) && (
@@ -785,7 +798,7 @@ export default function ICPForm({
         {errors.client && <p className="icp-error">{errors.client}</p>}
       </div>
 
-      {/* Client names — optional tag input */}
+      {/* Client names - optional tag input */}
       <div className="icp-field-group">
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           Who are some of your clients? <span style={{ color: '#8A959C', fontWeight: 400, fontSize: 12 }}>(optional)</span>

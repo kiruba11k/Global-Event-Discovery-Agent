@@ -1,5 +1,5 @@
 /*
-  landing.css — LeadStrategus landing page, light editorial system.
+  landing.css - LeadStrategus landing page, light editorial system.
   Tokens live in styles/theme.css. No dark theme, no glassmorphism.
 */
 
@@ -307,7 +307,7 @@
   color: rgba(251,247,240,.72);
 }
 
-/* ════════ HOW IT WORKS — three pillars ════════ */
+/* ════════ HOW IT WORKS - three pillars ════════ */
 .ld-how {
   padding: 110px 24px 70px;
   background: var(--paper);
@@ -396,7 +396,7 @@
 }
 .hiw-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
-/* diagram 1 — ranked rows */
+/* diagram 1 - ranked rows */
 .hiw-rankrow {
   display: grid;
   grid-template-columns: 24px 1fr 90px 42px;
@@ -428,7 +428,7 @@
   text-align: right;
 }
 
-/* diagram 2 — calendar slots */
+/* diagram 2 - calendar slots */
 .hiw-slot {
   display: flex;
   align-items: center;
@@ -464,7 +464,7 @@
   flex-shrink: 0;
 }
 
-/* diagram 3 — talking points */
+/* diagram 3 - talking points */
 .hiw-point {
   display: flex;
   align-items: flex-start;
@@ -785,7 +785,7 @@
   .hiw-rankrow { grid-template-columns: 20px 1fr 60px 38px; }
 }
 
-/* ════════ GLOBE — live DB labels ════════ */
+/* ════════ GLOBE - live DB labels ════════ */
 .hero-globe-wrap { position: relative; }
 .globe-label {
   font-family: var(--font-mono);
@@ -843,7 +843,7 @@
   letter-spacing: .04em; color: var(--ink-faint);
 }
 
-/* ════════ PIPELINE MACHINE — 3D skeuomorphic conveyor ════════ */
+/* ════════ PIPELINE MACHINE - 3D skeuomorphic conveyor ════════ */
 .pm-sect {
   padding: 100px 24px 120px;
   background: var(--paper-deep);
