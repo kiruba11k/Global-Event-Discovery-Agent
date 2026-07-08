@@ -106,7 +106,7 @@ const clay = (color, rough = 0.35) => ({
   clearcoat: 0.15, clearcoatRoughness: 0.1,
   roughnessMap: noiseTex || undefined,
   sheen: 0.3, sheenColor: '#DCE2F0', sheenRoughness: 0.55,
-  envMapIntensity: 0.45,
+  envMapIntensity: 0.52,
 })
 const paintedMetal = (color) => ({
   color, roughness: 0.28, metalness: 0.12,
@@ -361,7 +361,7 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
   return (
     <group position={[sx, sy, 1.28]}>
       {/* hairline trim — near-zero bezel, edge-to-edge glass */}
-      <RoundedBox args={[sw + 0.02, 0.62 * k + 0.02, 0.04]} radius={0.07} position={[0, 0, -0.042]}>
+      <RoundedBox args={[sw + 0.02, 0.62 * k + 0.02, 0.04]} radius={0.1} position={[0, 0, -0.042]}>
         <meshPhysicalMaterial {...stainless} roughness={0.3} />
       </RoundedBox>
       {/* inner holographic UI — light emits from within the shell */}
@@ -370,7 +370,7 @@ function StationScreen({ m, title, lines, accent, accent2, sw = 1.42, sx = 0, sy
         <meshBasicMaterial map={tex} transparent opacity={0} toneMapped={false} />
       </mesh>
       {/* deep smoked glass shell in front */}
-      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.08} position={[0, 0, -0.008]}>
+      <RoundedBox args={[sw, 0.62 * k, 0.04]} radius={0.11} position={[0, 0, -0.008]}>
         <meshPhysicalMaterial {...smokedGlass} />
       </RoundedBox>
       {/* soft glossy reflection near the top of the glass */}
@@ -434,9 +434,14 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
   const heroGlow = useRef()
   const magGlow = useRef()
   const { hw, hh, hy, r = 0.2, sw, sx = 0 } = shape
-  const topTint = useMemo(
-    () => '#' + new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.13).getHexString(),
-    [body])
+  const tints = useMemo(() => {
+    const c = h => '#' + h.getHexString()
+    return {
+      top:    c(new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.15)),
+      front:  c(new THREE.Color(body).lerp(new THREE.Color('#FFFFFF'), 0.05)),
+      bottom: c(new THREE.Color(body).lerp(new THREE.Color('#000000'), 0.1)),
+    }
+  }, [body])
   const top = hy + hh / 2
   useFrame(({ clock }) => {
     const a = machineActivity(clock.elapsedTime, m)
@@ -461,7 +466,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       </RoundedBox>
       {/* titanium edge frame under the blade */}
       <RoundedBox args={[hw - 0.06, 0.03, 2.04]} radius={0.015} position={[0, hy - hh / 2 - 0.02, 0]}>
-        <meshPhysicalMaterial {...paintedMetal('#394870')} />
+        <meshPhysicalMaterial {...paintedMetal(tints.bottom)} />
       </RoundedBox>
       {/* microscopic suspension wires down to the track rails */}
       {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([fx, fz], i) => {
@@ -476,7 +481,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       })}
       {/* top inlay panel — breaks the large flat surface, ~13% lighter */}
       <RoundedBox args={[hw - 0.5, 0.022, 1.46]} radius={0.011} position={[0, top + 0.004, 0]}>
-        <meshPhysicalMaterial {...clay(topTint, 0.32)} />
+        <meshPhysicalMaterial {...clay(tints.top, 0.32)} />
       </RoundedBox>
       {[-1, 1].map(sgn => (
         <mesh key={sgn} position={[0, top + 0.002, sgn * 0.78]}>
@@ -484,13 +489,25 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
           <meshStandardMaterial color={DETAIL_C} roughness={0.9} />
         </mesh>
       ))}
+      {/* front fascia plate, +5% — separates the front read from the sides */}
+      <RoundedBox args={[hw - 0.4, hh - 0.1, 0.02]} radius={0.03} position={[0, hy, 1.045]}>
+        <meshPhysicalMaterial {...clay(tints.front, 0.33)} />
+      </RoundedBox>
       {/* embedded LED light modules along the lower edge (not a strip) */}
       {[-2, -1, 0, 1, 2].map(i => (
-        <mesh key={i} position={[i * ((hw - 0.6) / 4), hy - hh / 2 + 0.03, 1.06]}>
-          <boxGeometry args={[0.16, 0.02, 0.014]} />
-          <meshStandardMaterial color={glowColor} emissive={glowColor}
-                                emissiveIntensity={1.1} toneMapped={false} />
-        </mesh>
+        <group key={i} position={[i * ((hw - 0.6) / 4), hy - hh / 2 + 0.03, 1.062]}>
+          <mesh>
+            <boxGeometry args={[0.16, 0.02, 0.012]} />
+            <meshStandardMaterial color={glowColor} emissive={glowColor}
+                                  emissiveIntensity={1.1} toneMapped={false} />
+          </mesh>
+          {/* diffused acrylic cover softening the module */}
+          <mesh position={[0, 0, 0.008]}>
+            <boxGeometry args={[0.2, 0.032, 0.01]} />
+            <meshPhysicalMaterial color="#FFFFFF" roughness={0.5} transmission={0.75}
+                                  thickness={0.2} ior={1.4} transparent />
+          </mesh>
+        </group>
       ))}
       {/* soft AO pool where the module meets the track below */}
       <mesh position={[0, 0.345, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -914,6 +931,13 @@ function Conveyor() {
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.9, 0.02, 0]} castShadow>
           <meshPhysicalMaterial {...coverClay} />
         </RoundedBox>
+      ))}
+      {/* machined groove lines along the frame face */}
+      {[0.12, -0.02].map((gy, i) => (
+        <mesh key={i} position={[0, gy, 0.956]}>
+          <boxGeometry args={[11.9, 0.008, 0.006]} />
+          <meshStandardMaterial color="#141B33" roughness={0.9} />
+        </mesh>
       ))}
       {/* tiny maintenance panels recessed in the deck face */}
       {[-3.6, 3.6].map((px, i) => (
