@@ -120,7 +120,7 @@ const champagne  = { color: CHAMPAGNE, roughness: 0.42, metalness: 0.45, envMapI
 const brushedAlu = { color: '#3E2A85', roughness: 0.6, metalness: 0.25, envMapIntensity: 0.7 }  // violet chassis
 const stainless  = { color: '#C8BFF5', roughness: 0.35, metalness: 0.7, envMapIntensity: 1.1 }  // chroma steel
 const rubber     = { color: RUBBER_C, roughness: 0.95, metalness: 0 }
-const beltRubber = { color: '#0F4C5C', roughness: 0.9, metalness: 0 }  // deep forest teal belt
+const beltRubber = { color: '#22252C', roughness: 0.55, metalness: 0.4 }  // matte titanium track
 const rollerSatin = { color: '#8B7BD8', roughness: 0.3, metalness: 0.6, envMapIntensity: 0.9 }
 const frosted = {
   color: '#FFFFFF', roughness: 0.45, metalness: 0,
@@ -390,12 +390,14 @@ function FloatingStat({ m, stats, accent, y }) {
           WebkitBackdropFilter: 'blur(12px) saturate(180%)',
           border: '1px solid rgba(255, 255, 255, 0.4)',
           boxShadow: '0 10px 32px rgba(70, 55, 30, 0.14)',
-          fontFamily: '"Helvetica Neue", Arial, sans-serif',
+          fontFamily: 'Inter, system-ui, -apple-system, "SF Pro Display", sans-serif',
         }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#3D3A33' }}>{stats[0]}</div>
           <div style={{ fontWeight: 600, fontSize: 11.5, color: accent, marginTop: 2 }}>{stats[1]}</div>
-          <div style={{ height: 4, borderRadius: 2, background: `${accent}40`, marginTop: 7 }}>
-            <div style={{ width: '72%', height: '100%', borderRadius: 2, background: accent }} />
+          <div style={{ height: 4, borderRadius: 2, background: `${accent}30`, marginTop: 7, overflow: 'hidden' }}>
+            <div style={{ width: '72%', height: '100%', borderRadius: 2,
+                          background: `linear-gradient(90deg, ${accent}, #FF6A88, ${accent})`,
+                          boxShadow: `0 0 8px ${accent}` }} />
           </div>
         </div>
       </Html>
@@ -440,7 +442,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       ))}
       {/* chamber walls — powder-coated, with a frosted acrylic insert */}
       {[-1, 1].map(s => (
-        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.2} smoothness={8} position={[0, 0.92, s * 1.0]} castShadow>
+        <RoundedBox key={s} args={[bw, 1.06, 0.52]} radius={0.09} smoothness={8} position={[0, 0.92, s * 1.0]} castShadow>
           <meshPhysicalMaterial {...clay(walls, 0.66)} />
         </RoundedBox>
       ))}
@@ -459,7 +461,7 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
         const hb = hy - hh / 2
         return (
           <mesh key={i} position={[fx * (hw / 2 - 0.42), (1.46 + hb) / 2, fz * 0.85]}>
-            <cylinderGeometry args={[0.024, 0.024, hb - 1.46, 12]} />
+            <cylinderGeometry args={[0.015, 0.015, hb - 1.46, 12]} />
             <meshPhysicalMaterial color="#E8EAEE" roughness={0.08} metalness={1}
                                   envMapIntensity={1.6} />
           </mesh>
@@ -469,23 +471,23 @@ function Station({ m, accent, accent2, neon, title, lines, shape, hero, stats, b
       <mesh position={[0, hy - hh / 2 + 0.05, 1.26]}>
         <boxGeometry args={[hw - 0.16, 0.022, 0.02]} />
         <meshStandardMaterial color={glowColor} emissive={glowColor}
-                              emissiveIntensity={2.5} toneMapped={false} />
+                              emissiveIntensity={2.0} toneMapped={false} />
       </mesh>
       {/* second light line seated in the chamber base joint */}
       <mesh position={[0, 0.46, 1.27]}>
         <boxGeometry args={[bw - 0.3, 0.016, 0.015]} />
         <meshStandardMaterial color={glowColor} emissive={glowColor}
-                              emissiveIntensity={1.8} toneMapped={false} />
+                              emissiveIntensity={2.0} toneMapped={false} />
       </mesh>
       {/* slot frames — accent-tinted lintel gives each station its
           identity; posts stay warm gray */}
       {[-1, 1].map(s => (
         <group key={s} position={[s * (bw / 2 - 0.02), 0, 0]}>
-          <RoundedBox args={[0.06, 0.09, 1.3]} radius={0.03} position={[0, 1.45, 0]}>
+          <RoundedBox args={[0.045, 0.07, 1.3]} radius={0.02} position={[0, 1.45, 0]}>
             <meshPhysicalMaterial {...anodizedAccent(accent)} roughness={0.55} envMapIntensity={0.5} />
           </RoundedBox>
           {[-1, 1].map(z => (
-            <RoundedBox key={z} args={[0.06, 1.1, 0.09]} radius={0.03} position={[0, 0.93, z * 0.63]}>
+            <RoundedBox key={z} args={[0.045, 1.1, 0.07]} radius={0.02} position={[0, 0.93, z * 0.63]}>
               <meshPhysicalMaterial {...graphite} />
             </RoundedBox>
           ))}
@@ -548,11 +550,11 @@ function ScannerGate({ m }) {
   return (
     <group>
       {/* full-width sensor rail across the low, wide gate */}
-      <RoundedBox args={[2.7, 0.12, 0.5]} radius={0.05} position={[0, 2.47, 0]} castShadow>
+      <RoundedBox args={[2.7, 0.08, 0.5]} radius={0.03} position={[0, 2.3, 0]} castShadow>
         <meshPhysicalMaterial {...graphite} />
       </RoundedBox>
       {[-1.0, -0.5, 0, 0.5, 1.0].map((ox, i) => (
-        <mesh key={i} position={[ox, 2.47, 0.26]}>
+        <mesh key={i} position={[ox, 2.3, 0.26]}>
           <sphereGeometry args={[0.042, 16, 16]} />
           <meshPhysicalMaterial color="#0E1524" roughness={0.1} metalness={0.4}
                                 emissive={BLUE} emissiveIntensity={0.4} />
@@ -598,7 +600,7 @@ function MatchScoreCore({ m }) {
     })
   })
   return (
-    <group position={[0, 3.13, 0]}>
+    <group position={[0, 2.73, 0]}>
       {/* angular chamfer slabs flanking the dome */}
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.6, 0.09, 2.0]} radius={0.035} position={[s * 0.78, 0.05, 0]}
@@ -607,8 +609,10 @@ function MatchScoreCore({ m }) {
         </RoundedBox>
       ))}
       <mesh castShadow position={[0, 0.06, 0]}>
-        <sphereGeometry args={[0.46, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshPhysicalMaterial {...frosted} />
+        <sphereGeometry args={[0.46, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshPhysicalMaterial color="#E8DFFF" roughness={0.15} metalness={0}
+                              transmission={0.92} thickness={1.0} ior={1.4} transparent
+                              emissive="#B98BFF" emissiveIntensity={0.18} />
       </mesh>
       {/* coral matching ring */}
       <mesh ref={r1} position={[0, 0.2, 0]} rotation={[Math.PI / 2.4, 0, 0]}>
@@ -619,11 +623,11 @@ function MatchScoreCore({ m }) {
       {/* lavender scoring ring */}
       <mesh ref={r2} position={[0, 0.22, 0]} rotation={[Math.PI / 2.6, 0, 0]}>
         <torusGeometry args={[0.21, 0.018, 12, 64]} />
-        <meshStandardMaterial color={PURPLE} emissive={PURPLE} emissiveIntensity={0.1}
+        <meshStandardMaterial color="#00F2FE" emissive="#00F2FE" emissiveIntensity={0.1}
                               metalness={0.3} roughness={0.3} />
       </mesh>
       {/* confidence meter on the head front */}
-      <group position={[0, -0.62, 1.27]}>
+      <group position={[0, -0.42, 1.27]}>
         {[0, 1, 2, 3, 4].map(i => (
           <mesh key={i} ref={el => (meter.current[i] = el)} position={[(i - 2) * 0.14, 0, 0]}>
             <boxGeometry args={[0.09, 0.045, 0.02]} />
@@ -653,23 +657,23 @@ function BriefPrinter({ m }) {
   return (
     <group>
       {/* front paper slot in the low printer face */}
-      <mesh position={[0.7, 2.18, 1.265]}>
+      <mesh position={[0.7, 2.0, 1.265]}>
         <boxGeometry args={[1.0, 0.035, 0.02]} />
         <meshStandardMaterial color="#55564F" roughness={0.9} />
       </mesh>
       {/* champagne output tray under the slot */}
-      <RoundedBox args={[1.04, 0.045, 0.5]} radius={0.02} position={[0.7, 2.11, 1.5]}
+      <RoundedBox args={[1.04, 0.045, 0.5]} radius={0.02} position={[0.7, 1.93, 1.5]}
                   rotation={[0.12, 0, 0]} castShadow>
         <meshPhysicalMaterial {...champagne} />
       </RoundedBox>
       {/* the brief gliding out of the slot */}
-      <mesh ref={paper} position={[0.7, 2.17, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
+      <mesh ref={paper} position={[0.7, 1.99, 1.3]} rotation={[-Math.PI / 2 + 0.12, 0, 0]}>
         <planeGeometry args={[0.84, 0.5]} />
         <meshStandardMaterial color="#FDFCF9" roughness={0.7} transparent opacity={0}
                               side={THREE.DoubleSide} />
       </mesh>
       {/* gold completion lamp on the roofline */}
-      <mesh ref={lamp} position={[0.7, 2.4, 0.9]}>
+      <mesh ref={lamp} position={[0.7, 2.28, 0.9]}>
         <sphereGeometry args={[0.05, 16, 16]} />
         <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.12} />
       </mesh>
@@ -855,7 +859,7 @@ function Conveyor() {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const g = c.getContext('2d')
-    g.fillStyle = '#0F4C5C'; g.fillRect(0, 0, 256, 64)
+    g.fillStyle = '#22252C'; g.fillRect(0, 0, 256, 64)
     g.fillStyle = 'rgba(255,255,255,0.07)'
     for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 3, 64)
     const t = new THREE.CanvasTexture(c)
@@ -893,7 +897,7 @@ function Conveyor() {
       </RoundedBox>
       <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[13.1, 0.02, 1.12]} />
-        <meshStandardMaterial color="#083641" roughness={0.92} />
+        <meshStandardMaterial color="#15171C" roughness={0.85} />
       </mesh>
       {[-1, 1].map(s => (
         <RoundedBox key={s} args={[0.24, 0.5, 1.94]} radius={0.1} position={[s * 6.9, 0.02, 0]} castShadow>
@@ -917,7 +921,7 @@ function Conveyor() {
         <group key={i}>
           {[-1, 1].map(s => (
             <mesh key={s} position={[lx, -0.5, s * 0.6]} castShadow>
-              <boxGeometry args={[0.12, 0.3, 0.12]} />
+              <boxGeometry args={[0.07, 0.3, 0.07]} />
               <meshPhysicalMaterial {...support} />
             </mesh>
           ))}
@@ -933,17 +937,17 @@ function Conveyor() {
 const STATIONS = [
   { title: 'DISCOVER', accent: BLUE, neon: '#00F2FE',
     body: '#512BD4', walls: '#3E2A85',     // ultra-violet over deep indigo
-    shape: { hw: 3.0, hh: 0.78, hy: 2.02, r: 0.3, bw: 2.4, sw: 1.5 },
+    shape: { hw: 3.0, hh: 0.62, hy: 1.94, r: 0.1, bw: 2.4, sw: 1.15 },
     stats: ['53 Events', '10,000+ raw scanned'],
     lines: ['Searching…', '53 Events · 92% Fit', 'Complete ✓'], Inner: ScannerGate },
-  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#B98BFF', neon: '#FF007A', hero: true,
+  { title: 'MATCH & SCORE', accent: ORANGE, accent2: '#00F2FE', neon: '#FF007A', hero: true,
     body: '#6E00FF', walls: '#43289A',     // velvet purple hero core
-    shape: { hw: 2.9, hh: 1.5, hy: 2.38, r: 0.26, bw: 2.5, sw: 2.2 },
+    shape: { hw: 2.9, hh: 1.1, hy: 2.18, r: 0.08, bw: 2.5, sw: 1.7 },
     stats: ['247 Matches', '+12% Quality Score'],
     lines: ['Matching & scoring…', '247 Matches · 6 Meetings', 'Complete ✓'], Inner: MatchScoreCore },
-  { title: 'BRIEF & DELIVER', accent: GOLD, neon: '#FFB347',
+  { title: 'BRIEF & DELIVER', accent: '#FF6A88', neon: '#FF5C86',
     body: '#5B2EC8', walls: '#3A2470',     // deep violet over midnight purple
-    shape: { hw: 2.9, hh: 0.72, hy: 1.99, r: 0.3, bw: 2.4, sw: 1.3, sx: -0.66 },
+    shape: { hw: 2.9, hh: 0.58, hy: 1.92, r: 0.1, bw: 2.4, sw: 1.05, sx: -0.66 },
     stats: ['6 Meeting Briefs', 'Executive Ready'],
     lines: ['Preparing…', 'Executive Brief Ready', 'Complete ✓'], Inner: BriefPrinter },
 ]
@@ -1004,9 +1008,11 @@ function DataCapsules() {
         <mesh key={i} ref={el => (refs.current[i] = el)}
               position={[START_X, 0.42, 0.34]} rotation={[0, 0, Math.PI / 2]}>
           <capsuleGeometry args={[0.065, 0.17, 6, 14]} />
-          <meshPhysicalMaterial color="#2A1858" roughness={0.35} metalness={0}
-                                emissive={colors[i % 4]} emissiveIntensity={1.5}
-                                transparent opacity={0.9} />
+          <meshPhysicalMaterial color="#EBE4FF" roughness={0.12} metalness={0}
+                                transmission={0.65} thickness={0.4} ior={1.4}
+                                iridescence={1} iridescenceIOR={1.3}
+                                emissive={colors[i % 4]} emissiveIntensity={1.4}
+                                transparent opacity={0.95} />
         </mesh>
       ))}
     </group>
@@ -1017,9 +1023,9 @@ function DataCapsules() {
 function AmbientPulse() {
   const ref = useRef()
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 0.4 + Math.sin(clock.elapsedTime * 0.5) * 0.008
+    if (ref.current) ref.current.intensity = 0.3 + Math.sin(clock.elapsedTime * 0.5) * 0.008
   })
-  return <ambientLight ref={ref} intensity={0.4} color="#120024" />
+  return <ambientLight ref={ref} intensity={0.3} color="#120024" />
 }
 
 /* cinematic hero camera — the line fills ~90% of the frame edge-to-
@@ -1088,16 +1094,16 @@ export default function EventFactory3D() {
         <AmbientPulse />
         {/* dominant sun from top-front-right: bright top highlights,
             deep soft drop shadows; frustum tightly bounds the line */}
-        {/* teal key: rakes cyan across the main faces */}
+        {/* teal key cutting from the LEFT: cyan gradient on left faces */}
         <directionalLight
-          position={[7, 12, 6]} intensity={2.5} color="#00F2FE"
+          position={[-8, 11, 6]} intensity={2.8} color="#00F2FE"
           castShadow shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0005} shadow-normalBias={0.02}
           shadow-camera-left={-9} shadow-camera-right={9}
           shadow-camera-top={6} shadow-camera-bottom={-4}
         />
-        {/* magenta rim: cuts a hot pink outline on edges and chamfers */}
-        <directionalLight position={[-7, 6, -7]} intensity={3.0} color="#FF007A" />
+        {/* magenta rim from rear-right: pink silhouette on chamfers/legs */}
+        <directionalLight position={[8, 6, -6]} intensity={3.4} color="#FF007A" />
         <hemisphereLight args={['#2A0D4E', '#120024', 0.35]} />
         <Environment frames={1} resolution={512}>
           <Lightformer intensity={1.6} position={[0, 8, -5]} scale={[18, 8, 1]} color="#7B4DFF" />
@@ -1109,7 +1115,7 @@ export default function EventFactory3D() {
           <FactoryScene />
         </group>
         <EffectComposer multisampling={4}>
-          <Bloom intensity={0.34} luminanceThreshold={0.72} luminanceSmoothing={0.3} mipmapBlur />
+          <Bloom intensity={1.0} luminanceThreshold={0.32} luminanceSmoothing={0.4} mipmapBlur />
           <HueSaturation saturation={0.05} />
           <BrightnessContrast brightness={0.012} contrast={0.035} />
         </EffectComposer>
