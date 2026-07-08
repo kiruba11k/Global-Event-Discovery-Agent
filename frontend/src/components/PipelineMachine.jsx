@@ -1,5 +1,5 @@
 /*
-  PipelineMachine.jsx — "The event factory": a side-view production line.
+  PipelineMachine.jsx - "The event factory": a side-view production line.
   Raw event tickets ride a conveyor through three working machines
   (SCAN → MATCH → BRIEF), visibly transforming at each stage, and drop
   out as a packaged, graded show card. Pure CSS machines + framer-motion
@@ -9,7 +9,7 @@
   entering at -8% and leaving at 104%. Machines sit at 27% / 52% / 77%,
   so a chip is "inside" machine i at travel fraction Fi. Chips are
   staggered CYCLE/3 apart, which means every machine processes a chip
-  each CYCLE/3 seconds — the pistons/beams loop on that period, phase-
+  each CYCLE/3 seconds - the pistons/beams loop on that period, phase-
   shifted so they fire exactly when a chip is underneath.
 */
 import { motion } from 'framer-motion'
@@ -33,7 +33,7 @@ const machineDelay = (i) =>
 /* ── the travelling chip: 4 stacked stages, CSS-timeline driven ──
    framer-motion left-keyframe loops proved unreliable across repeats,
    so travel + stage crossfades are plain CSS animations sharing one
-   duration/delay — they can never drift apart or stall. */
+   duration/delay - they can never drift apart or stall. */
 function Chip({ index }) {
   const style = { '--d': `${index * SPACING}s`, '--cycle': `${CYCLE}s` }
   return (
@@ -117,7 +117,7 @@ export default function PipelineMachine({ stats }) {
             {events} events go in. <em>Six shows come out.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
-            The ranking — and why each show fits — is free and instant. The meetings
+            The ranking - and why each show fits - is free and instant. The meetings
             and per-meeting talking points are the part our team does for you.
           </p>
         </div>

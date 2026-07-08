@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   LEADSTRATEGUS EVENT INTELLIGENCE — App styles
+   LEADSTRATEGUS EVENT INTELLIGENCE - App styles
    Light, warm, editorial theme. Built on src/styles/theme.css
    design tokens (--paper, --surface, --ink, --c-find, …).
    Legacy token names are aliased to the new palette below so
@@ -59,7 +59,7 @@ button { font-family: var(--font-body); }
 .app-shell { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
 
 /* ═══════════════════════════════════════════════════════════
-   HERO — solid warm paper, no orbs / blur / gradients
+   HERO - solid warm paper, no orbs / blur / gradients
    ═══════════════════════════════════════════════════════════ */
 .orb-container { display: none; }
 .orb { display: none; }
@@ -138,7 +138,7 @@ button { font-family: var(--font-body); }
 .ct-chevron { color: var(--ink-faint); flex-shrink: 0; }
 
 /* ═══════════════════════════════════════════════════════════
-   COMPANY FORM — CARD WIZARD
+   COMPANY FORM - CARD WIZARD
    ═══════════════════════════════════════════════════════════ */
 .cf-scene { perspective: 1200px; width: 100%; }
 .cf-card {
@@ -246,7 +246,7 @@ button { font-family: var(--font-body); }
 .cf-btn-save:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
 /* ═══════════════════════════════════════════════════════════
-   ICP FORM — CONVERSATIONAL WIZARD
+   ICP FORM - CONVERSATIONAL WIZARD
    ═══════════════════════════════════════════════════════════ */
 .icp-form {
   background: var(--surface); border: 1px solid var(--line);
@@ -548,7 +548,7 @@ button { font-family: var(--font-body); }
 .deal-size-pill.active .ds-label { color: var(--c-find); }
 
 /* ═══════════════════════════════════════════════════════════
-   PRICING CARD — inline in expand-row
+   PRICING CARD - inline in expand-row
    ═══════════════════════════════════════════════════════════ */
 .pricing-card {
   grid-column: 1 / -1;
@@ -649,7 +649,7 @@ button { font-family: var(--font-body); }
 .pc-disclaimer svg { flex-shrink: 0; margin-top: 2px; color: var(--ink-faint); }
 
 /* ═══════════════════════════════════════════════════════════
-   TABLE — updated header labels
+   TABLE - updated header labels
    ═══════════════════════════════════════════════════════════ */
 .data-table th:nth-child(7),
 .data-table th:nth-child(8) {
@@ -698,7 +698,7 @@ button { font-family: var(--font-body); }
   border-radius: var(--r-sm);
 }
 
-/* ── Pricing card — what's included list ────────────────── */
+/* ── Pricing card - what's included list ────────────────── */
 .wi-item {
   display: flex;
   gap: 10px;

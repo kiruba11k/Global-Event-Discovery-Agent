@@ -1,9 +1,9 @@
 /*
-  HowItWorks.jsx — the three product pillars as alternating feature rows,
+  HowItWorks.jsx - the three product pillars as alternating feature rows,
   each with a bespoke framer-motion animated diagram:
-    01 FIND — events ranked by ICP density        (teal)
-    02 MEET — calendar fills with booked ICPs     (coral)
-    03 TALK — tailored talking points typed out   (amber)
+    01 FIND - events ranked by ICP density        (teal)
+    02 MEET - calendar fills with booked ICPs     (coral)
+    03 TALK - tailored talking points typed out   (amber)
 */
 import { motion } from 'framer-motion'
 import { MapPin, CalendarCheck, MessageSquareText, ArrowRight } from 'lucide-react'
@@ -60,7 +60,7 @@ function MeetDiagram() {
   const slots = [
     { t: '09:00', who: 'VP Procurement · MedTech Co', ok: true },
     { t: '10:30', who: 'Head of Ops · Hospital Group', ok: true },
-    { t: '12:00', who: 'Lunch — floor walk', ok: false },
+    { t: '12:00', who: 'Lunch - floor walk', ok: false },
     { t: '14:00', who: 'CTO · Diagnostics Scale-up', ok: true },
     { t: '15:30', who: 'Dir. Supply Chain · Pharma', ok: true },
   ]
@@ -101,9 +101,9 @@ function MeetDiagram() {
 /* ── Diagram 3: tailored talking points ──────────────────────── */
 function TalkDiagram() {
   const points = [
-    'They just opened a Munich plant — lead with EU logistics.',
+    'They just opened a Munich plant - lead with EU logistics.',
     'Their RFP cycle starts Q3. Book the follow-up now.',
-    'CTO posted about integration pain — demo the API first.',
+    'CTO posted about integration pain - demo the API first.',
   ]
   return (
     <div className="hiw-diagram hiw-diagram-talk" aria-hidden="true">
@@ -131,7 +131,7 @@ function TalkDiagram() {
         viewport={view}
         transition={{ delay: 0.95, duration: 0.5 }}
       >
-        Generated from their news, hiring & posts — per meeting.
+        Generated from their news, hiring & posts - per meeting.
       </motion.div>
     </div>
   )
@@ -143,17 +143,17 @@ const buildPillars = (events) => [
     id: 'find',
     icon: MapPin,
     chip: 'Step 01 · Find',
-    title: 'Find the tradeshows where your ICP actually hangs out — free.',
-    desc: 'Stop picking shows off a competitor\'s booth list. We scan ' + events + ' B2B events and rank every one by how many of your ideal customers will be in the room — with buyer counts, costs and dates.',
-    points: ['ICP-density score per show', 'Why each show fits — explained', 'Ranked shortlist in 90 seconds'],
+    title: 'Find the tradeshows where your ICP actually hangs out - free.',
+    desc: 'Stop picking shows off a competitor\'s booth list. We scan ' + events + ' B2B events and rank every one by how many of your ideal customers will be in the room - with buyer counts, costs and dates.',
+    points: ['ICP-density score per show', 'Why each show fits - explained', 'Ranked shortlist in 90 seconds'],
     Diagram: FindDiagram,
   },
   {
     id: 'meet',
     icon: CalendarCheck,
     chip: 'Step 02 · Meet',
-    title: 'Get meetings with the right ICPs attending — before you fly.',
-    desc: 'The show starts weeks before the doors open. Once you engage us, our team identifies the exact attendees who match your ICP and books your calendar — so day one starts with meetings, not badge-scanning.',
+    title: 'Get meetings with the right ICPs attending - before you fly.',
+    desc: 'The show starts weeks before the doors open. Once you engage us, our team identifies the exact attendees who match your ICP and books your calendar - so day one starts with meetings, not badge-scanning.',
     points: ['Attendee-level ICP matching', 'Outreach & booking done for you', 'Walk in with a full calendar'],
     Diagram: MeetDiagram,
   },
@@ -187,7 +187,7 @@ export default function HowItWorks({ stats }) {
 
         <div className="hiw-service-note">
           <strong>Step 01 is free and instant.</strong> Steps 02–03 are done for you
-          by our team — see your ranked list first, then get in touch.
+          by our team - see your ranked list first, then get in touch.
         </div>
 
         {PILLARS.map((p, i) => {

@@ -69,8 +69,8 @@ function PathCards({ onScrollToForm }) {
       cls: 'ld-path-attend',
       chip: 'find',
       tag: 'Attending · hunting meetings',
-      h3: 'Sales, BD, founders — book your ICP before you fly out.',
-      desc: 'Walk in with a calendar, not a hope. We show you how many of your buyers attend each show and why it fits — then our team books the meetings and briefs you for each one.',
+      h3: 'Sales, BD, founders - book your ICP before you fly out.',
+      desc: 'Walk in with a calendar, not a hope. We show you how many of your buyers attend each show and why it fits - then our team books the meetings and briefs you for each one.',
       cta: 'Find my shows',
     },
     {
@@ -78,7 +78,7 @@ function PathCards({ onScrollToForm }) {
       chip: 'meet',
       tag: 'Exhibiting · need booth traffic',
       h3: 'Get 5× the qualified meetings around your booth.',
-      desc: 'Stop waiting for walk-ups. We pre-book your target buyers into slots before the floor opens — so day one starts full.',
+      desc: 'Stop waiting for walk-ups. We pre-book your target buyers into slots before the floor opens - so day one starts full.',
       cta: 'Boost my booth',
     },
   ]
@@ -133,11 +133,11 @@ function FooterCTA({ onScrollToForm }) {
         </h2>
         <p className="ld-footer-cta-sub">
           Tell us your ICP and where you'll travel. We'll tell you which events are worth
-          the flight — and what to say when you get there.
+          the flight - and what to say when you get there.
         </p>
         <div className="ld-footer-cta-btns">
           <button className="ds-btn-primary ld-cta-invert" onClick={onScrollToForm}>
-            Rank my shows — it's free <ArrowRight size={17} aria-hidden="true" />
+            Rank my shows - it's free <ArrowRight size={17} aria-hidden="true" />
           </button>
           <a
             className="ds-btn-outline ld-cta-invert-outline"
@@ -250,19 +250,19 @@ export default function App() {
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
-        toast.error('No matching events found — try a wider geography or different buyer description.')
+        toast.error('No matching events found - try a wider geography or different buyer description.')
         setLoading(false)
         return
       }
 
       const go = display.filter(e => e.fit_verdict === 'GO').length
-      toast.success(`Found ${display.length} events — ${go} strong matches`, { duration: 3500 })
+      toast.success(`Found ${display.length} events - ${go} strong matches`, { duration: 3500 })
 
       if (email) _autoSendReport(events, profile, email)
 
       goTo('ranking', '/')
     } catch (err) {
-      toast.error(err.message || 'Search failed — please try again')
+      toast.error(err.message || 'Search failed - please try again')
     } finally {
       setLoading(false)
     }
@@ -311,7 +311,7 @@ export default function App() {
     } catch (err) {
       const msg = err.message || ''
       if (msg.includes('RESEND') || msg.includes('503'))
-        toast.error('RESEND_API_KEY not set — add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
+        toast.error('RESEND_API_KEY not set - add it in Render → Environment Variables.', { duration: 8000, icon: '🔑' })
       else
         toast.error(`Failed to send report: ${msg}`, { duration: 6000 })
     }

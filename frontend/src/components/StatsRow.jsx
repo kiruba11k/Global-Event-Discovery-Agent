@@ -1,5 +1,5 @@
 /*
-  StatsRow.jsx — animated counters (react-countup) on an ink band.
+  StatsRow.jsx - animated counters (react-countup) on an ink band.
   Figures come live from /api/stats; static values are only the
   in-flight fallback and two product constants (time-to-list, free tier).
 */
@@ -11,7 +11,7 @@ export default function StatsRow({ stats }) {
   const totalEvents = stats?.total_events_in_db > 0 ? stats.total_events_in_db : null
   const countries   = stats?.countries_covered  > 0 ? stats.countries_covered  : null
   // live_sources is normalized server-side (connector families, not raw
-  // scraper-run labels) — never count events_by_source keys, they're noisy
+  // scraper-run labels) - never count events_by_source keys, they're noisy
   const sources     = stats?.live_sources > 0 ? stats.live_sources : null
 
   const CELLS = [

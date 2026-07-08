@@ -48,7 +48,7 @@ export const api = {
   // ── Email PDF report ──────────────────────────────────
   /**
    * Generates a PDF in-memory on the backend and emails it via Resend.
-   * The PDF is never stored — generated, sent, discarded.
+   * The PDF is never stored - generated, sent, discarded.
    *
    * @param {Object} payload
    * @param {string}   payload.email              - recipient email
@@ -61,7 +61,7 @@ export const api = {
       method: 'POST',
       body:   JSON.stringify(payload),
     }),
-  // ── Geo hint — live event counts + neighbour suggestions ─
+  // ── Geo hint - live event counts + neighbour suggestions ─
   geoHint: (geos = [], industries = []) =>
     request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}`),
 

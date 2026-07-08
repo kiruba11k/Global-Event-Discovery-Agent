@@ -417,6 +417,22 @@ def _word_in_text(word: str, text: str) -> bool:
     return bool(re.search(r"\b" + re.escape(word) + r"\b", text, re.I))
 
 
+def _syn_in_text(syn: str, text: str) -> bool:
+    """
+    Boundary-aware synonym match.
+    Short synonyms (≤4 chars) must match whole words only, so "auto"
+    never fires inside "automation" and "ev" never fires inside "event".
+    Longer synonyms are stems anchored at a word start ("manufactur"
+    matches "manufacturing", "technolog" matches "technology").
+    """
+    syn = syn.strip().lower()
+    if not syn:
+        return False
+    if len(syn) <= 4:
+        return bool(re.search(r"\b" + re.escape(syn) + r"\b", text, re.I))
+    return bool(re.search(r"\b" + re.escape(syn), text, re.I))
+
+
 # ── Industry matching (profile → event) ───────────────────────────
 
 def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:
@@ -454,10 +470,12 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
         if already:
             continue
 
-        # Pass 1b: prefix/stem match (e.g. "financial" matches "finance")
+        # Pass 1b: prefix/stem match (e.g. "financial" matches "finance").
+        # Stem must start at a word boundary so "automo" never fires
+        # mid-word and short stems don't match unrelated substrings.
         for w in pi_words:
             stem = w[:min(len(w), 6)]  # 6-char prefix stem
-            if len(stem) >= 4 and stem in event_text:
+            if len(stem) >= 5 and re.search(r"\b" + re.escape(stem), event_text):
                 matched.append(prof_ind)
                 already = True
                 break
@@ -466,17 +484,23 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
             continue
 
         # Pass 2: taxonomy bridge — profile industry key → EventsEye synonyms
+        # Key activation is token-based, never substring: "tech" must not
+        # activate for "medtech", or a healthcare ICP inherits every
+        # technology synonym and matches unrelated industrial events.
+        pi_tokens = [t for t in re.split(r"[^a-z0-9.]+", pi_lower) if len(t) > 2]
         for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
-            # key activation: the profile industry matches this taxonomy key
             key_words = [kw for kw in key.split() if len(kw) > 2]
             if not key_words:
                 continue
-            key_match_score = sum(1 for kw in key_words if kw in pi_lower or pi_lower in kw)
+            key_match_score = sum(
+                1 for kw in key_words
+                if any(t == kw or t.startswith(kw) for t in pi_tokens)
+            )
             if key_match_score == 0:
                 continue
             # Does the event text contain any synonym from this key's list?
             for syn in synonyms:
-                if syn in industry_str or syn in event_text:
+                if _syn_in_text(syn, industry_str) or _syn_in_text(syn, event_text):
                     matched.append(prof_ind)
                     already = True
                     break
@@ -490,18 +514,30 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
         # If what the company sells relates to the event topic
         if icp_context:
             for w in pi_words:
-                if len(w) >= 4 and w in event_text:
+                if len(w) >= 4 and _syn_in_text(w, event_text):
                     matched.append(prof_ind)
                     break
 
     matched = list(dict.fromkeys(matched))  # preserve order, deduplicate
 
+    # The FIRST target industry is the user's primary intent (the parser
+    # emits it first). An event matching only secondary industries must
+    # never outrank one matching the primary — this is what previously
+    # let a manufacturing show beat a healthcare show for a healthcare ICP.
     n = len(matched)
-    if   n >= 3: score = 0.35
-    elif n == 2: score = 0.28
-    elif n == 1: score = 0.20
-    else:
+    primary     = (profile.target_industries[0] or "").strip() if profile.target_industries else ""
+    primary_hit = primary in matched
+
+    if n == 0:
         score = 0.0
+    elif primary_hit:
+        if   n >= 3: score = 0.35
+        elif n == 2: score = 0.32
+        else:        score = 0.26
+    else:
+        if   n >= 3: score = 0.24
+        elif n == 2: score = 0.20
+        else:        score = 0.14
 
     return round(score, 4), matched
 

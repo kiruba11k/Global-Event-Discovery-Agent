@@ -1,5 +1,5 @@
 /*
-  icp-form.css — light, warm, editorial theme
+  icp-form.css - light, warm, editorial theme
   Import in ICPForm.jsx: import '../icp-form.css'
 
   All selectors are .icp-* scoped. Built on the design tokens in
@@ -426,7 +426,7 @@
 .icp-date-notice svg { flex-shrink: 0; margin-top: 1px; color: var(--c-find, #0E7C6B); }
 .icp-date-notice strong { color: var(--ink, #1E2B33); }
 
-/* ── Submit button — ink pill (.ds-btn-primary style) ───────────── */
+/* ── Submit button - ink pill (.ds-btn-primary style) ───────────── */
 .icp-submit-btn {
   display:        flex;
   align-items:    center;

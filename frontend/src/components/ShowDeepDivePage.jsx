@@ -1,16 +1,16 @@
 /*
-  ShowDeepDivePage.jsx — Screen 3: Per-show deep dive
+  ShowDeepDivePage.jsx - Screen 3: Per-show deep dive
 
-  DATA POLICY — nothing hardcoded, everything from the API event object:
+  DATA POLICY - nothing hardcoded, everything from the API event object:
   ─────────────────────────────────────────────────────────────────────
   • ICP count     = est_attendees × (relevance_score/100) × 0.35
                     Shows "Data pending" when est_attendees = 0/null.
-  • Pipeline      = icpCount × dealMidpoint × 0.15 — formula-only, labelled as estimate.
+  • Pipeline      = icpCount × dealMidpoint × 0.15 - formula-only, labelled as estimate.
   • Fit grade     = relevance_score + fit_verdict weighting (A+/A/B+/B/C).
   • Sponsors      = event.sponsors (real field from backend). Section hidden if empty.
   • Buyer personas = event.buyer_persona (real field from backend).
   • Key numbers   = event.key_numbers (real field from backend).
-  • Historical    = REMOVED from MVP — no real historical data in the DB.
+  • Historical    = REMOVED from MVP - no real historical data in the DB.
                     Will appear in v2 when we ingest YoY attendance data.
   ─────────────────────────────────────────────────────────────────────
 */
@@ -22,7 +22,7 @@ import '../show-deep-dive.css'
 
 // ── Fit grade ─────────────────────────────────────────────────────
 function getFitGrade(event) {
-  // Prefer backend-calculated grade (5-factor weighted formula) — same as ShowRankingPage
+  // Prefer backend-calculated grade (5-factor weighted formula) - same as ShowRankingPage
   if (event?.fit_grade) {
     const MAP = {
       'A+': { grade: 'A+', label: event.fit_label || 'Exceptional fit', cls: 'grade-aplus' },
@@ -310,7 +310,7 @@ export default function ShowDeepDivePage({
                 const icpData = getICPData(event, profile)
                 if (!icpData) return (
                   <>
-                    <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22, color: 'var(--ink-faint)' }}>—</div>
+                    <div className="ddv-stat-num ddv-stat-accent" style={{ fontSize: 22, color: 'var(--ink-faint)' }}>-</div>
                     <div className="ddv-stat-label">Attendee data not yet published</div>
                     <div className="ddv-stat-note">ICP count will appear once organiser publishes figures</div>
                   </>
@@ -360,7 +360,7 @@ export default function ShowDeepDivePage({
                 </>
               ) : (
                 <>
-                  <div className="ddv-stat-num ddv-stat-go" style={{ fontSize: 22 }}>—</div>
+                  <div className="ddv-stat-num ddv-stat-go" style={{ fontSize: 22 }}>-</div>
                   <div className="ddv-stat-label">pipeline estimate</div>
                   <div className="ddv-stat-note">Available once attendee count confirmed</div>
                 </>

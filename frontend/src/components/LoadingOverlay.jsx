@@ -159,7 +159,7 @@ export default function LoadingOverlay({ profile, stats }) {
       position:       'fixed',
       inset:          0,
       zIndex:         9999,
-      /* Solid warm-paper scrim — no blur, no glass */
+      /* Solid warm-paper scrim - no blur, no glass */
       background:     'rgba(251,247,240,.92)',
       display:        'flex',
       alignItems:     'center',
@@ -175,7 +175,7 @@ export default function LoadingOverlay({ profile, stats }) {
         backgroundSize: '56px 56px',
       }} />
 
-      {/* Main card — solid white editorial card */}
+      {/* Main card - solid white editorial card */}
       <div style={{
         position:     'relative',
         background:   '#FFFFFF',
@@ -245,7 +245,7 @@ export default function LoadingOverlay({ profile, stats }) {
 
         {/* Headline */}
         <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 600, color: '#1E2B33', textAlign: 'center', marginBottom: 4, letterSpacing: '-0.01em' }}>
-          {isHighProb ? 'Strong ICP — high meeting potential' : 'Analysing your show matches'}
+          {isHighProb ? 'Strong ICP - high meeting potential' : 'Analysing your show matches'}
         </div>
         <div style={{ fontSize: 13, color: '#4C5A63', marginBottom: 22, textAlign: 'center' }}>
           Scanning {eventsLabel} events{dots}

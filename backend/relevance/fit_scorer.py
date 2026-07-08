@@ -438,7 +438,7 @@ def estimate_icp_count(
         "low":           low,
         "high":          high,
         "display":       f"~{est:,}",
-        "range_display": f"{low:,} – {high:,}",
+        "range_display": f"{low:,} - {high:,}",
         "methodology": (
             f"Based on {att:,} total attendees at this event. "
             f"~{dm_pct}% of B2B show attendees are decision-makers (not vendors). "

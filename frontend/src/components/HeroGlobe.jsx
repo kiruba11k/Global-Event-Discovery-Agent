@@ -1,5 +1,5 @@
 /*
-  HeroGlobe.jsx — 3D point-cloud globe with event markers and travel arcs.
+  HeroGlobe.jsx - 3D point-cloud globe with event markers and travel arcs.
   Markers and labels come from the DB (stats.top_locations → real upcoming
   shows with city + country); the static list only renders while stats
   load. A cycling caption spotlights one real show at a time.
@@ -10,7 +10,7 @@ import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { locateEvent } from '../lib/cityCoords'
 
-const R = 2                       // globe radius — everything derives from this
+const R = 2                       // globe radius - everything derives from this
 const LABEL_CLEARANCE = 1.58      // fit radius incl. labels + pulse rings
 const INK = '#1E2B33'
 const TEAL = '#0E7C6B'
@@ -157,7 +157,7 @@ function Scene({ cities, spotlight }) {
     const n = cities.length
     if (n < 2) return []
     // rank all pairs by great-circle span, keep the longest with each
-    // endpoint used at most twice — arcs wrap the sphere, no clustering
+    // endpoint used at most twice - arcs wrap the sphere, no clustering
     const pos = cities.map(c => latLngToVec3(c.lat, c.lng, 1))
     const pairs = []
     for (let a = 0; a < n; a++)
@@ -205,7 +205,7 @@ export default function HeroGlobe({ locations }) {
   const cities = useMemo(() => {
     const located = (locations || []).map(locateEvent).filter(Boolean)
     const base = located.length >= 4 ? located.slice(0, 10) : [...FALLBACK_CITIES]
-    // event data skews northern — balance the sphere with southern/eastern
+    // event data skews northern - balance the sphere with southern/eastern
     // hub cities (real tradeshow destinations) so the globe feels global
     const SOUTH_HUBS = [
       { name: 'Expo', city: 'São Paulo', country: 'Brazil', lat: -23.55, lng: -46.63 },
