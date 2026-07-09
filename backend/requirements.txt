@@ -54,3 +54,7 @@ serpapi
 
 # pgvector semantic matching - local ONNX embeddings, no torch
 fastembed
+
+# test suite
+pytest
+pytest-asyncio

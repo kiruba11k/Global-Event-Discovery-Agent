@@ -334,22 +334,16 @@ async def fetch_realtime_candidates(
         )
         db_candidates = list(r4.scalars().all())
 
-    # ── Progressive pre-enrichment ────────────────────────────────
-    # Enrich events with empty descriptions BEFORE scoring so the scorer
-    # has real data. Cap at 15 to stay within SerpAPI rate limits.
-    # This fixes: "empty description → low score → not enriched → stays low"
-    if settings.serpapi_key:
-        try:
-            from enrichment.serp_enricher import enrich_events_batch
-            empty_desc = [
-                e for e in db_candidates
-                if not (e.description or "").strip() or len((e.description or "").strip()) < 60
-            ][:15]
-            if empty_desc:
-                logger.info(f"Pre-enriching {len(empty_desc)} thin-description events before scoring")
-                await enrich_events_batch(empty_desc, settings.serpapi_key)
-        except Exception as exc:
-            logger.debug(f"Pre-enrichment skipped: {exc}")
+    # NOTE: a "pre-enrichment" pass used to run here — SerpAPI-enriching
+    # up to 15 thin-description candidates before scoring. Its results
+    # were never applied to db_candidates or persisted (the return value
+    # was discarded), so it burned SerpAPI's 100-req/month free quota
+    # and ~45s of latency per search for zero effect on scoring or
+    # ranking. Removed. The scorer already falls back to industry_tags/
+    # category/venue when description is thin (relevance/scorer.py
+    # _get_event_text), so nothing regresses. The only real enrichment
+    # now happens once, on the final 6 events actually shown to the
+    # user (api/routes_events.py) — see enrichment/serp_enricher.py.
 
     logger.info(
         f"Pipeline complete: {len(db_candidates)} candidates for scoring | "
