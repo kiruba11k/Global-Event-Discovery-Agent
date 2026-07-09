@@ -29,9 +29,21 @@ class Settings(BaseSettings):
     # Used both as the per-request size guard and the sliding-window budget.
     groq_tpm_limit: int = 8000
     # Longest we'll queue a call waiting for TPM headroom before falling back.
-    # Must survive most of the 60s sliding window or chunked ranker calls
-    # after a busy stretch fail instantly instead of queueing.
-    groq_tpm_max_wait_seconds: float = 45.0
+    #
+    # Was 45.0 — production logs showed this repeatedly blocking a full
+    # search for 36-48s at a time (the ranker's validator pass, then each
+    # enrichment event's serp_validate call, all queuing on the SAME
+    # process-wide TPM window one after another) while the fallback model
+    # succeeded INSTANTLY every time it was actually tried. The wait was
+    # pure latency with no correctness benefit — every call site here
+    # already degrades gracefully to "skip validation, use raw data" or
+    # "serve from a fallback model" on a None/timeout, so there's nothing
+    # to lose by failing over quickly. This got materially worse once
+    # enrichment ran multiple events concurrently (see
+    # enrichment/serp_enricher.py _ENRICH_CONCURRENCY) — several tasks now
+    # pile onto the same shared TPM window at once instead of one at a
+    # time, so a long wait here multiplies instead of just adding once.
+    groq_tpm_max_wait_seconds: float = 10.0
     # Reasoning models (gpt-oss/qwen3) think before emitting JSON — never give
     # them less completion room than this or they 400 with json_validate_failed.
     groq_min_reasoning_tokens: int = 1536
