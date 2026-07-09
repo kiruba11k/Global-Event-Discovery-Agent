@@ -28,6 +28,15 @@ async def lifespan(app: FastAPI):
         await init_profile_feedback_table(_engine)
     except Exception as _e:
         logger.warning(f"ProfileStore init skipped: {_e}")
+    # Restore circuit-breaker state so a cold start on a free-tier host
+    # (Render spins idle instances down) doesn't re-probe endpoints we
+    # already know are dead/quota-exhausted from before the restart.
+    try:
+        from ingestion.source_health import load_from_db
+        from db.database import AsyncSessionLocal as _SessionLocal
+        await load_from_db(_SessionLocal)
+    except Exception as _e:
+        logger.warning(f"source_health restore skipped: {_e}")
     yield
     logger.info("Event Intelligence Agent — shutting down")
 
@@ -48,6 +57,18 @@ app.add_middleware(
 
 # Main search + stats routes
 app.include_router(events_router, prefix="/api", tags=["events"])
+
+# Email PDF report — was defined but never mounted, so every
+# POST /api/email-report 404'd. weasyprint/resend are imported lazily
+# inside the handler, so this is safe to mount even if either package
+# is missing from the environment (the endpoint just errors at call
+# time instead of failing app startup).
+try:
+    from api.routes_email import router as email_router
+    app.include_router(email_router, prefix="/api", tags=["email"])
+    logger.info("Email report routes mounted at /api/email-report")
+except ImportError as e:
+    logger.warning(f"Email report routes not loaded: {e}")
 
 # Admin routes: CSV upload + manual TM/PHQ ingest
 try:

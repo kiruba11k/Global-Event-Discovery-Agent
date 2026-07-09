@@ -609,14 +609,26 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     enrichments: dict = {}
     if settings.serpapi_key and final_top_events:
         try:
+            import asyncio as _aio_timeout
             from enrichment.serp_enricher import enrich_events_batch
             from db.crud import update_event_enrichment
-            enrichments = await enrich_events_batch(
-                events      = final_top_events,
-                serpapi_key = settings.serpapi_key,
-                groq_client = _groq_client_async,
-                max_enrich  = len(final_top_events),  # exactly the 6 shown events
-            )
+            try:
+                # Defensive bound: bounded concurrency already cuts this to
+                # ~30-40s for 6 events, but a stuck SerpAPI/Groq call must
+                # never hold the whole search open indefinitely — better to
+                # show the 6 events un-enriched than to hang the request.
+                enrichments = await _aio_timeout.wait_for(
+                    enrich_events_batch(
+                        events      = final_top_events,
+                        serpapi_key = settings.serpapi_key,
+                        groq_client = _groq_client_async,
+                        max_enrich  = len(final_top_events),  # exactly the 6 shown events
+                    ),
+                    timeout=60,
+                )
+            except _aio_timeout.TimeoutError:
+                logger.warning("SerpAPI enrichment exceeded 60s budget — showing un-enriched results")
+                enrichments = {}
             if enrichments:
                 logger.info(
                     f"Enriched {len(enrichments)} events — "

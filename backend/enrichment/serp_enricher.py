@@ -36,6 +36,14 @@ except ImportError:
 # Per-process cache: (cleaned_name|year|city) → result dict
 _cache: dict[str, dict] = {}
 
+# How many events to enrich concurrently. SerpAPI's free tier caps
+# TOTAL requests per month (100), not requests per second, so capping
+# concurrency (rather than going fully sequential) is safe and turns a
+# ~2min wall-clock enrichment pass for 6 events into ~30-40s without
+# spending any more quota. Keep modest — this also fans out into Groq
+# validation calls per event, which share the same TPM budget.
+_ENRICH_CONCURRENCY = 3
+
 # ── Venue / hotel / social domains that are NOT event official pages ──
 _VENUE_DOMAINS: frozenset[str] = frozenset({
     "singaporeexpo.com.sg", "excel.london", "expoforum-center.ru",
@@ -891,7 +899,7 @@ async def enrich_events_batch(
         return {}
 
     logger.info(
-        f"SerpAPI enriching {len(to_enrich)} events sequentially "
+        f"SerpAPI enriching {len(to_enrich)} events (concurrency={_ENRICH_CONCURRENCY}) "
         f"[att={sum(1 for x in to_enrich if x[1])} "
         f"prc={sum(1 for x in to_enrich if x[2])} "
         f"link={sum(1 for x in to_enrich if x[4])}]"
@@ -899,56 +907,69 @@ async def enrich_events_batch(
 
     enriched_map: dict[str, dict] = {}
 
-    # SEQUENTIAL — not asyncio.gather — to avoid rate-limit failures
-    for event, need_att, need_prc, need_desc, need_link in to_enrich:
-        year = (event.start_date or "")[:4] or "2026"
-        city = (
-            (getattr(event, "event_cities", "") or "").strip() or
-            (event.city or "").strip()
-        )
-        ind  = (
-            (getattr(event, "related_industries", "") or "").strip() or
-            (event.industry_tags or "").strip()
-        )
-        data = await enrich_event(
-            event_name       = event.name,
-            year             = year,
-            city             = city,
-            source_url       = event.source_url or "",
-            serpapi_key      = serpapi_key,
-            industry_tags    = ind,
-            need_attendees   = need_att,
-            need_price       = need_prc,
-            need_description = need_desc,
-            need_link        = need_link,
-            groq_client      = groq_client,
-        )
+    # BOUNDED CONCURRENCY — a small semaphore (not full asyncio.gather,
+    # not a strictly sequential loop). This was sequential with a fixed
+    # 0.3s gap between every call, which serialises ~8-70s of network +
+    # LLM-validation latency PER EVENT — 6 events took 2m19s in
+    # production. SerpAPI's free tier is a MONTHLY request quota
+    # (100/mo), not a per-second rate limit, so a small concurrency cap
+    # (not unlimited fan-out) keeps us polite to the API while cutting
+    # wall-clock time ~N-fold without using any more quota.
+    sem = asyncio.Semaphore(_ENRICH_CONCURRENCY)
+
+    async def _enrich_one(event, need_att, need_prc, need_desc, need_link):
+        async with sem:
+            year = (event.start_date or "")[:4] or "2026"
+            city = (
+                (getattr(event, "event_cities", "") or "").strip() or
+                (event.city or "").strip()
+            )
+            ind  = (
+                (getattr(event, "related_industries", "") or "").strip() or
+                (event.industry_tags or "").strip()
+            )
+            data = await enrich_event(
+                event_name       = event.name,
+                year             = year,
+                city             = city,
+                source_url       = event.source_url or "",
+                serpapi_key      = serpapi_key,
+                industry_tags    = ind,
+                need_attendees   = need_att,
+                need_price       = need_prc,
+                need_description = need_desc,
+                need_link        = need_link,
+                groq_client      = groq_client,
+            )
+            result = dict(data) if data else {}
+
+            # ── Sponsor enrichment (3.9): secondary search when sponsors empty ──
+            if groq_client and serpapi_key and not (event.sponsors or "").strip():
+                try:
+                    sponsors_str = await enrich_sponsors(
+                        event_name  = event.name,
+                        year        = year,
+                        serpapi_key = serpapi_key,
+                        groq_client = groq_client,
+                    )
+                    if sponsors_str:
+                        result["sponsors"] = sponsors_str
+                except Exception as exc:
+                    logger.debug(f"Sponsor enrichment error: {exc}")
+
+            return event.id, (result or None)
+
+    results = await asyncio.gather(
+        *(_enrich_one(*args) for args in to_enrich),
+        return_exceptions=True,
+    )
+    for r in results:
+        if isinstance(r, Exception):
+            logger.warning(f"SerpAPI enrichment task failed: {r}")
+            continue
+        event_id, data = r
         if data:
-            enriched_map[event.id] = data
-
-        # ── Sponsor enrichment (3.9): secondary search when sponsors empty ──
-        # Only runs if event has no sponsor data AND groq_client available.
-        # Counts against the same SerpAPI quota — skip if already at limit.
-        if (groq_client and serpapi_key and
-                not (event.sponsors or "").strip() and
-                len(enriched_map) <= max_enrich):
-            try:
-                sponsors_str = await enrich_sponsors(
-                    event_name  = event.name,
-                    year        = year,
-                    serpapi_key = serpapi_key,
-                    groq_client = groq_client,
-                )
-                if sponsors_str and event.id in enriched_map:
-                    enriched_map[event.id]["sponsors"] = sponsors_str
-                elif sponsors_str:
-                    enriched_map[event.id] = {"sponsors": sponsors_str}
-            except Exception as exc:
-                logger.debug(f"Sponsor enrichment error: {exc}")
-            await asyncio.sleep(0.3)
-
-        # Small delay between calls to be polite to the API
-        await asyncio.sleep(0.3)
+            enriched_map[event_id] = data
 
     att_n  = sum(1 for d in enriched_map.values() if d.get("est_attendees"))
     prc_n  = sum(1 for d in enriched_map.values() if d.get("price_description"))
