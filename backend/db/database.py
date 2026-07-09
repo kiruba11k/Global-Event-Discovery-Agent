@@ -155,6 +155,12 @@ async def init_db():
         await conn.run_sync(EventBase.metadata.create_all)
         # Add any missing columns to existing tables
         await _add_missing_columns(conn)
+        # source_health circuit-breaker state (survives cold starts)
+        try:
+            from ingestion.source_health import ensure_table as _ensure_sh_table
+            await _ensure_sh_table(conn)
+        except Exception as e:
+            logger.debug(f"source_health table: {e}")
 
     # SQLite performance tweaks
     if IS_SQLITE:
