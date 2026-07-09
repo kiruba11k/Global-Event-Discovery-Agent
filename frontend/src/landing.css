@@ -857,13 +857,35 @@
   gap: 16px; margin-bottom: 40px;
 }
 
-/* ── The event factory: side-view production line ── */
-.ef-scene {
+/* ── The event factory: side-view production line ──
+   .ef-scene-frame is full-width and its height tracks the JS-computed
+   scale (set inline per render) so the scaled-down scene never gets
+   clipped or leaves a gap in the document flow. .ef-scene keeps its
+   native 1020x340 layout box always; only `transform: scale()` (also
+   set inline, computed from the frame's real measured width) shrinks
+   it — this is what makes it fit exactly on any device width instead
+   of only the two viewport breakpoints a fixed CSS scale() could target. */
+.ef-scene-frame {
   position: relative;
+  width: 100%;
   max-width: 1020px;
-  height: 340px;
   margin: 30px auto 0;
+  overflow: hidden;
 }
+.ef-scene-motion {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.ef-scene {
+  position: absolute;
+  top: 0; left: 50%;
+  width: 1020px;
+  height: 340px;
+  margin-left: -510px;   /* half of width — keeps scale-from-center anchored */
+  transform-origin: top center;
+}
+.ef-scene--compact .ef-machine-label { display: none; }
 
 /* intake hopper */
 .ef-hopper {
@@ -1272,12 +1294,7 @@
   padding: 3px 9px;
 }
 
-@media (max-width: 900px) {
-  .ef-scene { transform: scale(.8); transform-origin: center; margin-top: 0; }
-}
 @media (max-width: 640px) {
-  .ef-scene { transform: scale(.52); height: 260px; }
-  .ef-machine-label { display: none; }
   .pm-sect { padding: 80px 4px 40px; }
 }
 

@@ -12,6 +12,7 @@
   each CYCLE/3 seconds - the pistons/beams loop on that period, phase-
   shifted so they fire exactly when a chip is underneath.
 */
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { fmtCountPlus } from '../lib/format'
 import '../landing.css'
@@ -21,6 +22,18 @@ const N_CHIPS = 3
 const SPACING = CYCLE / N_CHIPS       // a chip hits each machine this often
 const X_ENTER = -8, X_EXIT = 104      // belt travel in %
 const MACHINES = [27, 52, 77]         // machine center positions in %
+
+// The scene is built at this fixed pixel width/height (percent-based
+// child positions, absolutely placed). transform: scale() shrinks it
+// visually but NOT its layout box, so a fixed-breakpoint scale() left
+// the scene still 1020px wide in the document — on a narrow phone the
+// wrapper's overflow:hidden then clipped to whatever slice happened to
+// sit under the viewport (usually the middle), cutting the hopper and
+// tray off the edges. Measuring the real container width and scaling
+// to fit exactly is the only way this holds together on every device.
+const SCENE_W = 1020
+const SCENE_H = 340
+const LABEL_MIN_SCALE = 0.5           // below this, machine labels are too small to read
 
 const frac = (x) => (x - X_ENTER) / (X_EXIT - X_ENTER)
 const F = MACHINES.map(frac)          // travel fraction at each machine
@@ -108,6 +121,24 @@ function Machine({ i, kind, title, sub }) {
 export default function PipelineMachine({ stats }) {
   const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
 
+  const frameRef = useRef(null)
+  const [scale, setScale] = useState(1)
+
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      // Never upscale past the scene's native size — only shrink to fit.
+      setScale(w > 0 ? Math.min(1, w / SCENE_W) : 1)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('orientationchange', measure)
+    return () => { ro.disconnect(); window.removeEventListener('orientationchange', measure) }
+  }, [])
+
   return (
     <section className="pm-sect" aria-labelledby="pm-heading">
       <div className="pm-inner">
@@ -122,45 +153,62 @@ export default function PipelineMachine({ stats }) {
           </p>
         </div>
 
-        <motion.div
-          className="ef-scene"
-          aria-hidden="true"
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        {/* Frame: full-width, height tracks the scaled scene so the
+            document flow never leaves a gap or clips the next section. */}
+        <div
+          ref={frameRef}
+          className="ef-scene-frame"
+          style={{ height: SCENE_H * scale }}
         >
-          {/* intake hopper */}
-          <div className="ef-hopper">
-            <div className="ef-hopper-mouth" />
-            <span className="ef-hopper-label">{events} events</span>
-          </div>
+          {/* Framer Motion owns `transform` on motion.div for its own y
+              animation and will silently overwrite any transform passed
+              via `style` — so the JS-computed scale lives on a plain,
+              non-motion child instead of fighting it for the same property. */}
+          <motion.div
+            className="ef-scene-motion"
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div
+              className={`ef-scene ${scale < LABEL_MIN_SCALE ? 'ef-scene--compact' : ''}`}
+              aria-hidden="true"
+              style={{ transform: `scale(${scale})` }}
+            >
+              {/* intake hopper */}
+              <div className="ef-hopper">
+                <div className="ef-hopper-mouth" />
+                <span className="ef-hopper-label">{events} events</span>
+              </div>
 
-          {/* machines (behind the chips, over the belt) */}
-          <Machine i={0} kind="scan"  title="Scan"  sub="ICP-density scored" />
-          <Machine i={1} kind="match" title="Match" sub="meetings booked by us" />
-          <Machine i={2} kind="brief" title="Brief" sub="briefed by our team" />
+              {/* machines (behind the chips, over the belt) */}
+              <Machine i={0} kind="scan"  title="Scan"  sub="ICP-density scored" />
+              <Machine i={1} kind="match" title="Match" sub="meetings booked by us" />
+              <Machine i={2} kind="brief" title="Brief" sub="briefed by our team" />
 
-          {/* conveyor */}
-          <div className="ef-belt">
-            <div className="ef-belt-surface" />
-            {Array.from({ length: N_CHIPS }, (_, i) => <Chip key={i} index={i} />)}
-            <div className="ef-wheel" style={{ left: '1.5%' }} />
-            <div className="ef-wheel" style={{ left: '25%' }} />
-            <div className="ef-wheel" style={{ left: '50%' }} />
-            <div className="ef-wheel" style={{ left: '74%' }} />
-            <div className="ef-wheel" style={{ right: '1.5%' }} />
-          </div>
+              {/* conveyor */}
+              <div className="ef-belt">
+                <div className="ef-belt-surface" />
+                {Array.from({ length: N_CHIPS }, (_, i) => <Chip key={i} index={i} />)}
+                <div className="ef-wheel" style={{ left: '1.5%' }} />
+                <div className="ef-wheel" style={{ left: '25%' }} />
+                <div className="ef-wheel" style={{ left: '50%' }} />
+                <div className="ef-wheel" style={{ left: '74%' }} />
+                <div className="ef-wheel" style={{ right: '1.5%' }} />
+              </div>
 
-          {/* output tray */}
-          <div className="ef-tray">
-            <div className="ef-tray-card" style={{ '--period': `${SPACING}s` }}>
-              <span className="ef-grade">A+</span>
+              {/* output tray */}
+              <div className="ef-tray">
+                <div className="ef-tray-card" style={{ '--period': `${SPACING}s` }}>
+                  <span className="ef-grade">A+</span>
+                </div>
+                <div className="ef-tray-box" />
+                <span className="ef-tray-label">your top 6</span>
+              </div>
             </div>
-            <div className="ef-tray-box" />
-            <span className="ef-tray-label">your top 6</span>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
     </section>
   )
