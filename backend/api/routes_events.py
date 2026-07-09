@@ -490,7 +490,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     cosine_scores: dict = {}
     try:
         from relevance import pgvector_store
-        if pgvector_store.is_active():
+        if await pgvector_store.is_active_async():
             # Lazily embed this request's candidates (bounded batch),
             # then search the whole index semantically.
             await pgvector_store.embed_missing(db, candidates)
