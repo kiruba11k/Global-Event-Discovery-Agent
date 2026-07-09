@@ -78,7 +78,8 @@ def test_pgvector_end_to_end():
     pgvector_store._provider = _DeterministicProvider()
     pgvector_store._provider_resolved = True
     pgvector_store._schema_ready = False
-    pgvector_store.settings.database_url = TEST_DSN  # force is_active() true
+    pgvector_store.settings.database_url = TEST_DSN     # force is_active() true
+    pgvector_store.settings.pgvector_enabled = True      # off by default in production
 
     async def run():
         eng = create_async_engine(TEST_DSN)

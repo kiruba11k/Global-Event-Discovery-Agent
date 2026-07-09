@@ -72,24 +72,40 @@ _provider_resolved = False
 
 
 def get_provider():
-    """Resolve the embedding provider once; None = semantic disabled."""
+    """
+    Resolve the embedding provider once; None = semantic disabled.
+
+    Jina (a network call, no local model) is tried first because it has
+    zero resident-memory cost. fastembed loads a ~250-300MB ONNX model
+    into process memory on first use, which alone is enough to OOM a
+    Render free instance (512MB total) — it only runs when the operator
+    has explicitly opted in via pgvector_allow_local_embeddings, on top
+    of pgvector_enabled.
+    """
     global _provider, _provider_resolved
     if _provider_resolved:
         return _provider
     _provider_resolved = True
     if not settings.pgvector_enabled:
         return None
-    try:
-        _provider = _FastEmbedProvider()
-        logger.info("pgvector: fastembed provider ready (bge-small-en-v1.5)")
-        return _provider
-    except Exception as exc:
-        logger.debug(f"pgvector: fastembed unavailable ({exc})")
+
     if settings.jina_api_key:
         _provider = _JinaProvider(settings.jina_api_key)
-        logger.info("pgvector: Jina API provider ready")
+        logger.info("pgvector: Jina API provider ready (no local model loaded)")
         return _provider
-    logger.info("pgvector: no embedding provider - semantic matching off")
+
+    if settings.pgvector_allow_local_embeddings:
+        try:
+            _provider = _FastEmbedProvider()
+            logger.info("pgvector: fastembed provider ready (bge-small-en-v1.5, "
+                        "local ONNX model loaded into memory)")
+            return _provider
+        except Exception as exc:
+            logger.debug(f"pgvector: fastembed unavailable ({exc})")
+
+    logger.info("pgvector: no embedding provider configured - semantic matching off "
+                "(set JINA_API_KEY, or PGVECTOR_ALLOW_LOCAL_EMBEDDINGS=true if the "
+                "instance has spare RAM for a local model)")
     return None
 
 
@@ -98,12 +114,28 @@ def _is_postgres() -> bool:
 
 
 def is_active() -> bool:
-    return _is_postgres() and get_provider() is not None
+    """
+    Cheap synchronous check — never triggers provider init (which can
+    block on a model load or network call). Safe to call from anywhere.
+    """
+    if not (_is_postgres() and settings.pgvector_enabled):
+        return False
+    if _provider_resolved:
+        return _provider is not None
+    return bool(settings.jina_api_key or settings.pgvector_allow_local_embeddings)
+
+
+async def is_active_async() -> bool:
+    """Full check including provider resolution, run off the event loop."""
+    if not _is_postgres():
+        return False
+    provider = await asyncio.to_thread(get_provider)
+    return provider is not None
 
 
 async def _embed(texts: Sequence[str]) -> List[List[float]]:
     """Run the (sync) provider off the event loop."""
-    provider = get_provider()
+    provider = await asyncio.to_thread(get_provider)
     if provider is None:
         return []
     return await asyncio.to_thread(provider.embed, texts)

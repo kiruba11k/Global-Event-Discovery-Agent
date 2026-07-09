@@ -43,15 +43,23 @@ class Settings(BaseSettings):
     preload_index_on_startup: bool = False
 
     # ── pgvector semantic matching (Postgres/Neon only) ──
-    # Activates automatically when database_url is Postgres AND an
-    # embedding provider is available; silently inert otherwise.
-    # Providers tried in order: fastembed (local ONNX, free, ~70MB),
-    # then Jina embeddings API (free tier, JINA_API_KEY).
-    pgvector_enabled: bool = True
+    # OFF by default — must be explicitly enabled. On a Render free
+    # instance (512MB), loading the local ONNX embedding model
+    # (fastembed + onnxruntime, ~250-300MB resident) is enough on its
+    # own to exceed the memory limit and get the whole process killed
+    # mid-request. Only flip this on if the instance has headroom, or
+    # rely on the Jina API provider (network call, no local model).
+    pgvector_enabled: bool = False
     pgvector_embed_batch: int = 64      # events embedded per search request (lazy backfill cap)
     pgvector_top_k: int = 80            # semantic hits pulled per search
     jina_api_key: str = ""
     jina_embedding_model: str = "jina-embeddings-v3"
+    # fastembed loads a local ONNX model into process memory the first
+    # time it's used — never do this unless the instance has spare RAM.
+    # Even with pgvector_enabled=true, the Jina API provider (if
+    # JINA_API_KEY is set) is preferred and fastembed is skipped unless
+    # this is explicitly turned on too.
+    pgvector_allow_local_embeddings: bool = False
 
     # ── Real-time Event APIs ──────────────────────
     # All free tiers — see signup URLs in .env.example
