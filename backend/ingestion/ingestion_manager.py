@@ -97,6 +97,13 @@ except ImportError:
     logger.warning("ingestion_manager: ingestion/luma.py not found — skipped")
     _HAS_LUMA = False
 
+try:
+    from ingestion.confstech import ConfsTechConnector
+    _HAS_CONFSTECH = True
+except ImportError:
+    logger.warning("ingestion_manager: ingestion/confstech.py not found — skipped")
+    _HAS_CONFSTECH = False
+
 
 # ── Build connector list from whatever is available ───────────────
 
@@ -111,6 +118,7 @@ def _build_connectors() -> list:
     if _HAS_SACEOS:     c.extend([ScraperSACEOS, ScraperMyCEB])
     if _HAS_MEETUP:     c.append(MeetupConnector)
     if _HAS_LUMA:       c.append(LumaConnector)
+    if _HAS_CONFSTECH:  c.append(ConfsTechConnector)
     return c
 
 
