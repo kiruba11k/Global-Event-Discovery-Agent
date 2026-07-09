@@ -484,9 +484,37 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     logger.info(f"Candidates for scoring: {len(candidates)}")
 
-    # ── Step 5: Semantic scoring (disabled on free tier) ─────────────
+    # ── Step 5: Semantic scoring ─────────────────────────────────────
+    # Preferred: pgvector on Postgres/Neon (persistent, whole-index).
+    # Legacy: in-process FAISS (enable_semantic_search) as fallback.
     cosine_scores: dict = {}
-    if settings.enable_semantic_search:
+    try:
+        from relevance import pgvector_store
+        if pgvector_store.is_active():
+            # Lazily embed this request's candidates (bounded batch),
+            # then search the whole index semantically.
+            await pgvector_store.embed_missing(db, candidates)
+            cosine_scores = await pgvector_store.semantic_scores(
+                db, profile,
+                date_from=profile.date_from, date_to=profile.date_to,
+            )
+            # Semantic recall: pull in strong matches the SQL keyword
+            # filters missed (bounded, date-window enforced by the query).
+            cand_ids = {e.id for e in candidates}
+            missing  = [eid for eid, cos in cosine_scores.items()
+                        if eid not in cand_ids and cos >= 0.60][:40]
+            if missing:
+                from sqlalchemy import select as _sel2
+                from models.event import EventORM as _ORM2
+                extra = (await db.execute(
+                    _sel2(_ORM2).where(_ORM2.id.in_(missing))
+                )).scalars().all()
+                candidates.extend(extra)
+                logger.info(f"pgvector recall: +{len(extra)} semantic-only candidates")
+    except Exception as exc:
+        logger.warning(f"pgvector semantic search (non-fatal): {exc}")
+
+    if not cosine_scores and settings.enable_semantic_search:
         try:
             from relevance.embedder import add_events_to_index, build_profile_text, get_index, search_similar
             idx = get_index()
@@ -954,6 +982,41 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             logger.debug(f"Client names persist: {_ce}")
 
     return resp_dict
+
+
+# ══════════════════════════════════════════════════════════════════════
+# POST /api/parse-icp  —  LLM-based universal buyer-text parsing
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/parse-icp")
+async def parse_icp(payload: dict):
+    """
+    Parse a free-text buyer description ("Head of Perioperative Services
+    at ambulatory surgery centers") into canonical industries + personas
+    via LLM, covering any designation instead of a hardcoded keyword map.
+
+    Degrades gracefully: {"source": "rules"} tells the frontend to keep
+    its local keyword-parse result. Never returns an error to the UI.
+    """
+    text = str(payload.get("text", "") or "").strip()
+    if len(text) < 4:
+        return {"source": "rules"}
+    try:
+        from relevance.icp_parser import parse_icp_text
+        result = await parse_icp_text(text)
+    except Exception as exc:
+        logger.warning(f"parse-icp failed (non-fatal): {exc}")
+        result = None
+    if result is None:
+        return {"source": "rules"}
+    return {
+        "source":         "llm",
+        "industries":     result.industries,
+        "personas":       result.personas,
+        "extra_keywords": result.extra_keywords,
+        "seniority":      result.seniority,
+        "confidence":     result.confidence,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════

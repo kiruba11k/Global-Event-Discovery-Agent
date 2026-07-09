@@ -51,3 +51,6 @@ rapidfuzz
 tenacity
 loguru
 serpapi
+
+# pgvector semantic matching - local ONNX embeddings, no torch
+fastembed

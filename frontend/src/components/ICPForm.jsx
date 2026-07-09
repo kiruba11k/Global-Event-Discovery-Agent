@@ -334,6 +334,14 @@ export default function ICPForm({
   const [showSugs, setShowSugs] = useState(false)
   const [mounted,  setMounted]  = useState(false)
 
+  // ── LLM parse refinement ───────────────────────────────────────
+  // The local keyword parse renders instantly; the backend LLM parse
+  // (universal - any designation/industry phrasing) replaces it when
+  // it arrives for the same text. { forText, industries, personas,
+  // extra_keywords } - only trusted while forText matches the input.
+  const [llmParse, setLlmParse] = useState(null)
+  const llmParseTimer = useRef(null)
+
   const [companyName,    setCompanyName]    = useState(companyData?.company_name || '')
   const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
   const [clientRange,    setClientRange]    = useState('')     // client count range
@@ -357,6 +365,37 @@ export default function ICPForm({
 
   useEffect(() => { setMounted(true) }, [])
 
+  // Debounced LLM parse of the buyer text (backend caches repeats)
+  useEffect(() => {
+    clearTimeout(llmParseTimer.current)
+    const text = buyer.trim()
+    if (text.length < 8) return
+    if (llmParse?.forText === text) return
+    llmParseTimer.current = setTimeout(async () => {
+      try {
+        const data = await api.parseIcp(text)
+        if (data?.source === 'llm' && data.industries?.length)
+          setLlmParse({ forText: text, ...data })
+      } catch (_) { /* keep local keyword parse */ }
+    }, 900)
+    return () => clearTimeout(llmParseTimer.current)
+  }, [buyer])
+
+  // Best available parse: LLM result when fresh, keyword parse otherwise
+  const effectiveParse = useCallback((text) => {
+    const t = text.trim()
+    const local = parseBuyerText(t)
+    if (llmParse?.forText === t && llmParse.industries?.length) {
+      return {
+        industries:     llmParse.industries,
+        personas:       llmParse.personas?.length ? llmParse.personas : local.personas,
+        extra_keywords: llmParse.extra_keywords || [],
+        source:         'llm',
+      }
+    }
+    return { ...local, extra_keywords: [], source: 'rules' }
+  }, [llmParse])
+
   // ── Geo hint: debounced live fetch after geo selection changes ──
   useEffect(() => {
     clearTimeout(geoHintTimer.current)
@@ -364,7 +403,7 @@ export default function ICPForm({
     setGeoHintLoad(true)
     geoHintTimer.current = setTimeout(async () => {
       try {
-        const { industries } = parseBuyerText(buyer)
+        const { industries } = effectiveParse(buyer)
         const data = await api.geoHint(geos, industries)
         const map = {}
         for (const item of (data.coverage || [])) map[item.geo] = item
@@ -373,7 +412,7 @@ export default function ICPForm({
       finally { setGeoHintLoad(false) }
     }, 600)
     return () => clearTimeout(geoHintTimer.current)
-  }, [geos, buyer])
+  }, [geos, buyer, effectiveParse])
 
   useEffect(() => {
     if (companyData?.email && !email)        setEmail(companyData.email)
@@ -419,7 +458,7 @@ export default function ICPForm({
     setGeos(updated)
     setErrors(p => ({ ...p, geos: '' }))
     // Auto-resubmit: build profile with swapped geos and call onSubmit
-    const { industries, personas } = parseBuyerText(buyer)
+    const { industries, personas, extra_keywords } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
@@ -432,13 +471,14 @@ export default function ICPForm({
         avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
         date_from, date_to,
         buyer_description:      buyer,
+        extra_keywords:         extra_keywords || [],
         differentiator_score:   diffScore,
         client_count_range:     clientRange || '11-50',
         client_names:           clientNames,
       }
       onSubmit(profile, email)
     }
-  }, [geos, buyer, dealSize, email, diffScore, clientRange, companyName, companyData, onSubmit])
+  }, [geos, buyer, dealSize, email, diffScore, clientRange, companyName, companyData, onSubmit, effectiveParse])
 
   const addClientName = () => {
     const name = clientNameInput.trim()
@@ -474,7 +514,7 @@ export default function ICPForm({
       })
       return
     }
-    const { industries, personas } = parseBuyerText(buyer)
+    const { industries, personas, extra_keywords } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
     const profile = {
       company_name:          companyData?.company_name || companyName || 'LeadStrategus User',
@@ -486,6 +526,7 @@ export default function ICPForm({
       avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
       date_from, date_to,
       buyer_description:    buyer,
+      extra_keywords:       extra_keywords || [],
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
       client_names:         clientNames,
@@ -530,13 +571,18 @@ export default function ICPForm({
           )}
         </div>
         {buyer.trim() && (() => {
-          const { industries, personas } = parseBuyerText(buyer)
+          const { industries, personas, source } = effectiveParse(buyer)
           if (!industries.length && !personas.length) return null
           return (
             <div className="icp-parse-preview" aria-live="polite">
               <span className="icp-parse-label">Parsed →</span>
               {industries.map(i => <span key={i} className="icp-tag icp-tag--ind">{i}</span>)}
               {personas.map(p  => <span key={p}  className="icp-tag icp-tag--per">{p}</span>)}
+              {source === 'llm' && (
+                <span className="icp-tag" style={{ background: 'rgba(46,94,170,0.08)', color: '#2E5EAA', border: '1px solid rgba(46,94,170,0.25)' }} title="Refined by AI from your exact wording">
+                  ✦ AI
+                </span>
+              )}
             </div>
           )
         })()}

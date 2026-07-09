@@ -13,14 +13,15 @@ Runs without backend dependencies installed (config/models are stubbed).
 import sys
 import types
 
-# ── Stub heavy imports so scorer.py loads standalone ───────────────
-sys.modules.setdefault("loguru", types.SimpleNamespace(
-    logger=types.SimpleNamespace(
-        info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        debug=lambda *a, **k: None,
-    )
-))
+# ── Stub heavy imports ONLY when the real modules can't load ───────
+# Prefer real modules: unconditional stubs leak into other test files
+# in the same pytest session and break their imports.
+
+def _stub_if_missing(name: str, stub) -> None:
+    try:
+        __import__(name)
+    except Exception:
+        sys.modules[name] = stub
 
 
 class _Settings:
@@ -30,9 +31,16 @@ class _Settings:
     rule_weight = 0.5
 
 
-sys.modules.setdefault("config", types.SimpleNamespace(get_settings=lambda: _Settings()))
-sys.modules.setdefault("models.event", types.SimpleNamespace(EventORM=object))
-sys.modules.setdefault("models.icp_profile", types.SimpleNamespace(ICPProfile=object))
+_stub_if_missing("loguru", types.SimpleNamespace(
+    logger=types.SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        debug=lambda *a, **k: None,
+    )
+))
+_stub_if_missing("config", types.SimpleNamespace(get_settings=lambda: _Settings()))
+_stub_if_missing("models.event", types.SimpleNamespace(EventORM=object))
+_stub_if_missing("models.icp_profile", types.SimpleNamespace(ICPProfile=object))
 
 from relevance import scorer  # noqa: E402
 

@@ -518,6 +518,12 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
                     matched.append(prof_ind)
                     break
 
+    # LLM-parsed niche keywords ("ambulatory surgery", "cold chain") count
+    # as secondary evidence — covers long-tail ICPs outside the taxonomy.
+    for kw in (getattr(profile, "extra_keywords", None) or []):
+        if kw and _syn_in_text(kw, event_text):
+            matched.append(kw)
+
     matched = list(dict.fromkeys(matched))  # preserve order, deduplicate
 
     # The FIRST target industry is the user's primary intent (the parser

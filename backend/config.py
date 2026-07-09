@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     enable_semantic_search: bool = False
     preload_index_on_startup: bool = False
 
+    # ── pgvector semantic matching (Postgres/Neon only) ──
+    # Activates automatically when database_url is Postgres AND an
+    # embedding provider is available; silently inert otherwise.
+    # Providers tried in order: fastembed (local ONNX, free, ~70MB),
+    # then Jina embeddings API (free tier, JINA_API_KEY).
+    pgvector_enabled: bool = True
+    pgvector_embed_batch: int = 64      # events embedded per search request (lazy backfill cap)
+    pgvector_top_k: int = 80            # semantic hits pulled per search
+    jina_api_key: str = ""
+    jina_embedding_model: str = "jina-embeddings-v3"
+
     # ── Real-time Event APIs ──────────────────────
     # All free tiers — see signup URLs in .env.example
 
