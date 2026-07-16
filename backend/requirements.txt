@@ -17,7 +17,7 @@ pydantic-settings
 python-dotenv
 
 # ── LLM ──────────────────────────────────────────────────────────────
-groq
+openai
 
 # ── Embeddings (disabled on free tier by default — uses >512 MB RAM) ─
 faiss-cpu

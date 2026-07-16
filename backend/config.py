@@ -12,41 +12,40 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./events.db"
 
-    # ── Groq LLM ─────────────────────────────────
-    groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
-    groq_temperature: float = 0.1
-    groq_max_tokens: int = 4096
-    groq_timeout_seconds: int = 45   # validator needs full time; was 25 which caused timeouts
+    # ── OpenAI LLM ─────────────────────────────────
+    # Paid API — token cost is real money, so every knob here exists to
+    # cap spend, not just to configure behaviour. See llm_client.py for
+    # how tpm_limit / max_tokens / daily_usd_budget are enforced.
+    openai_api_key: str = ""
+    # gpt-4o-mini is the cheapest model that reliably follows this app's
+    # JSON-mode ranking/tagging/parsing prompts — roughly 1/10th the
+    # price of a full-size model (~$0.15/1M input, ~$0.60/1M output).
+    openai_model: str = "gpt-4o-mini"
+    openai_temperature: float = 0.1
+    openai_max_tokens: int = 1024        # completion cap — output tokens cost ~4x input
+    openai_timeout_seconds: int = 45
 
-    # Free-tier LLM gateway (relevance/llm_client.py)
-    # Comma-separated fallback chain tried when the primary model 413s/429s.
-    # NOTE: this is only a hint — llm_client validates the chain against
-    # Groq's live /models endpoint at runtime and drops decommissioned ids,
-    # auto-picking replacements from whatever Groq actually serves.
-    groq_fallback_models: str = "openai/gpt-oss-20b"
-    # Groq on-demand tokens-per-minute ceiling for the org (free tier = 8000).
-    # Used both as the per-request size guard and the sliding-window budget.
-    groq_tpm_limit: int = 8000
-    # Longest we'll queue a call waiting for TPM headroom before falling back.
-    #
-    # Was 45.0 — production logs showed this repeatedly blocking a full
-    # search for 36-48s at a time (the ranker's validator pass, then each
-    # enrichment event's serp_validate call, all queuing on the SAME
-    # process-wide TPM window one after another) while the fallback model
-    # succeeded INSTANTLY every time it was actually tried. The wait was
-    # pure latency with no correctness benefit — every call site here
-    # already degrades gracefully to "skip validation, use raw data" or
-    # "serve from a fallback model" on a None/timeout, so there's nothing
-    # to lose by failing over quickly. This got materially worse once
-    # enrichment ran multiple events concurrently (see
-    # enrichment/serp_enricher.py _ENRICH_CONCURRENCY) — several tasks now
-    # pile onto the same shared TPM window at once instead of one at a
-    # time, so a long wait here multiplies instead of just adding once.
-    groq_tpm_max_wait_seconds: float = 10.0
-    # Reasoning models (gpt-oss/qwen3) think before emitting JSON — never give
-    # them less completion room than this or they 400 with json_validate_failed.
-    groq_min_reasoning_tokens: int = 1536
+    # Comma-separated fallback chain tried when the primary model errors
+    # or rate-limits. Keep every entry on the mini/nano tier — putting a
+    # full-size model here defeats the cost cap.
+    openai_fallback_models: str = "gpt-4o-mini,gpt-4.1-mini"
+
+    # Self-imposed tokens-per-minute ceiling. This is a spend throttle,
+    # not an OpenAI-enforced limit — it exists so a traffic spike queues
+    # briefly instead of firing an unbounded number of billed calls at
+    # once.
+    openai_tpm_limit: int = 40000
+    # Longest we'll queue a call waiting for TPM headroom before falling
+    # back to the next model / giving up. Keep short — under concurrent
+    # load a long wait here multiplies instead of adding once.
+    openai_tpm_max_wait_seconds: float = 10.0
+
+    # ── Hard cost ceiling ──────────────────────────
+    # Once estimated spend for the current UTC day crosses this, chat_json()
+    # refuses new calls (returns None) instead of silently keeping billing.
+    # Every call site already degrades gracefully on None (skip validation,
+    # fall back to rule-based scoring), so this fails safe.
+    openai_daily_usd_budget: float = 5.0
 
     # ── Embedding model ───────────────────────────
     embedding_model: str = "all-MiniLM-L6-v2"
