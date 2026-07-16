@@ -606,65 +606,68 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     final_event_ids = {r.id for r in ranked}
     final_top_events = [e for e in top_events if e.id in final_event_ids]
 
+    # DB-only mode: SerpAPI enrichment disabled — all event data (dates,
+    # attendees, price, links) comes straight from the Neon `events` table.
+    # Re-enable by uncommenting the block below.
     enrichments: dict = {}
-    if settings.serpapi_key and final_top_events:
-        try:
-            import asyncio as _aio_timeout
-            from enrichment.serp_enricher import enrich_events_batch
-            from db.crud import update_event_enrichment
-            try:
-                # Defensive bound: bounded concurrency already cuts this to
-                # ~30-40s for 6 events, but a stuck SerpAPI/Groq call must
-                # never hold the whole search open indefinitely — better to
-                # show the 6 events un-enriched than to hang the request.
-                enrichments = await _aio_timeout.wait_for(
-                    enrich_events_batch(
-                        events      = final_top_events,
-                        serpapi_key = settings.serpapi_key,
-                        groq_client = _groq_client_async,
-                        max_enrich  = len(final_top_events),  # exactly the 6 shown events
-                    ),
-                    timeout=60,
-                )
-            except _aio_timeout.TimeoutError:
-                logger.warning("SerpAPI enrichment exceeded 60s budget — showing un-enriched results")
-                enrichments = {}
-            if enrichments:
-                logger.info(
-                    f"Enriched {len(enrichments)} events — "
-                    f"att={sum(1 for d in enrichments.values() if d.get('est_attendees'))} "
-                    f"date={sum(1 for d in enrichments.values() if d.get('start_date'))} "
-                    f"price={sum(1 for d in enrichments.values() if d.get('price_description'))} "
-                    f"link={sum(1 for d in enrichments.values() if d.get('event_link'))}"
-                )
-                # Persist enriched data back to DB using a fresh session
-                # (cannot reuse request db — it closes when the response is sent)
-                import asyncio as _aio
-                from db.database import AsyncSessionLocal as _SessionLocal
-                _snapshot = dict(enrichments)
-                async def _persist_enrichments():
-                    async with _SessionLocal() as _db:
-                        for eid, edata in _snapshot.items():
-                            db_updates: dict = {}
-                            if edata.get("est_attendees"):
-                                db_updates["est_attendees"] = edata["est_attendees"]
-                            if edata.get("start_date"):
-                                db_updates["start_date"] = edata["start_date"]
-                            if edata.get("end_date"):
-                                db_updates["end_date"] = edata["end_date"]
-                            if edata.get("registration_url") or edata.get("website"):
-                                url = edata.get("registration_url") or edata.get("website", "")
-                                db_updates["registration_url"] = url
-                                db_updates["website"]          = url
-                            if edata.get("price_description"):
-                                db_updates["price_description"] = edata["price_description"]
-                            if edata.get("audience_personas"):
-                                db_updates["audience_personas"] = edata["audience_personas"]
-                            if db_updates:
-                                await update_event_enrichment(_db, eid, db_updates)
-                _aio.ensure_future(_persist_enrichments())
-        except Exception as exc:
-            logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
+    # if settings.serpapi_key and final_top_events:
+    #     try:
+    #         import asyncio as _aio_timeout
+    #         from enrichment.serp_enricher import enrich_events_batch
+    #         from db.crud import update_event_enrichment
+    #         try:
+    #             # Defensive bound: bounded concurrency already cuts this to
+    #             # ~30-40s for 6 events, but a stuck SerpAPI/Groq call must
+    #             # never hold the whole search open indefinitely — better to
+    #             # show the 6 events un-enriched than to hang the request.
+    #             enrichments = await _aio_timeout.wait_for(
+    #                 enrich_events_batch(
+    #                     events      = final_top_events,
+    #                     serpapi_key = settings.serpapi_key,
+    #                     groq_client = _groq_client_async,
+    #                     max_enrich  = len(final_top_events),  # exactly the 6 shown events
+    #                 ),
+    #                 timeout=60,
+    #             )
+    #         except _aio_timeout.TimeoutError:
+    #             logger.warning("SerpAPI enrichment exceeded 60s budget — showing un-enriched results")
+    #             enrichments = {}
+    #         if enrichments:
+    #             logger.info(
+    #                 f"Enriched {len(enrichments)} events — "
+    #                 f"att={sum(1 for d in enrichments.values() if d.get('est_attendees'))} "
+    #                 f"date={sum(1 for d in enrichments.values() if d.get('start_date'))} "
+    #                 f"price={sum(1 for d in enrichments.values() if d.get('price_description'))} "
+    #                 f"link={sum(1 for d in enrichments.values() if d.get('event_link'))}"
+    #             )
+    #             # Persist enriched data back to DB using a fresh session
+    #             # (cannot reuse request db — it closes when the response is sent)
+    #             import asyncio as _aio
+    #             from db.database import AsyncSessionLocal as _SessionLocal
+    #             _snapshot = dict(enrichments)
+    #             async def _persist_enrichments():
+    #                 async with _SessionLocal() as _db:
+    #                     for eid, edata in _snapshot.items():
+    #                         db_updates: dict = {}
+    #                         if edata.get("est_attendees"):
+    #                             db_updates["est_attendees"] = edata["est_attendees"]
+    #                         if edata.get("start_date"):
+    #                             db_updates["start_date"] = edata["start_date"]
+    #                         if edata.get("end_date"):
+    #                             db_updates["end_date"] = edata["end_date"]
+    #                         if edata.get("registration_url") or edata.get("website"):
+    #                             url = edata.get("registration_url") or edata.get("website", "")
+    #                             db_updates["registration_url"] = url
+    #                             db_updates["website"]          = url
+    #                         if edata.get("price_description"):
+    #                             db_updates["price_description"] = edata["price_description"]
+    #                         if edata.get("audience_personas"):
+    #                             db_updates["audience_personas"] = edata["audience_personas"]
+    #                         if db_updates:
+    #                             await update_event_enrichment(_db, eid, db_updates)
+    #             _aio.ensure_future(_persist_enrichments())
+    #     except Exception as exc:
+    #         logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
 
     # Re-rank the final 6 with enrichment data now available
     if enrichments:
