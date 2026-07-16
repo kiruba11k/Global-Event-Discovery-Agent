@@ -93,16 +93,55 @@ AsyncSessionLocal = async_sessionmaker(
 
 # New columns that need to be added to the existing `events` table
 # Format: (column_name, sql_type, default_value)
+#
+# Kept exhaustive against models/event.py::EventORM on purpose — a
+# manually recreated / CSV-imported `events` table (e.g. after dropping
+# the table in the Neon console and re-uploading a cleaned CSV) only has
+# the columns present in that CSV. Every EventORM column not in the CSV
+# needs to be listed here so ADD COLUMN IF NOT EXISTS backfills it on
+# next startup, instead of the app crashing with UndefinedColumnError.
 _NEW_COLUMNS = [
-    ("event_venues",       "TEXT",    "''"),
-    ("event_cities",       "TEXT",    "''"),
-    ("related_industries", "TEXT",    "''"),
-    ("website",            "TEXT",    "''"),
-    ("organizer",          "TEXT",    "''"),
-    ("serpapi_enriched",   "BOOLEAN", "FALSE"),
-    ("vip_count",          "INTEGER", "0"),
-    ("exhibitor_count",    "INTEGER", "0"),
-    ("speaker_count",      "INTEGER", "0"),
+    ("event_venues",       "TEXT",     "''"),
+    ("event_cities",       "TEXT",     "''"),
+    ("related_industries", "TEXT",     "''"),
+    ("website",            "TEXT",     "''"),
+    ("organizer",          "TEXT",     "''"),
+    ("serpapi_enriched",   "BOOLEAN",  "FALSE"),
+    ("vip_count",          "INTEGER",  "0"),
+    ("exhibitor_count",    "INTEGER",  "0"),
+    ("speaker_count",      "INTEGER",  "0"),
+    ("short_summary",      "TEXT",     "''"),
+    ("edition_number",     "TEXT",     "''"),
+    ("duration_days",      "INTEGER",  "1"),
+    ("venue_name",         "TEXT",     "''"),
+    ("address",            "TEXT",     "''"),
+    ("is_virtual",         "BOOLEAN",  "FALSE"),
+    ("is_hybrid",          "BOOLEAN",  "FALSE"),
+    ("est_attendees",      "INTEGER",  "0"),
+    ("ticket_price_usd",   "FLOAT",    "0.0"),
+    ("price_description",  "TEXT",     "''"),
+    ("registration_url",   "TEXT",     "''"),
+    ("sponsors",           "TEXT",     "''"),
+    ("speakers_url",       "TEXT",     "''"),
+    ("agenda_url",         "TEXT",     "''"),
+    ("category",           "TEXT",     "''"),
+    ("industry_tags",      "TEXT",     "''"),
+    ("audience_personas",  "TEXT",     "''"),
+    ("relevance_score",    "FLOAT",    "0.0"),
+    ("relevance_tier",     "TEXT",     "''"),
+    ("rationale",          "TEXT",     "''"),
+    ("confidence_score",   "FLOAT",    "0.8"),
+    ("source_platform",    "TEXT",     "''"),
+    ("source_url",         "TEXT",     "''"),
+]
+
+# (table, column_name) pairs that must be TEXT/VARCHAR, not TIMESTAMP —
+# a Neon CSV-console import can auto-infer "2026-05-01"-style strings as
+# a `timestamp` column, which then breaks every `start_date >= :string`
+# comparison the app makes (EventORM.start_date is a plain String).
+_FORCE_TEXT_COLUMNS = [
+    ("events", "start_date"),
+    ("events", "end_date"),
 ]
 
 
@@ -128,6 +167,23 @@ async def _add_missing_columns(conn):
                 logger.debug(f"{table}.{col_name} ensured.")
             except Exception as e:
                 logger.debug(f"{table}.{col_name} check: {e}")
+
+        # Fix columns a CSV console-import may have auto-typed as TIMESTAMP
+        # instead of TEXT (see _FORCE_TEXT_COLUMNS comment above).
+        for table, col_name in _FORCE_TEXT_COLUMNS:
+            try:
+                row = (await conn.execute(text(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_name = :t AND column_name = :c"
+                ), {"t": table, "c": col_name})).fetchone()
+                if row and row[0] not in ("text", "character varying"):
+                    await conn.execute(text(
+                        f"ALTER TABLE {table} ALTER COLUMN {col_name} "
+                        f"TYPE TEXT USING {col_name}::text"
+                    ))
+                    logger.info(f"{table}.{col_name} converted {row[0]} → TEXT")
+            except Exception as e:
+                logger.warning(f"{table}.{col_name} type fix failed: {e}")
     elif IS_SQLITE:
         for table, col_name, col_type, default in _TABLE_COLUMNS:
             try:
