@@ -121,26 +121,33 @@ async def fetch_realtime_candidates(
     )
 
     # ── Step 3: Fire all APIs in parallel, each isolated ──────────
-    serp_coro = (
-        run_serpapi_queries(
-            query_bundle.serpapi, settings.serpapi_key, date_from, date_to
-        ) if api_ok["SerpAPI"] and query_bundle.serpapi else _noop()
-    )
-    tm_coro = (
-        run_ticketmaster_queries(
-            query_bundle.ticketmaster, settings.ticketmaster_key, date_from, date_to
-        ) if api_ok["Ticketmaster"] and query_bundle.ticketmaster else _noop()
-    )
-    eb_coro = (
-        run_eventbrite_queries(
-            query_bundle.eventbrite, settings.eventbrite_token, date_from, date_to
-        ) if api_ok["Eventbrite"] and query_bundle.eventbrite else _noop()
-    )
-    phq_coro = (
-        run_predicthq_queries(
-            query_bundle.predicthq, phq_key, date_from, date_to
-        ) if api_ok["PredictHQ"] and query_bundle.predicthq else _noop()
-    )
+    # DB-only mode: all live/paid API sources disabled — events come
+    # exclusively from the Neon `events` table (cleaned EventsEye + AUMA
+    # dataset). Re-enable by uncommenting the assignments below.
+    # serp_coro = (
+    #     run_serpapi_queries(
+    #         query_bundle.serpapi, settings.serpapi_key, date_from, date_to
+    #     ) if api_ok["SerpAPI"] and query_bundle.serpapi else _noop()
+    # )
+    # tm_coro = (
+    #     run_ticketmaster_queries(
+    #         query_bundle.ticketmaster, settings.ticketmaster_key, date_from, date_to
+    #     ) if api_ok["Ticketmaster"] and query_bundle.ticketmaster else _noop()
+    # )
+    # eb_coro = (
+    #     run_eventbrite_queries(
+    #         query_bundle.eventbrite, settings.eventbrite_token, date_from, date_to
+    #     ) if api_ok["Eventbrite"] and query_bundle.eventbrite else _noop()
+    # )
+    # phq_coro = (
+    #     run_predicthq_queries(
+    #         query_bundle.predicthq, phq_key, date_from, date_to
+    #     ) if api_ok["PredictHQ"] and query_bundle.predicthq else _noop()
+    # )
+    serp_coro = _noop()
+    tm_coro   = _noop()
+    eb_coro   = _noop()
+    phq_coro  = _noop()
 
     serp_evs, tm_evs, eb_evs, phq_evs = await asyncio.gather(
         _safe_run(serp_coro, "SerpAPI"),
