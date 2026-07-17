@@ -7,6 +7,8 @@ Routes:
   POST /admin/ingest/predicthq        Manually bulk-scrape PredictHQ → store in DB
   GET  /admin/ingest/status           Last-run summary
   GET  /admin/db/count                Event counts by source
+  POST /admin/backfill-embeddings         Start pgvector embedding backfill (background)
+  GET  /admin/backfill-embeddings/status  Progress of the backfill above
 
 Security:
   All routes require  X-Admin-Key: {seed_admin_token}  header
@@ -34,7 +36,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from loguru import logger
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -796,3 +798,76 @@ async def db_count(db: AsyncSession = Depends(get_db), _auth: None = Depends(_ch
         "future_events":      future_r.scalar() or 0,
         "events_by_platform": {row.source_platform: row.n for row in platform_r},
     }
+
+
+# ─────────────────────────────────────────────────────────────────
+# Route: pgvector embedding backfill (remote-triggerable)
+#
+# scripts/backfill_embeddings.py is a CLI script meant to be run where
+# you have shell access + DATABASE_URL + an embedding provider (Jina
+# API key, or local fastembed). Not everyone can run that locally
+# (e.g. corporate/sandboxed environments with no outbound access to
+# Jina) — this exposes the same logic as an HTTPS endpoint you can
+# trigger with a single curl from anywhere, backed by whatever
+# JINA_API_KEY / PGVECTOR_ALLOW_LOCAL_EMBEDDINGS is set on the deployed
+# instance itself (which already has network access).
+# ─────────────────────────────────────────────────────────────────
+
+_backfill_status: dict = {
+    "running": False, "embedded": 0, "started_at": None,
+    "finished_at": None, "error": None,
+}
+
+
+async def _run_backfill_embeddings() -> None:
+    from db.database import AsyncSessionLocal
+    from relevance import pgvector_store
+    from sqlalchemy import text as _text
+
+    _backfill_status.update({
+        "running": True, "embedded": 0, "started_at": datetime.utcnow().isoformat() + "Z",
+        "finished_at": None, "error": None,
+    })
+    try:
+        async with AsyncSessionLocal() as db:
+            if not pgvector_store.is_active():
+                raise RuntimeError(
+                    "pgvector inactive — set PGVECTOR_ENABLED=true and either "
+                    "JINA_API_KEY or PGVECTOR_ALLOW_LOCAL_EMBEDDINGS=true"
+                )
+            if not await pgvector_store.ensure_schema(db):
+                raise RuntimeError("pgvector schema setup failed (see server logs)")
+
+            while True:
+                ids = (await db.execute(_text(
+                    "SELECT id FROM events WHERE embedding IS NULL LIMIT 128"
+                ))).scalars().all()
+                if not ids:
+                    break
+                events = (await db.execute(
+                    select(EventORM).where(EventORM.id.in_(list(ids)))
+                )).scalars().all()
+                done = await pgvector_store.embed_missing(db, events, limit=128)
+                if done == 0:
+                    break
+                _backfill_status["embedded"] += done
+                logger.info(f"admin backfill: {_backfill_status['embedded']} embedded so far")
+    except Exception as exc:
+        logger.error(f"admin backfill failed: {exc}")
+        _backfill_status["error"] = str(exc)
+    finally:
+        _backfill_status["running"] = False
+        _backfill_status["finished_at"] = datetime.utcnow().isoformat() + "Z"
+
+
+@router.post("/backfill-embeddings", summary="Start pgvector embedding backfill in the background")
+async def backfill_embeddings(background: BackgroundTasks, _auth: None = Depends(_check_admin)):
+    if _backfill_status["running"]:
+        raise HTTPException(409, "Backfill already running — check /admin/backfill-embeddings/status")
+    background.add_task(_run_backfill_embeddings)
+    return {"started": True, "status_url": "/admin/backfill-embeddings/status"}
+
+
+@router.get("/backfill-embeddings/status", summary="Progress of the pgvector embedding backfill")
+async def backfill_embeddings_status(_auth: None = Depends(_check_admin)):
+    return _backfill_status

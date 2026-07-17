@@ -1,13 +1,19 @@
 """
-api/routes_events.py — Search endpoint wired to real-time pipeline.
+api/routes_events.py — Search endpoint, DB-only mode.
 
 POST /api/search:
-  1. build_queries()           — ICP form → targeted API queries
-  2. fetch_realtime_candidates() — fires SerpAPI + TM + EB + PHQ in parallel
-  3. score_candidates()        — rule-based + optional FAISS scoring
-  4. enrich_events_batch()     — SerpAPI fills attendees/price/links
-  5. rank_with_groq()          — LLM ranking + anti-hallucination validator
-  6. _apply_result_mix()       — enforce 4 GO + 3 CONSIDER
+  1. build_queries()             — ICP form → targeted keywords (still used
+                                    for logging/query-shaping, not live APIs)
+  2. fetch_realtime_candidates() — DB-only: SerpAPI/Ticketmaster/Eventbrite/
+                                    PredictHQ fan-out is disabled (see
+                                    ingestion/realtime_pipeline.py); this
+                                    just runs the tiered DB query.
+  3. score_candidates()          — rule-based + optional pgvector/FAISS scoring
+  4. rank_with_groq()            — LLM ranking + anti-hallucination validator
+                                    (OpenAI now, see relevance/llm_client.py;
+                                    the old SerpAPI enrichment step is also
+                                    disabled — see Step 9 below)
+  5. _apply_result_mix()         — enforce 3 GO + 3 CONSIDER
 
 GET /api/stats — shows realtime_apis status so frontend can warn about missing keys.
 """
@@ -54,9 +60,19 @@ router   = APIRouter()
 settings = get_settings()
 
 _last_results: dict  = {}
+_LAST_RESULTS_MAX     = 500   # dead state otherwise grows unbounded — nothing currently reads
+                               # this dict (the CSV-export route it was meant for was never
+                               # built), but keep a cap so it can't leak memory under sustained load
 RESULT_LIMIT          = 6
 GO_RESULT_COUNT       = 3
 CONSIDER_RESULT_COUNT = 3
+
+def _store_last_results(profile_id: str, value: list) -> None:
+    if len(_last_results) >= _LAST_RESULTS_MAX:
+        for old_id in list(_last_results.keys())[: len(_last_results) - _LAST_RESULTS_MAX + 1]:
+            _last_results.pop(old_id, None)
+    _last_results[profile_id] = value
+
 
 _seed_10times_status: dict           = {"running": False, "last_result": None, "last_error": None}
 _seed_conferencealerts_status: dict  = {"running": False, "last_result": None, "last_error": None}
@@ -478,7 +494,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     if not candidates:
         logger.info("No candidates after date filter.")
-        _last_results[profile_id] = []
+        _store_last_results(profile_id, [])
         return SearchResponse(profile_id=profile_id, company_name=profile.company_name,
                                total_found=0, events=[], generated_at=datetime.utcnow().isoformat() + "Z")
 
@@ -593,7 +609,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
     # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
     ranked = _apply_result_mix(ranked)
-    _last_results[profile_id] = ranked
+    _store_last_results(profile_id, ranked)
 
     # ── Step 9: SerpAPI enrichment — only for the 6 final events ──────
     # Cost optimisation: skip events already enriched in DB (serpapi_enriched=True
@@ -675,7 +691,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         # Verdict-aware order + result mix must be reapplied here too —
         # a raw score sort after re-ranking put CONSIDER events above GO.
         ranked = _apply_result_mix(_sort_ranked(ranked))
-        _last_results[profile_id] = ranked
+        _store_last_results(profile_id, ranked)
 
     # ── Step 10: Calculate 5-factor fit scores + ICP counts ──────────
     # Attach fit_grade (A+/A/B+/B/C), icp_count, and universe_stats
