@@ -631,3 +631,58 @@ async def update_company_profile_client_names(
     cp.client_names = _json.dumps(merged)
     cp.updated_at   = datetime.utcnow()
     await db.commit()
+
+
+# ── Search submissions (durable ICP form log — see models/search_submission.py) ──
+
+async def create_search_submission(
+    db: AsyncSession,
+    *,
+    ip_address: str,
+    profile_json: str,
+    company_name: str,
+    email: str,
+    company_profile_id: str,
+    job_id: str,
+) -> "SearchSubmissionORM":
+    from models.search_submission import SearchSubmissionORM
+    row = SearchSubmissionORM(
+        id                 = str(uuid.uuid4()),
+        ip_address         = ip_address,
+        profile_json       = profile_json,
+        company_name       = company_name,
+        email              = email,
+        company_profile_id = company_profile_id or "",
+        job_id             = job_id or "",
+        status             = "queued",
+        submitted_at       = datetime.utcnow(),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def update_search_submission_status(
+    db: AsyncSession,
+    row_id: str,
+    *,
+    status: str,
+    result_total_found: Optional[int] = None,
+    error: str = "",
+) -> None:
+    from models.search_submission import SearchSubmissionORM
+    result = await db.execute(
+        select(SearchSubmissionORM).where(SearchSubmissionORM.id == row_id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        return
+    row.status = status
+    if result_total_found is not None:
+        row.result_total_found = result_total_found
+    if error:
+        row.error = error[:2000]
+    if status in ("done", "error"):
+        row.completed_at = datetime.utcnow()
+    await db.commit()

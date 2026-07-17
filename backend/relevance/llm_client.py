@@ -280,29 +280,57 @@ class LLMClient:
         # "unavailable" outcome) so a down Redis doesn't retry every call.
         self._redis: Optional["aioredis.Redis"] = None
         self._redis_checked: bool = False
+        self._redis_lock: Optional[asyncio.Lock] = None   # created lazily, see _get_redis()
 
     # -- infra ------------------------------------------------------
     async def _get_redis(self) -> Optional["aioredis.Redis"]:
-        """Lazily connect to Redis; None means 'use in-process fallback'."""
+        """
+        Lazily connect to Redis; None means 'use in-process fallback'.
+
+        Guarded by a lock: `llm` is a module-level singleton, and with the
+        search job queue now running several concurrent workers, many
+        tasks can hit this as their first call at once. Without a lock,
+        each sees `_redis_checked=False` and races to connect — whichever
+        finishes last silently overwrites the others' outcome, which can
+        pin the whole process to "Redis unavailable" even when it isn't.
+
+        IMPORTANT: `_redis_checked` only flips to True once the connection
+        attempt has fully resolved (success OR failure), not the moment
+        we start trying — an uncontended asyncio.Lock().acquire() doesn't
+        yield control, so the first caller runs synchronously right up to
+        `await ping()`. If the flag were set before that await, a second
+        concurrent caller's fast-path check above would see the flag True
+        while `self._redis` is still None (the first caller isn't done
+        yet) and wrongly return that stale None, bypassing the lock
+        entirely. Reproduced empirically in lib/redis_client.py's
+        equivalent function — same bug, same fix.
+        """
         if self._redis_checked:
             return self._redis
-        self._redis_checked = True
-        if not (aioredis and settings.redis_url):
-            return None
-        try:
-            client = aioredis.from_url(
-                settings.redis_url, decode_responses=True, socket_connect_timeout=3,
-            )
-            await client.ping()
-            self._redis = client
-            logger.info("llm_client: Redis connected — cache/budget/TPM shared across workers")
-        except Exception as exc:
-            logger.warning(
-                f"llm_client: Redis unavailable ({exc}) — falling back to in-process "
-                "state (correct only for a single worker process)"
-            )
-            self._redis = None
-        return self._redis
+        if self._redis_lock is None:
+            self._redis_lock = asyncio.Lock()   # safe to create unguarded: no await between the check and this line
+        async with self._redis_lock:
+            if self._redis_checked:              # re-check: another task may have
+                return self._redis                # resolved this while we waited
+            if not (aioredis and settings.redis_url):
+                self._redis_checked = True
+                return None
+            try:
+                client = aioredis.from_url(
+                    settings.redis_url, decode_responses=True, socket_connect_timeout=3,
+                )
+                await client.ping()
+                self._redis = client
+                logger.info("llm_client: Redis connected — cache/budget/TPM shared across workers")
+            except Exception as exc:
+                logger.warning(
+                    f"llm_client: Redis unavailable ({exc}) — falling back to in-process "
+                    "state (correct only for a single worker process)"
+                )
+                self._redis = None
+            finally:
+                self._redis_checked = True   # only mark resolved AFTER self._redis has its final value
+            return self._redis
 
     # -- shared cache (Redis, falls back to in-process) ---------------
     async def _cache_get(self, key: str) -> Optional[Any]:

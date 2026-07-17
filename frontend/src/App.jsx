@@ -252,7 +252,12 @@ export default function App() {
     setSuggestedGeos([])
 
     try {
-      const res    = await api.search({ profile })
+      const initial = await api.search({ profile })
+      // Search queue active (REDIS_URL set on the backend) → poll until
+      // done; no queue configured → result is already attached inline.
+      const res = initial.status === 'queued'
+        ? await api.pollSearchStatus(initial.job_id)
+        : initial.result
       const events = res.events || []
       setProfileId(res.profile_id || '')
       setResults(events)
@@ -279,6 +284,8 @@ export default function App() {
       if (kind) {
         setFatalError({ kind, detail: err.message })
         goTo('error')
+      } else if (err.status === 429) {
+        toast.error(err.message, { icon: '⏳', duration: 8000 })
       } else {
         toast.error(err.message || 'Search failed - please try again')
       }

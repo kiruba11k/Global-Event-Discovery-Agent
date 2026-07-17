@@ -27,7 +27,7 @@ from typing import Iterable, Optional
 
 from fastapi import (
     APIRouter, BackgroundTasks, Depends, File, Form,
-    Header, HTTPException, Query, UploadFile,
+    Header, HTTPException, Query, Request, UploadFile,
 )
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,15 +35,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from db.crud import (
     batch_upsert_events, count_events,
-    create_company_profile, get_all_events,
-    get_company_profile, get_event_by_id,
+    create_company_profile, create_search_submission, get_all_events,
+    get_company_profile, get_event_by_id, update_search_submission_status,
 )
 from db.database import get_db
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from ingestion.realtime_pipeline import fetch_realtime_candidates
 from models.company_profile import CompanyProfileCreate
 from models.event import EventCreate
-from models.icp_profile import CompanyContext, SearchRequest, SearchResponse
+from models.icp_profile import CompanyContext, ICPProfile, SearchRequest, SearchResponse
 from relevance.groq_ranker import rank_with_groq
 from relevance.scorer import score_candidates
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
@@ -352,9 +352,18 @@ async def fetch_company_profile(profile_id: str, db: AsyncSession = Depends(get_
 # POST /api/search  —  REAL-TIME PIPELINE
 # ══════════════════════════════════════════════════════════════════════
 
-@router.post("/search", response_model=SearchResponse)
-async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_db)):
-    profile    = request.profile
+async def _run_search_pipeline(
+    profile: ICPProfile,
+    company_context: CompanyContext | None,
+    company_profile_id: str | None,
+    db: AsyncSession,
+) -> dict:
+    """
+    The actual search pipeline — DB query, scoring, LLM ranking. Runs
+    inside a queue worker (see queueing/search_queue.py), NOT directly
+    inside the /api/search request/response cycle anymore; see the thin
+    POST /api/search below, which only enqueues a job and returns immediately.
+    """
     profile_id = str(uuid.uuid4())
     deal_size  = profile.avg_deal_size_category or "medium"
 
@@ -368,9 +377,9 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
     )
 
     # ── Company context ─────────────────────────────────────────────
-    company_ctx: CompanyContext | None = request.company_context
-    if request.company_profile_id and not company_ctx:
-        cp = await get_company_profile(db, request.company_profile_id)
+    company_ctx: CompanyContext | None = company_context
+    if company_profile_id and not company_ctx:
+        cp = await get_company_profile(db, company_profile_id)
         if cp:
             company_ctx = CompanyContext(
                 company_name=cp.company_name, founded_year=cp.founded_year,
@@ -980,7 +989,7 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
 
       
            # ── Persist client names to company profile if provided ───────────
-    _cp_id_snap = request.company_profile_id or None
+    _cp_id_snap = company_profile_id or None
     _cl_snap    = list(getattr(profile, "client_names", None) or [])
     if _cl_snap:
         try:
@@ -1008,6 +1017,117 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
             logger.debug(f"Client names persist: {_ce}")
 
     return resp_dict
+
+
+# ── Queue worker entry point ─────────────────────────────────────────
+# Called from queueing/search_queue.worker_loop() (started at app
+# startup, see main.py). Runs OUTSIDE any request — must open its own
+# DB session, the one that enqueued this job is long gone by the time
+# a worker picks it up.
+async def _process_search_job(payload: dict) -> dict:
+    from db.database import AsyncSessionLocal
+
+    profile = ICPProfile(**payload["profile"])
+    company_context = (
+        CompanyContext(**payload["company_context"]) if payload.get("company_context") else None
+    )
+    company_profile_id = payload.get("company_profile_id") or None
+    submission_id       = payload.get("submission_id")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await _run_search_pipeline(profile, company_context, company_profile_id, db)
+        except Exception:
+            if submission_id:
+                async with AsyncSessionLocal() as db_err:
+                    await update_search_submission_status(db_err, submission_id, status="error", error="pipeline failed")
+            raise
+
+    if submission_id:
+        async with AsyncSessionLocal() as db2:
+            await update_search_submission_status(
+                db2, submission_id, status="done",
+                result_total_found=result.get("total_found", 0),
+            )
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════
+# POST /api/search  —  thin endpoint: rate-limit → persist submission →
+# enqueue → return immediately. The real work happens in a background
+# worker (queueing/search_queue.worker_loop → _process_search_job above)
+# so N simultaneous requests don't all race the same DB pool / OpenAI
+# budget inside the request/response cycle at once.
+#
+# Falls back to running the pipeline inline (old synchronous behavior)
+# if REDIS_URL isn't configured — see queueing/search_queue.enqueue().
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/search", status_code=202)
+async def search_events(
+    request: SearchRequest,
+    http_request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from api.rate_limit import enforce_daily_search_limit
+    from queueing.search_queue import enqueue
+
+    ip = await enforce_daily_search_limit(http_request)
+
+    profile = request.profile
+    profile_dict = profile.model_dump()
+
+    submission = await create_search_submission(
+        db,
+        ip_address          = ip,
+        profile_json         = json.dumps(profile_dict),
+        company_name         = profile.company_name or "",
+        email                = profile.email or "",
+        company_profile_id   = request.company_profile_id or "",
+        job_id                = "",
+    )
+
+    payload = {
+        "profile":             profile_dict,
+        "company_context":     request.company_context.model_dump() if request.company_context else None,
+        "company_profile_id":  request.company_profile_id,
+        "submission_id":       submission.id,
+    }
+
+    job_id = await enqueue(payload)
+
+    if job_id is None:
+        # Redis not configured — fall back to running inline, same as
+        # before the queue existed. Still logged/persisted the same way.
+        logger.warning("search_queue unavailable (no REDIS_URL) — running search inline")
+        try:
+            result = await _run_search_pipeline(
+                profile, request.company_context, request.company_profile_id, db,
+            )
+        except Exception as exc:
+            await update_search_submission_status(db, submission.id, status="error", error=str(exc))
+            raise
+        await update_search_submission_status(
+            db, submission.id, status="done", result_total_found=result.get("total_found", 0),
+        )
+        return {"status": "done", "job_id": None, "result": result}
+
+    submission.job_id = job_id
+    await db.commit()
+
+    return {"status": "queued", "job_id": job_id}
+
+
+@router.get("/search/status/{job_id}")
+async def search_status(job_id: str):
+    """Poll a queued search job. Returns {status, result, error} —
+    status is one of queued|processing|done|error."""
+    from queueing.search_queue import get_job
+
+    job = await get_job(job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found or expired (results are kept for 1 hour)")
+    return {"status": job.get("status"), "result": job.get("result"), "error": job.get("error")}
 
 
 # ══════════════════════════════════════════════════════════════════════
