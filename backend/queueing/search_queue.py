@@ -46,8 +46,8 @@ JOB_TTL_SECONDS = 3600          # results expire after 1h — plenty of time to 
 # command per poll attempt on providers that meter by command count —
 # 3 workers blocking every ~5s, 24/7, is ~1.1-1.5M commands/month on its
 # own, several times over a typical free-tier cap (e.g. Upstash's
-# 500k/month). At this app's real traffic ceiling (one search per IP
-# per day, enforced by api/rate_limit.py), a multi-second poll interval
+# 500k/month). At this app's real traffic ceiling (up to 3 searches per
+# IP per day, enforced by api/rate_limit.py), a multi-second poll interval
 # costs nothing in practice — queue latency of a few seconds when idle
 # is unnoticeable next to the search itself taking 5-30s to run.
 # Configurable via SEARCH_QUEUE_POLL_SECONDS — see config.py.

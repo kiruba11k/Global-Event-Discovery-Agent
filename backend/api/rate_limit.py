@@ -1,9 +1,16 @@
 """
-api/rate_limit.py — one search per IP per UTC calendar day.
+api/rate_limit.py — up to DAILY_SEARCH_LIMIT searches per IP per UTC day.
 
-Backed by Redis (SET NX with a TTL expiring at the next UTC midnight) so
-the limit is shared across worker processes — an in-process counter
-would silently give every worker its own separate quota for the same IP.
+Backed by Redis (INCR-based counter with a TTL expiring at the next UTC
+midnight) so the limit is shared across worker processes — an in-process
+counter would silently give every worker its own separate quota for the
+same IP.
+
+INCR+EXPIRE is done via a single Lua script (EVAL) so the increment and
+the "set expiry only on the first hit of the day" step are atomic — two
+separate round-trips (INCR then check-and-EXPIRE) would race under
+concurrent requests from the same IP and could let the TTL never get
+set, or get reset on every request instead of only the first.
 
 Fails OPEN if Redis is unavailable: a rate limiter you can't check
 should not be the reason the whole app goes down, matching the
@@ -18,6 +25,19 @@ from fastapi import HTTPException, Request
 from loguru import logger
 
 from lib.redis_client import get_redis
+
+DAILY_SEARCH_LIMIT = 3
+
+# KEYS[1] = the counter key, ARGV[1] = TTL seconds (only applied on the
+# first increment of the day, so later requests don't keep pushing the
+# expiry back out).
+_INCR_WITH_TTL_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
 
 
 def client_ip(request: Request) -> str:
@@ -36,8 +56,9 @@ def _seconds_until_utc_midnight() -> int:
 
 async def enforce_daily_search_limit(request: Request) -> str:
     """
-    Raises HTTPException(429) if this IP already searched today.
-    Returns the IP address used for the check (caller can log/persist it).
+    Raises HTTPException(429) once this IP has used DAILY_SEARCH_LIMIT
+    searches today. Returns the IP address used for the check (caller
+    can log/persist it).
     """
     ip = client_ip(request)
     r = await get_redis()
@@ -47,14 +68,14 @@ async def enforce_daily_search_limit(request: Request) -> str:
 
     key = f"searchlimit:{ip}:{time.strftime('%Y-%m-%d', time.gmtime())}"
     try:
-        was_set = await r.set(key, "1", nx=True, ex=_seconds_until_utc_midnight())
-        if not was_set:
+        count = await r.eval(_INCR_WITH_TTL_SCRIPT, 1, key, _seconds_until_utc_midnight())
+        if count > DAILY_SEARCH_LIMIT:
             ttl = await r.ttl(key)
             hours = max(1, (ttl or 0) // 3600)
             raise HTTPException(
                 429,
                 detail=(
-                    "You've already used your one free search today. "
+                    f"You've used all {DAILY_SEARCH_LIMIT} free searches for today. "
                     f"Please try again in about {hours} hour{'s' if hours != 1 else ''} "
                     "(resets at midnight UTC)."
                 ),
