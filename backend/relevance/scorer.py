@@ -713,6 +713,22 @@ def _score_attendees(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
     return round(score, 4), tier
 
 
+# Region is meant to be the PRIMARY filter on the ICP form — a user who
+# names "India" wants India results first, industry/persona second. Pure
+# additive scoring (industry 0.35 + persona 0.25 max vs geo 0.22 max)
+# let a strong industry+persona match from the WRONG country outscore a
+# weaker-but-present match from the RIGHT country — e.g. a German
+# fintech event (0.35+0.25=0.60) beating an India fintech event with a
+# non-primary industry hit (0.22+0.14=0.36), even though the user
+# explicitly asked for India. This multiplicative penalty on a real geo
+# mismatch (not "Global" scope, not virtual/hybrid) makes geography the
+# deciding factor first without making it an absolute hard filter — an
+# overwhelmingly strong foreign match can still surface (0.4 × a
+# near-max ~1.0 score ≈ 0.4, comparable to a modest in-region match), but
+# a routine industry-only win no longer buries every regional result.
+GEO_MISMATCH_PENALTY = 0.4
+
+
 # ── Main rule scorer ───────────────────────────────────────────────
 
 def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
@@ -726,6 +742,8 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         ind_score + per_score + geo_score + type_score + att_score,
         4
     )
+    if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
+        total = round(total * GEO_MISMATCH_PENALTY, 4)
 
     detail = {
         "industry_matched":  ind_matched[:4],
