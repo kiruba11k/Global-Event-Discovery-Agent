@@ -138,6 +138,11 @@ _NEW_COLUMNS = [
     ("confidence_score",   "FLOAT",    "0.8"),
     ("source_platform",    "TEXT",     "''"),
     ("source_url",         "TEXT",     "''"),
+    # These two DateTime columns were missed in the original pass at
+    # making this list exhaustive against EventORM — found in production
+    # via "column events.ingested_at does not exist" on every /api/search.
+    ("ingested_at",        "TIMESTAMP", "NOW()"),
+    ("last_verified_at",   "TIMESTAMP", "NOW()"),
 ]
 
 # (table, column_name) pairs that must be TEXT/VARCHAR, not TIMESTAMP —
