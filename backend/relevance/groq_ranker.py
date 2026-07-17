@@ -589,7 +589,7 @@ _COMPLETION_TOKENS_MIN       = 600
 
 
 def _completion_budget(n_events: int) -> int:
-    return min(settings.openai_max_tokens,
+    return min(settings.openai_ranker_max_tokens,
                max(_COMPLETION_TOKENS_MIN, n_events * _COMPLETION_TOKENS_PER_EVENT))
 
 
