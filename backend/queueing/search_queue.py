@@ -29,11 +29,29 @@ from typing import Awaitable, Callable, Optional
 
 from loguru import logger
 
+from config import get_settings
 from lib.redis_client import get_redis
+
+settings = get_settings()
 
 QUEUE_KEY       = "search:queue"
 JOB_KEY_PREFIX  = "search:job:"
 JOB_TTL_SECONDS = 3600          # results expire after 1h — plenty of time to poll
+
+# Non-blocking LPOP + sleep, NOT BLPOP. Managed Redis providers on a
+# proxy layer (Upstash in particular) don't reliably support long-lived
+# blocking commands — the proxy cuts the connection before the block
+# completes, which is exactly the "Timeout reading from ...upstash.io"
+# warning this replaced. Even when BLPOP "worked", it's still 1 billed
+# command per poll attempt on providers that meter by command count —
+# 3 workers blocking every ~5s, 24/7, is ~1.1-1.5M commands/month on its
+# own, several times over a typical free-tier cap (e.g. Upstash's
+# 500k/month). At this app's real traffic ceiling (one search per IP
+# per day, enforced by api/rate_limit.py), a multi-second poll interval
+# costs nothing in practice — queue latency of a few seconds when idle
+# is unnoticeable next to the search itself taking 5-30s to run.
+# Configurable via SEARCH_QUEUE_POLL_SECONDS — see config.py.
+POLL_INTERVAL_SECONDS = settings.search_queue_poll_seconds
 
 
 async def enqueue(payload: dict) -> Optional[str]:
@@ -89,19 +107,19 @@ async def worker_loop(worker_name: str, process_fn: ProcessFn) -> None:
     if r is None:
         logger.info(f"search_queue[{worker_name}]: Redis not configured — worker idle")
         return
-    logger.info(f"search_queue[{worker_name}]: started")
+    logger.info(f"search_queue[{worker_name}]: started (polling every {POLL_INTERVAL_SECONDS}s)")
     while True:
         try:
-            popped = await r.blpop(QUEUE_KEY, timeout=5)
+            job_id = await r.lpop(QUEUE_KEY)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning(f"search_queue[{worker_name}]: blpop failed ({exc}) — retrying in 2s")
-            await asyncio.sleep(2)
+            logger.warning(f"search_queue[{worker_name}]: lpop failed ({exc}) — retrying in {POLL_INTERVAL_SECONDS}s")
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
             continue
-        if not popped:
+        if not job_id:
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
             continue
-        _, job_id = popped
         job = await get_job(job_id)
         if job is None:
             continue

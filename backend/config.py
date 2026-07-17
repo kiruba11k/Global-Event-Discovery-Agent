@@ -29,7 +29,22 @@ class Settings(BaseSettings):
     # regardless of this value. Bound by openai_tpm_limit/db pool size
     # more than raw worker count — more workers just means more jobs
     # racing those same shared ceilings concurrently.
-    search_queue_workers: int = 3
+    #
+    # Kept low (1) on purpose: each worker polls the queue every
+    # search_queue_poll_seconds REGARDLESS of whether there's a job
+    # waiting — that's N workers × 1 Redis command every poll interval,
+    # 24/7, forever. On a metered free tier (Upstash: 500k commands/mo)
+    # this adds up fast at idle — 3 workers @ 5s used to burn ~1.5M/mo
+    # on its own. This app's real traffic ceiling is tiny (one search
+    # per IP per day, see api/rate_limit.py), so raise this only if
+    # you've actually confirmed jobs are queuing up faster than 1
+    # worker clears them.
+    search_queue_workers: int = 1
+    # Seconds between each worker's queue poll when idle. See the comment
+    # above — this is the primary lever for Redis command budget, not
+    # worker count. 3 workers × poll every N seconds = ~3 × (86400×30/N)
+    # commands/month from idle polling alone.
+    search_queue_poll_seconds: int = 10
 
     # ── OpenAI LLM ─────────────────────────────────
     # Paid API — token cost is real money, so every knob here exists to
