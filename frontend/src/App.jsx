@@ -1,9 +1,10 @@
 /*
-  App.jsx   three-screen app with simple state router
+  App.jsx   four-screen app with simple state router
 
   screen === 'home'     → homepage + hero form
   screen === 'ranking'  → ShowRankingPage (full page, scroll to top)
   screen === 'deepdive' → ShowDeepDivePage (full page, scroll to top)
+  screen === 'error'    → ErrorPage (server down / network unreachable / 5xx)
 */
 
 import { useState, useEffect } from 'react'
@@ -13,6 +14,7 @@ import ShowRankingPage   from './components/ShowRankingPage'
 import ShowDeepDivePage  from './components/ShowDeepDivePage'
 import EmailReportModal  from './components/EmailReportModal'
 import LoadingOverlay    from './components/LoadingOverlay'
+import ErrorPage         from './components/ErrorPage'
 import LandingNav        from './components/LandingNav'
 import HeroSection       from './components/HeroSection'
 import HowItWorks        from './components/HowItWorks'
@@ -200,8 +202,19 @@ export default function App() {
   const [suggestedGeos,    setSuggestedGeos]    = useState([])
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
+  const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
+
+  // Server-down / network-unreachable / 5xx errors get the full ErrorPage
+  // (the user can't do anything useful until the backend is back); normal
+  // 4xx validation errors ("no results", bad input) stay as a toast so
+  // the app doesn't block a user who can just adjust their search.
+  const classifyError = (err) => {
+    if (err?.status === undefined) return 'network'
+    if (err.status >= 500) return 'server'
+    return null
+  }
 
   // /* ── Scroll reveal observer ────────────────────────────────── */
   // useEffect(() => {
@@ -262,7 +275,13 @@ export default function App() {
 
       goTo('ranking', '/')
     } catch (err) {
-      toast.error(err.message || 'Search failed - please try again')
+      const kind = classifyError(err)
+      if (kind) {
+        setFatalError({ kind, detail: err.message })
+        goTo('error')
+      } else {
+        toast.error(err.message || 'Search failed - please try again')
+      }
     } finally {
       setLoading(false)
     }
@@ -318,6 +337,29 @@ export default function App() {
   }
 
   const allDisplay = results.filter(e => e.fit_verdict !== 'SKIP')
+
+  /* ── Screen: Error (server down / network unreachable / 5xx) ─ */
+  if (screen === 'error') {
+    return (
+      <ErrorPage
+        kind={fatalError?.kind || 'server'}
+        detail={fatalError?.detail || ''}
+        onRetry={() => {
+          setFatalError(null)
+          if (lastProfile) {
+            goTo('home')
+            onSearch(lastProfile, userEmail)
+          } else {
+            window.location.reload()
+          }
+        }}
+        onGoHome={() => {
+          setFatalError(null)
+          goTo('home')
+        }}
+      />
+    )
+  }
 
   /* ── Screen: Ranking ───────────────────────────────────────── */
   if (screen === 'ranking') {

@@ -1,14 +1,31 @@
 const BASE = import.meta.env.VITE_API_URL || ''
 
+// Attach the HTTP status (when we have one) to the thrown Error so callers
+// can tell "the server is down / errored" (5xx, or no status at all — a
+// network failure) apart from "the user needs to fix their input" (4xx),
+// without re-parsing the message string. See ErrorPage.jsx / App.jsx.
+function apiError(message, status) {
+  const err = new Error(message)
+  err.status = status
+  return err
+}
+
 async function request(path, options = {}) {
   const url = `${BASE}/api${path}`
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  })
+  let res
+  try {
+    res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...options,
+    })
+  } catch (networkErr) {
+    // fetch() itself rejects on DNS failure, connection refused, CORS
+    // block, offline, etc. — no status code available, server unreachable.
+    throw apiError(networkErr.message || 'Network request failed', undefined)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `API error ${res.status}`)
+    throw apiError(err.detail || `API error ${res.status}`, res.status)
   }
   return res.json()
 }
@@ -24,10 +41,11 @@ export const api = {
   // ── Company profile ───────────────────────────────────
   saveCompanyProfile: (formData) =>
     fetch(`${BASE}/api/company-profile`, { method: 'POST', body: formData })
+      .catch((networkErr) => { throw apiError(networkErr.message || 'Network request failed', undefined) })
       .then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }))
-          throw new Error(err.detail || `API error ${res.status}`)
+          throw apiError(err.detail || `API error ${res.status}`, res.status)
         }
         return res.json()
       }),
