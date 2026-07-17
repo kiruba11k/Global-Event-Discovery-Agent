@@ -573,16 +573,11 @@ async def search_events(request: SearchRequest, db: AsyncSession = Depends(get_d
         f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
     )
 
-    # Build shared Groq async client (reused for both enrichment and ranking)
-    _groq_client_async = None
-    try:
-        from groq import AsyncGroq as _AsyncGroq
-        import os as _os
-        _groq_key = getattr(settings, "groq_api_key", "") or _os.environ.get("GROQ_API_KEY", "")
-        if _groq_key:
-            _groq_client_async = _AsyncGroq(api_key=_groq_key)
-    except Exception:
-        pass
+    # NOTE: used to build a shared Groq async client here for SerpAPI
+    # enrichment (enrichment/serp_enricher.py's optional groq_client
+    # param). Enrichment is disabled (DB-only mode) and the LLM gateway
+    # moved to OpenAI (relevance/llm_client.py handles its own client),
+    # so there's nothing to build.
 
     # ── Step 7: Groq LLM ranking + cross-validation (no enrichment yet) ─
     # Run ranking first on raw DB data to select the 6 final events,
@@ -1259,7 +1254,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "top_locations":      top_locations,
         "events_by_source":   by_source,
         "faiss_vectors":      index_size,
-        "groq_enabled":       bool(settings.groq_api_key),
+        "openai_enabled":     bool(settings.openai_api_key),
         "serpapi_enabled":    bool(settings.serpapi_key),
         "resend_enabled":     bool(settings.resend_api_key),
         # Real-time API key status (shown in frontend status bar)

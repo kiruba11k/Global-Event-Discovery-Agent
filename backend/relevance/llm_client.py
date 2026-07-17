@@ -1,21 +1,30 @@
 """
-llm_client.py — free-tier-aware Groq LLM gateway.
+llm_client.py — cost-capped OpenAI LLM gateway.
 
 Every LLM call in the app should go through `chat_json()` instead of
-calling the Groq SDK directly. This layer exists because the project
-runs on free tiers, where the constraints ARE the architecture:
+calling the OpenAI SDK directly. Unlike Groq's free tier, OpenAI bills
+per token — so this layer's job is to make sure traffic never turns into
+a surprise bill:
 
   • Token budgeting  — estimates prompt tokens before sending; refuses
-    (returns None) or lets callers chunk instead of burning a 413.
-  • TPM rate limiter — sliding 60s window of tokens sent per model, so
-    we queue briefly rather than trip Groq's on-demand TPM ceiling.
-  • Model fallback   — on 413/429/5xx the call cascades down a chain of
-    smaller/cheaper models instead of failing outright.
+    (returns None) or lets callers chunk instead of sending an
+    oversized (and expensive) request.
+  • TPM rate limiter — sliding 60s window of tokens sent per model, a
+    self-imposed throttle so a traffic spike queues briefly instead of
+    firing an unbounded number of billed calls at once.
+  • Daily USD budget — tracks estimated spend per UTC day; once it
+    crosses `settings.openai_daily_usd_budget`, calls are refused
+    (returns None) instead of silently continuing to bill. Every call
+    site already degrades gracefully on None (skip validation, fall
+    back to rule-based scoring), so this fails safe.
+  • Model fallback   — on errors/429/5xx the call cascades down a chain
+    of configured models (keep every entry on the cheap mini/nano tier).
   • Robust JSON      — code-fence stripping + best-effort JSON repair
     (trailing commas, unquoted keys, truncated tails) so one malformed
-    character doesn't discard an otherwise good completion.
-  • Response cache   — small TTL cache keyed on (model, prompts); free
-    tiers punish retries of identical work.
+    character doesn't discard an otherwise good (and already paid-for)
+    completion.
+  • Response cache   — small TTL cache keyed on (model, prompts); avoids
+    re-billing for identical repeated work.
 
 All knobs live in config.Settings so they can be tuned per deployment
 via environment variables.
@@ -28,6 +37,7 @@ import hashlib
 import json
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional, Type
 
@@ -39,18 +49,43 @@ from config import get_settings
 settings = get_settings()
 
 try:
-    from groq import Groq
+    from openai import OpenAI
 except ImportError:                                     # pragma: no cover
-    Groq = None
+    OpenAI = None
+
+try:
+    import redis.asyncio as aioredis
+except ImportError:                                     # pragma: no cover
+    aioredis = None
 
 
 # ── Token estimation ───────────────────────────────────────────────
-# Groq counts real tokens; we only need a safe upper-ish estimate.
+# We only need a safe upper-ish estimate for budgeting/throttling, not
+# exact billing figures (the API response has real usage for that).
 # English prose ≈ 4 chars/token; JSON payloads are denser in symbols,
 # so use 3.4 chars/token to stay conservative.
 
 def estimate_tokens(text: str) -> int:
     return int(len(text) / 3.4) + 1
+
+
+# ── Per-model $ pricing (USD per 1M tokens) — mini/nano tier only ───
+# Used solely to estimate spend for the daily budget guard. Approximate
+# on purpose: the guard just needs to be in the right ballpark to stop
+# a runaway loop, not match the invoice to the cent.
+_PRICING_PER_1M: dict[str, tuple[float, float]] = {
+    # (input $/1M, output $/1M)
+    "gpt-4o-mini":  (0.15, 0.60),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1-nano": (0.10, 0.40),
+    "gpt-4o":       (2.50, 10.00),
+}
+_DEFAULT_PRICING = (0.50, 1.50)  # conservative fallback for unlisted models
+
+
+def _estimate_cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    in_price, out_price = _PRICING_PER_1M.get(model, _DEFAULT_PRICING)
+    return (prompt_tokens / 1_000_000) * in_price + (completion_tokens / 1_000_000) * out_price
 
 
 # ── Sliding-window TPM limiter ─────────────────────────────────────
@@ -78,6 +113,42 @@ class _TPMWindow:
             if time.monotonic() + wait > deadline:
                 return False
             await asyncio.sleep(min(wait, deadline - time.monotonic()))
+
+
+# ── Daily USD spend guard ────────────────────────────────────────────
+
+class _DailyBudget:
+    """Tracks estimated spend for the current UTC day; resets at midnight."""
+
+    def __init__(self) -> None:
+        self._day: Optional[str] = None
+        self._spent: float = 0.0
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _today() -> str:
+        return time.strftime("%Y-%m-%d", time.gmtime())
+
+    async def remaining(self, budget: float) -> float:
+        async with self._lock:
+            today = self._today()
+            if today != self._day:
+                self._day, self._spent = today, 0.0
+            return max(0.0, budget - self._spent)
+
+    async def add(self, usd: float) -> None:
+        async with self._lock:
+            today = self._today()
+            if today != self._day:
+                self._day, self._spent = today, 0.0
+            self._spent += usd
+
+    async def spent_today(self) -> float:
+        async with self._lock:
+            today = self._today()
+            if today != self._day:
+                return 0.0
+            return self._spent
 
 
 # ── JSON repair ────────────────────────────────────────────────────
@@ -185,54 +256,157 @@ class LLMStats:
     cache_hits: int = 0
     fallbacks: int = 0
     failures: int = 0
+    budget_blocked: int = 0
     tokens_sent: int = 0
+    estimated_usd: float = 0.0
 
 
 class LLMClient:
     # substrings identifying non-chat models we must never route JSON to
-    _NON_CHAT = ("whisper", "tts", "guard", "embed", "moderation", "vision-preview")
+    _NON_CHAT = ("whisper", "tts", "embed", "moderation", "dall-e", "davinci",
+                 "babbage", "audio", "realtime", "transcribe", "image")
 
     def __init__(self) -> None:
-        self._client: Optional["Groq"] = None
-        self._windows: dict[str, _TPMWindow] = {}
-        self._cache = _TTLCache()
+        self._client: Optional["OpenAI"] = None
+        self._windows: dict[str, _TPMWindow] = {}       # in-process fallback only
+        self._cache = _TTLCache()                       # in-process fallback only
+        self._budget = _DailyBudget()                   # in-process fallback only
         self.stats = LLMStats()
         self._available_models: Optional[set[str]] = None
         self._models_fetched_at: float = 0.0
         self._resolved_chain: Optional[list[str]] = None
+        # Shared state across worker processes (see config.redis_url comment).
+        # None until first use; resolved once, then cached (including the
+        # "unavailable" outcome) so a down Redis doesn't retry every call.
+        self._redis: Optional["aioredis.Redis"] = None
+        self._redis_checked: bool = False
 
     # -- infra ------------------------------------------------------
-    def _groq(self) -> Optional["Groq"]:
-        if self._client is None and Groq and settings.groq_api_key:
-            self._client = Groq(api_key=settings.groq_api_key)
+    async def _get_redis(self) -> Optional["aioredis.Redis"]:
+        """Lazily connect to Redis; None means 'use in-process fallback'."""
+        if self._redis_checked:
+            return self._redis
+        self._redis_checked = True
+        if not (aioredis and settings.redis_url):
+            return None
+        try:
+            client = aioredis.from_url(
+                settings.redis_url, decode_responses=True, socket_connect_timeout=3,
+            )
+            await client.ping()
+            self._redis = client
+            logger.info("llm_client: Redis connected — cache/budget/TPM shared across workers")
+        except Exception as exc:
+            logger.warning(
+                f"llm_client: Redis unavailable ({exc}) — falling back to in-process "
+                "state (correct only for a single worker process)"
+            )
+            self._redis = None
+        return self._redis
+
+    # -- shared cache (Redis, falls back to in-process) ---------------
+    async def _cache_get(self, key: str) -> Optional[Any]:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                raw = await r.get(f"llmcache:{key}")
+                return json.loads(raw) if raw else None
+            except Exception as exc:
+                logger.debug(f"llm_client: redis cache get failed ({exc}) — using in-process cache")
+        return self._cache.get(key)
+
+    async def _cache_put(self, key: str, value: Any, ttl: float) -> None:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                await r.setex(f"llmcache:{key}", max(1, int(ttl)), json.dumps(value))
+                return
+            except Exception as exc:
+                logger.debug(f"llm_client: redis cache put failed ({exc}) — using in-process cache")
+        self._cache.put(key, value, ttl)
+
+    # -- shared daily $ budget (Redis, falls back to in-process) ------
+    async def _budget_remaining(self, budget: float) -> float:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                raw = await r.get(f"llmbudget:{day}")
+                spent = float(raw) if raw else 0.0
+                return max(0.0, budget - spent)
+            except Exception as exc:
+                logger.debug(f"llm_client: redis budget read failed ({exc}) — using in-process budget")
+        return await self._budget.remaining(budget)
+
+    async def _budget_add(self, usd: float) -> None:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                key = f"llmbudget:{day}"
+                await r.incrbyfloat(key, usd)
+                await r.expire(key, 90_000)   # ~25h, safely covers UTC day rollover
+                return
+            except Exception as exc:
+                logger.debug(f"llm_client: redis budget write failed ({exc}) — using in-process budget")
+        await self._budget.add(usd)
+
+    # -- shared TPM window (Redis sorted set, falls back to in-process) --
+    async def _tpm_reserve(self, model: str, tokens: int, limit: int, max_wait: float) -> bool:
+        r = await self._get_redis()
+        if r is None:
+            return await self._window(model).reserve(tokens, limit, max_wait)
+
+        key = f"llmtpm:{model}"
+        deadline = time.monotonic() + max_wait
+        try:
+            while True:
+                now = time.time()
+                await r.zremrangebyscore(key, 0, now - 60)
+                members = await r.zrangebyscore(key, now - 60, now)
+                used = 0
+                for m in members:
+                    try:
+                        used += int(m.split(":", 1)[0])
+                    except (ValueError, IndexError):
+                        pass
+                if used + tokens <= limit:
+                    await r.zadd(key, {f"{tokens}:{uuid.uuid4().hex}": now})
+                    await r.expire(key, 90)
+                    return True
+                if time.monotonic() + 1.0 > deadline:
+                    return False
+                await asyncio.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
+        except Exception as exc:
+            logger.debug(f"llm_client: redis TPM reserve failed ({exc}) — using in-process window")
+            return await self._window(model).reserve(tokens, limit, max_wait)
+
+    def _openai(self) -> Optional["OpenAI"]:
+        if self._client is None and OpenAI and settings.openai_api_key:
+            self._client = OpenAI(api_key=settings.openai_api_key)
         return self._client
 
     @property
     def _configured_chain(self) -> list[str]:
-        chain = [settings.groq_model] + [
-            m.strip() for m in settings.groq_fallback_models.split(",") if m.strip()
+        chain = [settings.openai_model] + [
+            m.strip() for m in settings.openai_fallback_models.split(",") if m.strip()
         ]
         seen: set[str] = set()
         return [m for m in chain if not (m in seen or seen.add(m))]
 
     async def _fetch_available_models(self) -> Optional[set[str]]:
-        """Live model list from Groq's /models endpoint, cached for 1h.
-
-        Models get decommissioned on free tiers without notice; asking the
-        API is the only future-proof source of truth.
-        """
+        """Live model list from OpenAI's /models endpoint, cached for 1h."""
         now = time.monotonic()
         if self._available_models is not None and now - self._models_fetched_at < 3600:
             return self._available_models
-        client = self._groq()
+        client = self._openai()
         if client is None:
             return None
         try:
             resp = await asyncio.wait_for(asyncio.to_thread(client.models.list), timeout=10)
             ids = {
                 m.id for m in resp.data
-                if getattr(m, "active", True)
-                and not any(s in m.id.lower() for s in self._NON_CHAT)
+                if not any(s in m.id.lower() for s in self._NON_CHAT)
             }
             if ids:
                 self._available_models = ids
@@ -240,40 +414,26 @@ class LLMClient:
                 self._resolved_chain = None          # re-resolve against fresh list
                 return ids
         except Exception as exc:
-            logger.warning(f"llm_client: could not list Groq models ({exc}) — using configured chain")
+            logger.warning(f"llm_client: could not list OpenAI models ({exc}) — using configured chain")
         return self._available_models
 
     async def resolve_model_chain(self) -> list[str]:
-        """Configured chain filtered to models that actually exist right now,
-        padded with live models when everything configured is decommissioned."""
+        """Configured chain, filtered to models that actually exist (best-effort)."""
         if self._resolved_chain is not None:
             return self._resolved_chain
 
         configured = self._configured_chain
         available = await self._fetch_available_models()
         if not available:                            # can't verify — trust config
+            self._resolved_chain = configured
             return configured
 
         chain = [m for m in configured if m in available]
         dropped = [m for m in configured if m not in available]
         if dropped:
-            logger.warning(f"llm_client: dropping decommissioned model(s) {dropped}")
-
-        if len(chain) < 2:
-            # auto-pick fallbacks from what Groq actually serves, small-first
-            def _pref(mid: str) -> int:
-                m = mid.lower()
-                if "gpt-oss-20b" in m: return 0
-                if "gpt-oss" in m:     return 1
-                if "qwen" in m:        return 2
-                if "llama" in m:       return 3
-                return 4
-            for mid in sorted(available, key=_pref):
-                if mid not in chain:
-                    chain.append(mid)
-                if len(chain) >= 3:
-                    break
-            logger.info(f"llm_client: auto-resolved model chain → {chain}")
+            logger.warning(f"llm_client: model(s) not available on this account {dropped}")
+        if not chain:
+            chain = configured  # trust config over an incomplete/odd model list
 
         self._resolved_chain = chain
         return chain
@@ -283,14 +443,25 @@ class LLMClient:
 
     # -- public helpers ----------------------------------------------
     def fits_budget(self, *texts: str, completion_tokens: int = 0) -> bool:
-        """Can this payload ever fit under the per-request token ceiling?"""
+        """Can this payload ever fit under the self-imposed TPM ceiling?"""
         need = sum(estimate_tokens(t) for t in texts) + completion_tokens
-        return need <= settings.groq_tpm_limit
+        return need <= settings.openai_tpm_limit
 
     def budget_for_payload(self, fixed: str, completion_tokens: int) -> int:
         """Chars available for the variable part of a prompt."""
-        spare = settings.groq_tpm_limit - estimate_tokens(fixed) - completion_tokens
+        spare = settings.openai_tpm_limit - estimate_tokens(fixed) - completion_tokens
         return max(0, int(spare * 3.4 * 0.9))           # 10% safety margin
+
+    async def spend_today(self) -> float:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                raw = await r.get(f"llmbudget:{day}")
+                return float(raw) if raw else 0.0
+            except Exception as exc:
+                logger.debug(f"llm_client: redis spend_today read failed ({exc})")
+        return await self._budget.spent_today()
 
     # -- main entry ---------------------------------------------------
     async def chat_json(
@@ -309,46 +480,66 @@ class LLMClient:
         JSON-mode chat completion with budgeting, fallback and repair.
 
         Returns the parsed object (validated `schema` instance when given,
-        else dict/list), or None when every model in the chain failed.
+        else dict/list), or None when every model in the chain failed, the
+        payload doesn't fit budget, or the daily spend cap is hit.
         """
-        client = self._groq()
+        client = self._openai()
         if client is None:
-            logger.warning(f"[{label}] GROQ_API_KEY not configured — skipping LLM call")
+            logger.warning(f"[{label}] OPENAI_API_KEY not configured — skipping LLM call")
             return None
 
-        max_out = max_completion_tokens or settings.groq_max_tokens
-        tout = timeout or settings.groq_timeout_seconds
+        max_out = max_completion_tokens or settings.openai_max_tokens
+        tout = timeout or settings.openai_timeout_seconds
         prompt_tokens = estimate_tokens(system) + estimate_tokens(user)
 
         cache_key = ""
         if cache_ttl > 0:
             cache_key = hashlib.sha256(f"{system}|{user}".encode()).hexdigest()
-            hit = self._cache.get(cache_key)
+            hit = await self._cache_get(cache_key)
             if hit is not None:
-                self.stats.cache_hits += 1
-                logger.debug(f"[{label}] cache hit")
-                return hit
+                if schema is not None and isinstance(hit, dict):
+                    try:
+                        hit = schema.model_validate(hit)
+                    except ValidationError:
+                        hit = None
+                if hit is not None:
+                    self.stats.cache_hits += 1
+                    logger.debug(f"[{label}] cache hit — $0 spent")
+                    return hit
 
-        if prompt_tokens + max_out > settings.groq_tpm_limit:
+        if prompt_tokens + max_out > settings.openai_tpm_limit:
             logger.warning(
                 f"[{label}] payload ~{prompt_tokens}+{max_out} tokens exceeds "
-                f"TPM limit {settings.groq_tpm_limit} — caller must chunk; skipping"
+                f"self-imposed TPM ceiling {settings.openai_tpm_limit} — caller must chunk; skipping"
+            )
+            return None
+
+        # Hard daily $ cap — estimate worst-case cost of this call up front
+        # (using the primary model's pricing) before spending anything.
+        est_cost = _estimate_cost_usd(settings.openai_model, prompt_tokens, max_out)
+        remaining = await self._budget_remaining(settings.openai_daily_usd_budget)
+        if est_cost > remaining:
+            self.stats.budget_blocked += 1
+            logger.warning(
+                f"[{label}] daily OpenAI budget (${settings.openai_daily_usd_budget:.2f}) "
+                f"would be exceeded (${remaining:.4f} left, call ~${est_cost:.4f}) — skipping"
             )
             return None
 
         chain = await self.resolve_model_chain()
         for i, model in enumerate(chain):
-            ok = await self._window(model).reserve(
+            ok = await self._tpm_reserve(
+                model,
                 prompt_tokens + max_out,
-                settings.groq_tpm_limit,
-                max_wait=settings.groq_tpm_max_wait_seconds,
+                settings.openai_tpm_limit,
+                settings.openai_tpm_max_wait_seconds,
             )
             if not ok:
                 logger.warning(f"[{label}] TPM window full for {model} — trying next model")
                 continue
 
-            raw = await self._request(client, model, system, user, max_out,
-                                      temperature, tout, label)
+            raw, usage = await self._request(client, model, system, user, max_out,
+                                              temperature, tout, label)
             if raw is None:
                 self.stats.fallbacks += 1
                 continue
@@ -367,44 +558,42 @@ class LLMClient:
                     self.stats.fallbacks += 1
                     continue
 
+            # Bill against the daily budget using REAL usage when the API
+            # returned it, falling back to the pre-call estimate otherwise.
+            in_tok, out_tok = usage if usage else (prompt_tokens, max_out)
+            actual_cost = _estimate_cost_usd(model, in_tok, out_tok)
+            await self._budget_add(actual_cost)
+
             self.stats.calls += 1
-            self.stats.tokens_sent += prompt_tokens
+            self.stats.tokens_sent += in_tok + out_tok
+            self.stats.estimated_usd += actual_cost
             if i > 0:
                 logger.info(f"[{label}] served by fallback model {model}")
             if cache_key:
-                self._cache.put(cache_key, parsed, cache_ttl)
+                # Always cache the dict form (not the pydantic instance) so
+                # a Redis-backed cache hit can be re-validated against
+                # `schema` uniformly with the in-process fallback path.
+                store_val = parsed.model_dump() if isinstance(parsed, BaseModel) else parsed
+                await self._cache_put(cache_key, store_val, cache_ttl)
             return parsed
 
         self.stats.failures += 1
         logger.error(f"[{label}] all models failed: {chain}")
         return None
 
-    @staticmethod
-    def _is_reasoning_model(model: str) -> bool:
-        """Reasoning models (gpt-oss, qwen3, deepseek-r1) spend completion
-        tokens thinking before emitting JSON — they need extra headroom and
-        low reasoning effort, or strict json_object mode 400s with
-        'max completion tokens reached before generating a valid document'."""
-        m = model.lower()
-        return "gpt-oss" in m or "qwen3" in m or "r1" in m
-
     async def _request(
         self, client, model, system, user, max_out, temperature, tout, label,
-    ) -> Optional[str]:
+    ) -> tuple[Optional[str], Optional[tuple[int, int]]]:
         kwargs = dict(
             model=model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=settings.groq_temperature if temperature is None else temperature,
+            temperature=settings.openai_temperature if temperature is None else temperature,
             max_tokens=max_out,
             response_format={"type": "json_object"},
         )
-        if self._is_reasoning_model(model):
-            # keep thinking short and give the JSON room to finish
-            kwargs["reasoning_effort"] = "low"
-            kwargs["max_tokens"] = max(max_out, settings.groq_min_reasoning_tokens)
 
         for attempt in ("json_mode", "plain"):
             try:
@@ -412,30 +601,28 @@ class LLMClient:
                     asyncio.to_thread(client.chat.completions.create, **kwargs),
                     timeout=tout,
                 )
-                return resp.choices[0].message.content
+                usage = None
+                if getattr(resp, "usage", None):
+                    usage = (resp.usage.prompt_tokens, resp.usage.completion_tokens)
+                return resp.choices[0].message.content, usage
             except asyncio.TimeoutError:
                 logger.warning(f"[{label}] {model} timed out after {tout}s")
-                return None
-            except TypeError:
-                # SDK/model rejects reasoning_effort — retry without it
-                kwargs.pop("reasoning_effort", None)
-                continue
+                return None, None
             except Exception as exc:
                 msg = str(exc)
-                if "json_validate_failed" in msg and attempt == "json_mode":
-                    # Groq's strict JSON mode discards the whole completion on a
-                    # formatting slip. Retry unconstrained — extract_json() can
-                    # repair fences/trailing junk that strict mode cannot.
+                if "json" in msg.lower() and attempt == "json_mode":
+                    # Some models/prompts reject strict JSON mode outright.
+                    # Retry unconstrained — extract_json() can repair
+                    # fences/trailing junk that strict mode cannot.
                     logger.warning(f"[{label}] {model} strict JSON mode failed — retrying without response_format")
                     kwargs.pop("response_format", None)
-                    kwargs["max_tokens"] = max(kwargs["max_tokens"], settings.groq_min_reasoning_tokens)
                     continue
-                if "413" in msg or "rate_limit" in msg or "429" in msg:
-                    logger.warning(f"[{label}] {model} rate/size limited — falling back")
+                if "rate_limit" in msg.lower() or "429" in msg or "insufficient_quota" in msg.lower():
+                    logger.warning(f"[{label}] {model} rate/quota limited — falling back")
                 else:
                     logger.error(f"[{label}] {model} error: {exc}")
-                return None
-        return None
+                return None, None
+        return None, None
 
 
 # module-level singleton

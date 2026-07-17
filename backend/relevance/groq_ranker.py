@@ -589,7 +589,7 @@ _COMPLETION_TOKENS_MIN       = 600
 
 
 def _completion_budget(n_events: int) -> int:
-    return min(settings.groq_max_tokens,
+    return min(settings.openai_max_tokens,
                max(_COMPLETION_TOKENS_MIN, n_events * _COMPLETION_TOKENS_PER_EVENT))
 
 
@@ -611,7 +611,7 @@ def _chunk_events_by_budget(events_dicts: list, system: str, profile_dict: dict)
         ev_tokens = estimate_tokens(json.dumps(ev, indent=2))
         # A single oversized event (huge serpapi payload) must still fit:
         # slim its enrichment bulk rather than guarantee a 413.
-        if fixed_tokens + ev_tokens + _completion_budget(1) > settings.groq_tpm_limit * 0.9:
+        if fixed_tokens + ev_tokens + _completion_budget(1) > settings.openai_tpm_limit * 0.9:
             ev = dict(ev)
             ev.pop("serpapi_results", None)
             ev["serpapi_text"] = (ev.get("serpapi_text") or "")[:600]
@@ -620,7 +620,7 @@ def _chunk_events_by_budget(events_dicts: list, system: str, profile_dict: dict)
         # Would adding this event still fit (incl. per-event completion budget)?
         prospective = fixed_tokens + current_tokens + ev_tokens \
             + _completion_budget(len(current) + 1)
-        if current and prospective > settings.groq_tpm_limit * 0.9:
+        if current and prospective > settings.openai_tpm_limit * 0.9:
             chunks.append(current)
             current, current_tokens = [], 0
         current.append(ev)
@@ -760,7 +760,11 @@ async def rank_with_groq(
                 label=f"ranker[{ci + 1}/{len(chunks)}]",
                 schema=GroqRankingResponse,
                 max_completion_tokens=_completion_budget(len(chunk)),
-                timeout=settings.groq_timeout_seconds,
+                timeout=settings.openai_timeout_seconds,
+                # Same ICP profile + same candidate events (e.g. a user
+                # re-running or refreshing a search) reuses the ranking
+                # instead of re-billing OpenAI for identical work.
+                cache_ttl=600,
             )
             if parsed is None:
                 logger.warning(f"Ranker chunk {ci + 1}/{len(chunks)} failed — "
@@ -803,6 +807,7 @@ async def rank_with_groq(
                     schema=ValidationResponse,
                     max_completion_tokens=val_completion,
                     timeout=20,           # hard cap — never 45s of dead time
+                    cache_ttl=600,        # same ranker output → same validation, don't re-bill
                 )
             else:
                 logger.warning("Validator payload over TPM budget — skipping "
