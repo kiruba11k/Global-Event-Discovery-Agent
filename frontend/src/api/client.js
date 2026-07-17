@@ -54,10 +54,18 @@ export const api = {
     while (Date.now() - start < timeoutMs) {
       const s = await request(`/search/status/${jobId}`)
       if (s.status === 'done') return s.result
-      if (s.status === 'error') throw new Error(s.error || 'Search failed')
+      // A failed *job* is not a network/server-down failure — the HTTP
+      // request to check status succeeded fine, the search pipeline
+      // itself errored (e.g. a backend bug, OpenAI outage). Give it a
+      // 2xx-ish status so App.jsx's classifyError() treats it as a
+      // normal toast-worthy failure, not the fatal "can't reach the
+      // server" full-page error — those are different problems and
+      // deserve different messaging. See apiError() above for the
+      // status convention this piggybacks on.
+      if (s.status === 'error') throw apiError(s.error || 'Search failed - please try again', 200)
       await new Promise((r) => setTimeout(r, intervalMs))
     }
-    throw new Error('Search is taking longer than expected - please try again')
+    throw apiError('Search is taking longer than expected - please try again', 200)
   },
 
   // ── Company profile ───────────────────────────────────
