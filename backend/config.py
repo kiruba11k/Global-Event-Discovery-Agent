@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # Set this (e.g. redis://localhost:6379/0, or a managed Redis URL)
     # before scaling past one worker.
     redis_url: str = ""
+    # Number of background workers consuming POST /api/search jobs from the
+    # Redis queue (see queueing/search_queue.py). Only relevant when
+    # redis_url is set — with no Redis, search runs inline per-request
+    # regardless of this value. Bound by openai_tpm_limit/db pool size
+    # more than raw worker count — more workers just means more jobs
+    # racing those same shared ceilings concurrently.
+    search_queue_workers: int = 3
 
     # ── OpenAI LLM ─────────────────────────────────
     # Paid API — token cost is real money, so every knob here exists to

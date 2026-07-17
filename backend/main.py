@@ -1,6 +1,7 @@
 """
 backend/main.py  —  LeadStrategus Event Intelligence Agent
 """
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,8 @@ from db.database import init_db
 from api.routes_events import router as events_router
 
 settings = get_settings()
+
+_worker_tasks: list = []
 
 
 @asynccontextmanager
@@ -37,7 +40,29 @@ async def lifespan(app: FastAPI):
         await load_from_db(_SessionLocal)
     except Exception as _e:
         logger.warning(f"source_health restore skipped: {_e}")
+
+    # POST /api/search job queue workers — no-ops (worker_loop returns
+    # immediately) unless REDIS_URL is set; see queueing/search_queue.py.
+    try:
+        from queueing.search_queue import worker_loop
+        from api.routes_events import _process_search_job
+        for i in range(max(1, settings.search_queue_workers)):
+            _worker_tasks.append(
+                asyncio.create_task(worker_loop(f"search-{i}", _process_search_job))
+            )
+        logger.info(f"Search queue: {len(_worker_tasks)} worker(s) started")
+    except Exception as _e:
+        logger.warning(f"Search queue workers not started: {_e}")
+
     yield
+
+    for t in _worker_tasks:
+        t.cancel()
+    for t in _worker_tasks:
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
     logger.info("Event Intelligence Agent — shutting down")
 
 

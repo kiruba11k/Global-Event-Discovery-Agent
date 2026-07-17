@@ -32,11 +32,33 @@ async function request(path, options = {}) {
 
 export const api = {
   // ── Event search ─────────────────────────────────────
+  // POST /api/search is now async: it either returns
+  // {status:'queued', job_id} (search queue is active — REDIS_URL is
+  // set on the backend) or {status:'done', job_id:null, result}
+  // (no queue configured, ran inline same as before this existed).
+  // Also throws a 429 (via request()'s apiError) if this IP already
+  // used its one search for the day.
   search: (payload) =>
     request('/search', {
       method: 'POST',
       body:   JSON.stringify(payload),
     }),
+
+  getSearchStatus: (jobId) => request(`/search/status/${jobId}`),
+
+  // Polls GET /api/search/status/{job_id} until the job finishes.
+  // Resolves with the SearchResponse-shaped result dict, or rejects
+  // with an Error (job failed, or polling timed out).
+  pollSearchStatus: async (jobId, { intervalMs = 1500, timeoutMs = 120000 } = {}) => {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      const s = await request(`/search/status/${jobId}`)
+      if (s.status === 'done') return s.result
+      if (s.status === 'error') throw new Error(s.error || 'Search failed')
+      await new Promise((r) => setTimeout(r, intervalMs))
+    }
+    throw new Error('Search is taking longer than expected - please try again')
+  },
 
   // ── Company profile ───────────────────────────────────
   saveCompanyProfile: (formData) =>
