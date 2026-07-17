@@ -37,6 +37,7 @@ import hashlib
 import json
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional, Type
 
@@ -51,6 +52,11 @@ try:
     from openai import OpenAI
 except ImportError:                                     # pragma: no cover
     OpenAI = None
+
+try:
+    import redis.asyncio as aioredis
+except ImportError:                                     # pragma: no cover
+    aioredis = None
 
 
 # ── Token estimation ───────────────────────────────────────────────
@@ -262,15 +268,119 @@ class LLMClient:
 
     def __init__(self) -> None:
         self._client: Optional["OpenAI"] = None
-        self._windows: dict[str, _TPMWindow] = {}
-        self._cache = _TTLCache()
-        self._budget = _DailyBudget()
+        self._windows: dict[str, _TPMWindow] = {}       # in-process fallback only
+        self._cache = _TTLCache()                       # in-process fallback only
+        self._budget = _DailyBudget()                   # in-process fallback only
         self.stats = LLMStats()
         self._available_models: Optional[set[str]] = None
         self._models_fetched_at: float = 0.0
         self._resolved_chain: Optional[list[str]] = None
+        # Shared state across worker processes (see config.redis_url comment).
+        # None until first use; resolved once, then cached (including the
+        # "unavailable" outcome) so a down Redis doesn't retry every call.
+        self._redis: Optional["aioredis.Redis"] = None
+        self._redis_checked: bool = False
 
     # -- infra ------------------------------------------------------
+    async def _get_redis(self) -> Optional["aioredis.Redis"]:
+        """Lazily connect to Redis; None means 'use in-process fallback'."""
+        if self._redis_checked:
+            return self._redis
+        self._redis_checked = True
+        if not (aioredis and settings.redis_url):
+            return None
+        try:
+            client = aioredis.from_url(
+                settings.redis_url, decode_responses=True, socket_connect_timeout=3,
+            )
+            await client.ping()
+            self._redis = client
+            logger.info("llm_client: Redis connected — cache/budget/TPM shared across workers")
+        except Exception as exc:
+            logger.warning(
+                f"llm_client: Redis unavailable ({exc}) — falling back to in-process "
+                "state (correct only for a single worker process)"
+            )
+            self._redis = None
+        return self._redis
+
+    # -- shared cache (Redis, falls back to in-process) ---------------
+    async def _cache_get(self, key: str) -> Optional[Any]:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                raw = await r.get(f"llmcache:{key}")
+                return json.loads(raw) if raw else None
+            except Exception as exc:
+                logger.debug(f"llm_client: redis cache get failed ({exc}) — using in-process cache")
+        return self._cache.get(key)
+
+    async def _cache_put(self, key: str, value: Any, ttl: float) -> None:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                await r.setex(f"llmcache:{key}", max(1, int(ttl)), json.dumps(value))
+                return
+            except Exception as exc:
+                logger.debug(f"llm_client: redis cache put failed ({exc}) — using in-process cache")
+        self._cache.put(key, value, ttl)
+
+    # -- shared daily $ budget (Redis, falls back to in-process) ------
+    async def _budget_remaining(self, budget: float) -> float:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                raw = await r.get(f"llmbudget:{day}")
+                spent = float(raw) if raw else 0.0
+                return max(0.0, budget - spent)
+            except Exception as exc:
+                logger.debug(f"llm_client: redis budget read failed ({exc}) — using in-process budget")
+        return await self._budget.remaining(budget)
+
+    async def _budget_add(self, usd: float) -> None:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                key = f"llmbudget:{day}"
+                await r.incrbyfloat(key, usd)
+                await r.expire(key, 90_000)   # ~25h, safely covers UTC day rollover
+                return
+            except Exception as exc:
+                logger.debug(f"llm_client: redis budget write failed ({exc}) — using in-process budget")
+        await self._budget.add(usd)
+
+    # -- shared TPM window (Redis sorted set, falls back to in-process) --
+    async def _tpm_reserve(self, model: str, tokens: int, limit: int, max_wait: float) -> bool:
+        r = await self._get_redis()
+        if r is None:
+            return await self._window(model).reserve(tokens, limit, max_wait)
+
+        key = f"llmtpm:{model}"
+        deadline = time.monotonic() + max_wait
+        try:
+            while True:
+                now = time.time()
+                await r.zremrangebyscore(key, 0, now - 60)
+                members = await r.zrangebyscore(key, now - 60, now)
+                used = 0
+                for m in members:
+                    try:
+                        used += int(m.split(":", 1)[0])
+                    except (ValueError, IndexError):
+                        pass
+                if used + tokens <= limit:
+                    await r.zadd(key, {f"{tokens}:{uuid.uuid4().hex}": now})
+                    await r.expire(key, 90)
+                    return True
+                if time.monotonic() + 1.0 > deadline:
+                    return False
+                await asyncio.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
+        except Exception as exc:
+            logger.debug(f"llm_client: redis TPM reserve failed ({exc}) — using in-process window")
+            return await self._window(model).reserve(tokens, limit, max_wait)
+
     def _openai(self) -> Optional["OpenAI"]:
         if self._client is None and OpenAI and settings.openai_api_key:
             self._client = OpenAI(api_key=settings.openai_api_key)
@@ -343,6 +453,14 @@ class LLMClient:
         return max(0, int(spare * 3.4 * 0.9))           # 10% safety margin
 
     async def spend_today(self) -> float:
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                day = time.strftime("%Y-%m-%d", time.gmtime())
+                raw = await r.get(f"llmbudget:{day}")
+                return float(raw) if raw else 0.0
+            except Exception as exc:
+                logger.debug(f"llm_client: redis spend_today read failed ({exc})")
         return await self._budget.spent_today()
 
     # -- main entry ---------------------------------------------------
@@ -377,11 +495,17 @@ class LLMClient:
         cache_key = ""
         if cache_ttl > 0:
             cache_key = hashlib.sha256(f"{system}|{user}".encode()).hexdigest()
-            hit = self._cache.get(cache_key)
+            hit = await self._cache_get(cache_key)
             if hit is not None:
-                self.stats.cache_hits += 1
-                logger.debug(f"[{label}] cache hit — $0 spent")
-                return hit
+                if schema is not None and isinstance(hit, dict):
+                    try:
+                        hit = schema.model_validate(hit)
+                    except ValidationError:
+                        hit = None
+                if hit is not None:
+                    self.stats.cache_hits += 1
+                    logger.debug(f"[{label}] cache hit — $0 spent")
+                    return hit
 
         if prompt_tokens + max_out > settings.openai_tpm_limit:
             logger.warning(
@@ -393,7 +517,7 @@ class LLMClient:
         # Hard daily $ cap — estimate worst-case cost of this call up front
         # (using the primary model's pricing) before spending anything.
         est_cost = _estimate_cost_usd(settings.openai_model, prompt_tokens, max_out)
-        remaining = await self._budget.remaining(settings.openai_daily_usd_budget)
+        remaining = await self._budget_remaining(settings.openai_daily_usd_budget)
         if est_cost > remaining:
             self.stats.budget_blocked += 1
             logger.warning(
@@ -404,10 +528,11 @@ class LLMClient:
 
         chain = await self.resolve_model_chain()
         for i, model in enumerate(chain):
-            ok = await self._window(model).reserve(
+            ok = await self._tpm_reserve(
+                model,
                 prompt_tokens + max_out,
                 settings.openai_tpm_limit,
-                max_wait=settings.openai_tpm_max_wait_seconds,
+                settings.openai_tpm_max_wait_seconds,
             )
             if not ok:
                 logger.warning(f"[{label}] TPM window full for {model} — trying next model")
@@ -437,7 +562,7 @@ class LLMClient:
             # returned it, falling back to the pre-call estimate otherwise.
             in_tok, out_tok = usage if usage else (prompt_tokens, max_out)
             actual_cost = _estimate_cost_usd(model, in_tok, out_tok)
-            await self._budget.add(actual_cost)
+            await self._budget_add(actual_cost)
 
             self.stats.calls += 1
             self.stats.tokens_sent += in_tok + out_tok
@@ -445,7 +570,11 @@ class LLMClient:
             if i > 0:
                 logger.info(f"[{label}] served by fallback model {model}")
             if cache_key:
-                self._cache.put(cache_key, parsed, cache_ttl)
+                # Always cache the dict form (not the pydantic instance) so
+                # a Redis-backed cache hit can be re-validated against
+                # `schema` uniformly with the in-process fallback path.
+                store_val = parsed.model_dump() if isinstance(parsed, BaseModel) else parsed
+                await self._cache_put(cache_key, store_val, cache_ttl)
             return parsed
 
         self.stats.failures += 1

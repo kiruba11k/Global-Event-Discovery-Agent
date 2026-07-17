@@ -19,6 +19,9 @@ python-dotenv
 # ── LLM ──────────────────────────────────────────────────────────────
 openai
 
+# ── Shared cache / rate-limit state across worker processes (optional) ─
+redis
+
 # ── Embeddings (disabled on free tier by default — uses >512 MB RAM) ─
 faiss-cpu
 sentence-transformers

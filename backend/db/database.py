@@ -80,7 +80,12 @@ _engine_kw: dict = {
 if IS_SQLITE:
     _engine_kw["connect_args"] = {"check_same_thread": False}
 if IS_POSTGRES:
-    # Neon: limit pool size to avoid connection exhaustion on free tier
+    # Neon: limit pool size to avoid connection exhaustion on free tier.
+    # NOTE: each Uvicorn worker process (see Procfile's WEB_CONCURRENCY)
+    # gets its OWN pool of this size — total connections against Neon is
+    # pool_size × worker_count. Raising WEB_CONCURRENCY without checking
+    # this against Neon's actual connection limit is how you get
+    # "too many connections" errors under load.
     _engine_kw["pool_size"]    = 3
     _engine_kw["max_overflow"] = 2
     _engine_kw["pool_timeout"] = 30

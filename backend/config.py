@@ -12,6 +12,18 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./events.db"
 
+    # ── Shared cache / rate-limit state (Redis) ───
+    # Optional. When empty, relevance/llm_client.py falls back to
+    # in-process memory automatically — fine for a single worker, but
+    # once you run multiple Uvicorn workers or instances (needed for
+    # 1k-concurrent-style load) the LLM response cache, the daily $
+    # budget counter, and the TPM throttle window all need to be SHARED
+    # across processes, or each worker enforces its own independent
+    # budget and the real spend cap becomes (budget × worker count).
+    # Set this (e.g. redis://localhost:6379/0, or a managed Redis URL)
+    # before scaling past one worker.
+    redis_url: str = ""
+
     # ── OpenAI LLM ─────────────────────────────────
     # Paid API — token cost is real money, so every knob here exists to
     # cap spend, not just to configure behaviour. See llm_client.py for
@@ -108,7 +120,7 @@ class Settings(BaseSettings):
     rule_weight: float = 0.35
     go_threshold: float = 0.68
     consider_threshold: float = 0.42
-    top_k_for_llm: int = 20
+    top_k_for_llm: int = 15   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
 
     # ── Scheduler ────────────────────────────────
     refresh_interval_hours: int = 24
