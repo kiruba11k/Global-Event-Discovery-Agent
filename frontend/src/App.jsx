@@ -282,7 +282,12 @@ export default function App() {
     } catch (err) {
       const kind = classifyError(err)
       if (kind) {
-        setFatalError({ kind, detail: err.message })
+        // Defense in depth: err.message is whatever the backend put in
+        // its error response. It shouldn't ever contain internals (SQL,
+        // stack traces, secrets) — but only show it at all in dev, so a
+        // future backend regression can't put raw exception text in
+        // front of a real user's screen.
+        setFatalError({ kind, detail: import.meta.env.DEV ? err.message : '' })
         goTo('error')
       } else if (err.status === 429) {
         toast.error(err.message, { icon: '⏳', duration: 8000 })

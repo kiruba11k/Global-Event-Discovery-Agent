@@ -130,7 +130,14 @@ async def worker_loop(worker_name: str, process_fn: ProcessFn) -> None:
             job["status"] = "done"
             job["result"] = result
         except Exception as exc:
+            # Full exception (including raw SQL/params for DB errors) goes
+            # to the server log only. GET /api/search/status/{job_id} is a
+            # public, unauthenticated endpoint — job["error"] is returned
+            # verbatim in that JSON response and was rendering straight
+            # into the frontend's error page, i.e. leaking table/column
+            # names and query structure to any end user whose search hit
+            # a backend bug. Never put str(exc) where a client can read it.
             logger.error(f"search_queue[{worker_name}]: job {job_id} failed: {exc}")
             job["status"] = "error"
-            job["error"] = str(exc)
+            job["error"] = "Search failed due to a server error. Please try again."
         await _set_job(job_id, job)
