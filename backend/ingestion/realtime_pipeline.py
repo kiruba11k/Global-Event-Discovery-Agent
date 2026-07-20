@@ -22,10 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from db.crud import batch_upsert_events, _expand_industry_terms   # ← fixed
 from ingestion.icp_query_builder import build_queries
-from ingestion.serpapi_events import run_serpapi_queries
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
 from ingestion.predicthq_realtime import run_predicthq_queries
+from ingestion.ita_trade_events import run_ita_queries
 from ingestion.source_health import source_health
 from models.event import EventORM
 from models.icp_profile import ICPProfile
@@ -92,11 +92,12 @@ async def fetch_realtime_candidates(
 
     # ── Step 2: API key status + circuit-breaker health ────────────
     phq_key = getattr(settings, "predicthq_key", "") or ""
+    ita_key = getattr(settings, "ita_api_key", "") or ""
     key_ok = {
-        "SerpAPI":      bool(settings.serpapi_key),
         "Ticketmaster": bool(settings.ticketmaster_key),
         "Eventbrite":   bool(settings.eventbrite_token),
         "PredictHQ":    bool(phq_key),
+        "ITA":          bool(ita_key),
     }
     # Skip sources whose circuit is open (401/402/404/429/… recently) —
     # don't burn wall-clock or quota on sources known to be down.
@@ -114,54 +115,48 @@ async def fetch_realtime_candidates(
         f"diff={diff_s} clients={client_r} | "
         f"active={active} | missing_keys={missing} | "
         f"keywords={query_bundle.keywords_used[:3]} | "
-        f"serp={len(query_bundle.serpapi)} "
         f"tm={len(query_bundle.ticketmaster)} "
         f"eb={len(query_bundle.eventbrite)} "
-        f"phq={len(query_bundle.predicthq)}"
+        f"phq={len(query_bundle.predicthq)} "
+        f"ita={len(query_bundle.ita)}"
     )
 
     # ── Step 3: Fire all APIs in parallel, each isolated ──────────
-    # DB-only mode: all live/paid API sources disabled — events come
-    # exclusively from the Neon `events` table (cleaned EventsEye + AUMA
-    # dataset). Re-enable by uncommenting the assignments below.
-    # serp_coro = (
-    #     run_serpapi_queries(
-    #         query_bundle.serpapi, settings.serpapi_key, date_from, date_to
-    #     ) if api_ok["SerpAPI"] and query_bundle.serpapi else _noop()
-    # )
-    # tm_coro = (
-    #     run_ticketmaster_queries(
-    #         query_bundle.ticketmaster, settings.ticketmaster_key, date_from, date_to
-    #     ) if api_ok["Ticketmaster"] and query_bundle.ticketmaster else _noop()
-    # )
-    # eb_coro = (
-    #     run_eventbrite_queries(
-    #         query_bundle.eventbrite, settings.eventbrite_token, date_from, date_to
-    #     ) if api_ok["Eventbrite"] and query_bundle.eventbrite else _noop()
-    # )
-    # phq_coro = (
-    #     run_predicthq_queries(
-    #         query_bundle.predicthq, phq_key, date_from, date_to
-    #     ) if api_ok["PredictHQ"] and query_bundle.predicthq else _noop()
-    # )
-    serp_coro = _noop()
-    tm_coro   = _noop()
-    eb_coro   = _noop()
-    phq_coro  = _noop()
+    # SerpAPI is intentionally NOT a search source here — it's reserved
+    # for scoped attendee-count enrichment on the final shown events
+    # (see enrichment/serp_enricher.py, called from routes_events.py).
+    # Eventbrite stays off pending a working token; Ticketmaster, PredictHQ
+    # and ITA (data.trade.gov) are live search sources.
+    tm_coro = (
+        run_ticketmaster_queries(
+            query_bundle.ticketmaster, settings.ticketmaster_key, date_from, date_to
+        ) if api_ok["Ticketmaster"] and query_bundle.ticketmaster else _noop()
+    )
+    eb_coro = _noop()
+    phq_coro = (
+        run_predicthq_queries(
+            query_bundle.predicthq, phq_key, date_from, date_to
+        ) if api_ok["PredictHQ"] and query_bundle.predicthq else _noop()
+    )
+    ita_coro = (
+        run_ita_queries(
+            query_bundle.ita, ita_key, date_from, date_to
+        ) if api_ok["ITA"] and query_bundle.ita else _noop()
+    )
 
-    serp_evs, tm_evs, eb_evs, phq_evs = await asyncio.gather(
-        _safe_run(serp_coro, "SerpAPI"),
-        _safe_run(tm_coro,   "Ticketmaster"),
-        _safe_run(eb_coro,   "Eventbrite"),
-        _safe_run(phq_coro,  "PredictHQ"),
+    tm_evs, eb_evs, phq_evs, ita_evs = await asyncio.gather(
+        _safe_run(tm_coro,  "Ticketmaster"),
+        _safe_run(eb_coro,  "Eventbrite"),
+        _safe_run(phq_coro, "PredictHQ"),
+        _safe_run(ita_coro, "ITA"),
     )
 
     # Per-source log
     for src, evs in [
-        ("SerpAPI",      serp_evs),
         ("Ticketmaster", tm_evs),
         ("Eventbrite",   eb_evs),
         ("PredictHQ",    phq_evs),
+        ("ITA",          ita_evs),
     ]:
         if evs:
             logger.info(f"  ✓ {src}: {len(evs)} events")
@@ -217,7 +212,7 @@ async def fetch_realtime_candidates(
     # Stage 1: hash-based dedup (existing)
     all_raw: list[dict] = []
     seen_hashes: set[str] = set()
-    for evs in [serp_evs, tm_evs, eb_evs, phq_evs]:
+    for evs in [tm_evs, eb_evs, phq_evs, ita_evs]:
         for ev in evs:
             dh = ev.get("dedup_hash") if isinstance(ev, dict) else getattr(ev, "dedup_hash", "")
             if dh and dh not in seen_hashes:
@@ -253,8 +248,8 @@ async def fetch_realtime_candidates(
 
     logger.info(
         f"Real-time: {len(new_events)} unique events "
-        f"(serp={len(serp_evs)} tm={len(tm_evs)} "
-        f"eb={len(eb_evs)} phq={len(phq_evs)})"
+        f"(tm={len(tm_evs)} eb={len(eb_evs)} "
+        f"phq={len(phq_evs)} ita={len(ita_evs)})"
     )
 
     # ── Step 5: Upsert to DB ───────────────────────────────────────
@@ -351,6 +346,19 @@ async def fetch_realtime_candidates(
     # _get_event_text), so nothing regresses. The only real enrichment
     # now happens once, on the final 6 events actually shown to the
     # user (api/routes_events.py) — see enrichment/serp_enricher.py.
+
+    # ── Step 7: Vectorize any newly-ingested candidates ─────────────
+    # Bounded, best-effort — embeds only rows with embedding IS NULL,
+    # capped by settings.pgvector_embed_batch. No-ops entirely when
+    # pgvector isn't configured (see pgvector_store.is_active()).
+    if new_events:
+        try:
+            from relevance.pgvector_store import embed_missing
+            embedded = await embed_missing(db, db_candidates)
+            if embedded:
+                logger.info(f"pgvector: embedded {embedded} new candidate(s)")
+        except Exception as exc:
+            logger.debug(f"pgvector: embed_missing skipped ({exc})")
 
     logger.info(
         f"Pipeline complete: {len(db_candidates)} candidates for scoring | "

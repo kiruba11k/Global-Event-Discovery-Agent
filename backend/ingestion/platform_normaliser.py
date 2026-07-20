@@ -106,6 +106,7 @@ def _normalise_platform_label(raw: str) -> str:
     if "eventseye" in pl or pl == "csv_upload": return "EventsEye"
     if "ticketmaster"  in pl: return "Ticketmaster"
     if "predicthq"     in pl: return "PredictHQ"
+    if pl == "ita" or "ita trade" in pl or "trade.gov" in pl: return "ITA"
     if "eventbrite"    in pl: return "Eventbrite"
     if "seed"          in pl: return "Seed"
     if "techcrunch"    in pl: return "TechCrunch"
@@ -385,6 +386,42 @@ def _from_seed(raw: dict) -> dict:
     }
 
 
+def _from_ita(raw: dict) -> dict:
+    """
+    ITA Trade Events API (data.trade.gov).
+    ita_trade_events.py's _parse_event() already produces the flattened
+    28-column shape, so this mostly passes fields through with cleanup.
+    """
+    name    = str(raw.get("name", "") or "")
+    src_url = str(raw.get("source_url", "") or "")
+    reg_url = str(raw.get("registration_url", "") or "")
+    clean_src = src_url if not _is_bad_url(src_url) else ""
+    clean_reg = reg_url if not _is_bad_url(reg_url) else ""
+
+    return {
+        "source_platform":    "ITA",
+        "source_url":         clean_src,
+        "name":               name,
+        "description":        str(raw.get("description", "") or ""),
+        "category":           str(raw.get("category", "") or "conference"),
+        "start_date":         _iso_date(raw.get("start_date", "")),
+        "end_date":           _iso_date(raw.get("end_date", "") or raw.get("start_date", "")),
+        "venue_name":         str(raw.get("venue_name", "") or ""),
+        "city":               str(raw.get("city", "") or ""),
+        "country":            str(raw.get("country", "") or ""),
+        "industry_tags":      str(raw.get("industry_tags", "") or ""),
+        "audience_personas":  "",       # ITA doesn't provide buyer personas
+        "est_attendees":      int(raw.get("est_attendees", 0) or 0),
+        "price_description":  str(raw.get("price_description", "") or ""),
+        "registration_url":   clean_reg,
+        "website":            str(raw.get("website", "") or clean_src),
+        "sponsors":           "",
+        "speakers_url":       "",
+        "agenda_url":         "",
+        "confidence_score":   float(raw.get("confidence_score", 0.7) or 0.7),
+    }
+
+
 def _from_generic(raw: dict, platform: str) -> dict:
     """Fallback for TechCrunch, Wikipedia, and any future source."""
     name    = str(raw.get("name", "") or "")
@@ -452,6 +489,8 @@ def normalise(raw: dict, platform: str = "") -> dict:
         data = _from_eventbrite(raw)
     elif platform_norm == "Seed":
         data = _from_seed(raw)
+    elif platform_norm == "ITA":
+        data = _from_ita(raw)
     else:
         data = _from_generic(raw, platform)
 

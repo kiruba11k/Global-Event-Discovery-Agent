@@ -848,14 +848,20 @@ RULES:
 
 
 async def enrich_events_batch(
-    events:      list,
-    serpapi_key: str,
-    groq_client: object = None,   # AsyncGroq client for post-validation
-    max_enrich:  int = 10,
+    events:          list,
+    serpapi_key:     str,
+    groq_client:     object = None,   # AsyncGroq client for post-validation
+    max_enrich:      int = 10,
+    attendees_only:  bool = False,    # scope every call to est_attendees only
 ) -> dict[str, dict]:
     """
     Enrich events with SerpAPI google_ai_mode — SEQUENTIALLY to avoid
     hitting the free-tier rate limit (100 req/month).
+
+    attendees_only=True restricts every SerpAPI lookup to attendee-count
+    extraction only (skips price/description/link enrichment and sponsor
+    lookups entirely) — for cost-controlled deployments where SerpAPI is
+    reserved purely for filling in est_attendees.
 
     Returns {event_id: enrichment_dict}.
     """
@@ -866,6 +872,12 @@ async def enrich_events_batch(
     to_enrich: list[tuple] = []
     for event in events:
         need_att  = (event.est_attendees or 0) == 0
+
+        if attendees_only:
+            if need_att:
+                to_enrich.append((event, True, False, False, False))
+            continue
+
         need_prc  = not (event.price_description or "").strip() or \
                     (event.price_description or "").strip().lower() in (
                         "see website", "see 10times listing",
@@ -944,7 +956,7 @@ async def enrich_events_batch(
             result = dict(data) if data else {}
 
             # ── Sponsor enrichment (3.9): secondary search when sponsors empty ──
-            if groq_client and serpapi_key and not (event.sponsors or "").strip():
+            if not attendees_only and groq_client and serpapi_key and not (event.sponsors or "").strip():
                 try:
                     sponsors_str = await enrich_sponsors(
                         event_name  = event.name,
