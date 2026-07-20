@@ -130,13 +130,15 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
       </div>
 
       {/* Pricing + ROI */}
-      {pricing && !pricing.is_manual && (
+      {pricing && (
         <div className="mp-section">
           <div className="mp-section-title">Suggested package</div>
           <div className="mp-pricing-row">
             <div className="mp-pkg-name">{pricing.package_name}</div>
-            {pricing.price_inr && (
-              <div className="mp-pkg-price">₹{Math.round(pricing.price_inr / 100_000)}L</div>
+            {pricing.price_usd != null && !pricing.is_custom && (
+              <div className="mp-pkg-price">
+                {pricing.price_usd === 0 ? 'Free forever' : `From $${pricing.price_usd.toLocaleString()}`}
+              </div>
             )}
             {pricing.is_custom && (
               <div className="mp-pkg-custom">Custom - contact us</div>
@@ -145,15 +147,8 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
         </div>
       )}
 
-      {pricing?.is_manual && (
-        <div className="mp-manual-review">
-          <span>⚠</span>
-          <span>{pricing.label}</span>
-        </div>
-      )}
-
       {/* ROI */}
-      {roi && roi.package_cost_inr && (
+      {roi && roi.package_cost_usd && (
         <div className="mp-section mp-roi">
           <div className="mp-section-title">Break-even analysis</div>
           <div className="mp-roi-grid">
@@ -166,7 +161,7 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
               <div className="mp-roi-label">package cost</div>
             </div>
             <div className="mp-roi-item">
-              <div className="mp-roi-num">₹{roi.cost_per_meeting_l}L</div>
+              <div className="mp-roi-num">${roi.cost_per_meeting.toLocaleString()}</div>
               <div className="mp-roi-label">cost/meeting</div>
             </div>
             <div className="mp-roi-item">
@@ -183,7 +178,7 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
         </div>
       )}
 
-      {roi && !roi.package_cost_inr && roi.avg_deal_display && (
+      {roi && !roi.package_cost_usd && roi.avg_deal_display && (
         <div className="mp-section">
           <p className="mp-roi-summary" style={{margin:0}}>
             {roi.summary}

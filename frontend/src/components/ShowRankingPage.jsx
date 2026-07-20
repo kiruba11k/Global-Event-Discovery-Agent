@@ -577,12 +577,6 @@ export default function ShowRankingPage({
           </div>
         )}
 
-        {unlocked && (fullEventPool.length - top6.length) > 0 && (
-          <div className="rk-more-notice">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            <span>{fullEventPool.length - top6.length} more relevant events in the full breakdown below.</span>
-          </div>
-        )}
       </div>
 
       {/* ── 4. DOWNLOADS ────────────────────────────────────── */}
