@@ -6,14 +6,38 @@ import {
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════
-   PRICING MATRIX - USD
+   PACKAGE CATALOG - USD
+   Single source of truth, mirrors the public cost sheet
+   (leadstrategus.com/pricing) and the tier cards rendered in
+   ShowRankingPage.jsx's "Pricing tiers" section.
    ═══════════════════════════════════════════════════════════ */
-const PRICING_MATRIX = {
-  low:        { 5: 2700,  10: 4500,  15: 6000,  20: 7800  },
-  medium:     { 5: 3300,  10: 5400,  15: 7200,  20: 9300  },
-  high:       { 5: 3900,  10: 6300,  15: 8400,  20: 10800 },
-  enterprise: { 5: 4500,  10: 7200,  15: 9600,  20: 12600 },
+const PACKAGES = {
+  discover: {
+    key: 'discover', tag: 'Free forever', name: 'Discover',
+    priceLabel: '$0', price: 0, outcome: 'Top 6 ranked shows',
+    features: ['Top 6 ranked shows', 'ICP count + fit grade', 'Location + dates', 'AI rationale', 'PDF report'],
+    cta: null,
+  },
+  starter: {
+    key: 'starter', tag: 'Most popular', name: 'Starter pack',
+    priceLabel: 'From $3,000', price: 3000, outcome: '10 qualified meetings',
+    features: ['Everything in Discover', 'Shows ranked 7–23', 'Pre-show ICP outreach', '10 confirmed meetings', 'Post-event follow-up'],
+    cta: 'Get started →',
+  },
+  growth: {
+    key: 'growth', tag: 'Best value', name: 'Growth pack',
+    priceLabel: 'From $5,000', price: 5000, outcome: '20 qualified meetings',
+    features: ['Everything in Starter', 'Full event calendar plan', 'Multi-show strategy', '20 confirmed meetings', 'Named ICP account list'],
+    cta: 'Get started →',
+  },
+  takeover: {
+    key: 'takeover', tag: 'For flagship events', name: 'Full takeover',
+    priceLabel: 'Custom', price: null, outcome: '50+ meetings per event',
+    features: ['Full-event meeting programme', 'Dedicated researcher', 'Outreach copy + sequences', 'On-site coordination', 'Outcomes guarantee'],
+    cta: 'Contact us →',
+  },
 }
+const PACKAGE_ORDER = ['discover', 'starter', 'growth', 'takeover']
 
 const DEAL_LABELS = {
   low:        'Low (<$10K ACV)',
@@ -22,21 +46,15 @@ const DEAL_LABELS = {
   enterprise: 'Enterprise (>$75K ACV)',
 }
 
-const fmt = (n) => `$${n.toLocaleString('en-US')}`
-
 /**
- * FIXED: Always returns at least [5] so pricing is shown even when
- * est_attendees = 0 (unknown, not actually zero attendees).
- * This is the root cause of the "-" in Meetings Range / Package columns.
+ * Recommend one paid package (never "Discover" - that's this free tool)
+ * based on event scale. Larger events support a bigger outreach programme.
  */
-function getAvailablePackages(attendees) {
+function recommendedPackage(attendees) {
   const n = parseInt(attendees) || 0
-  if (n >= 5000) return [5, 10, 15, 20]
-  if (n >= 3000) return [5, 10, 15]
-  if (n >= 1000) return [5, 10]
-  // Always return [5] for unknown/small attendance
-  // DB events have est_attendees=0 which means UNKNOWN, not literally zero
-  return [5]
+  if (n >= 10000) return PACKAGES.takeover
+  if (n >= 3000)  return PACKAGES.growth
+  return PACKAGES.starter
 }
 
 function getEventTier(attendees) {
@@ -47,15 +65,6 @@ function getEventTier(attendees) {
   if (n >= 1000)  return { tier: 'Mid Event',             tag: '🤝' }
   if (n > 0)      return { tier: 'Boutique Event',        tag: '💎' }
   return           { tier: 'Trade Show / Conference',  tag: '📅' }
-}
-
-function estimatePipeline(meetings, dealSizeCategory) {
-  const midpoints = { low: 5000, medium: 17500, high: 50000, enterprise: 100000 }
-  const mid       = midpoints[dealSizeCategory] || midpoints.medium
-  const qualified = Math.round(meetings * 0.4)
-  const closed    = Math.round(qualified * 0.25)
-  const pipeline  = Math.round(qualified * mid * 0.5).toLocaleString('en-US')
-  return { qualified, closed, pipeline }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -107,19 +116,16 @@ function PricingDisclaimer({ dealSizeCategory }) {
 
 /* ─────────────────────────────────────────────────────────
    PRICING CARD
-   FIXED: Renders for ALL events regardless of est_attendees value.
-   When attendees unknown, shows starter package with a note.
+   Renders the real package catalog for ALL events regardless of
+   est_attendees value, highlighting the recommended tier for this
+   event's scale. When attendees unknown, defaults to Starter.
    ───────────────────────────────────────────────────────── */
 function PricingCard({ attendees, eventName, dealSizeCategory }) {
-  const n        = parseInt(attendees) || 0
-  const packages = getAvailablePackages(n)   // always [5] minimum
-  const tierInfo = getEventTier(n)
-  const category = dealSizeCategory || 'medium'
-  const prices   = PRICING_MATRIX[category] || PRICING_MATRIX.medium
+  const n         = parseInt(attendees) || 0
+  const tierInfo  = getEventTier(n)
+  const category  = dealSizeCategory || 'medium'
+  const recommended = recommendedPackage(n)
   const unknownAttendees = n === 0
-
-  const [selected, setSelected] = useState(packages[0])
-  const pipe = estimatePipeline(selected, category)
 
   return (
     <div className="pricing-card">
@@ -138,65 +144,33 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
       {unknownAttendees && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--c-find-soft)', border: '1px solid rgba(14,124,107,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 2, fontSize: 11, color: 'var(--ink-soft)' }}>
           <Info size={13} style={{ color: 'var(--c-find)', flexShrink: 0, marginTop: 1 }} />
-          Attendee count not yet available for this event. Showing our starter package - <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-find)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
+          Attendee count not yet available for this event. Showing our Starter pack - <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-find)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
         </div>
       )}
 
       <WhatIsIncluded />
 
       <div className="pc-deal-label">
-        Package pricing for <strong>{DEAL_LABELS[category]}</strong> deals
+        Recommended package for <strong>{eventName || 'this event'}</strong>
       </div>
 
-      {/* Package pills */}
-      <div className="pc-pkg-row">
-        {packages.map(m => (
-          <button key={m} type="button" className={`pc-pkg-pill ${selected === m ? 'active' : ''}`} onClick={() => setSelected(m)}>
-            {m} meetings
-          </button>
-        ))}
-      </div>
-
-      {/* Selected card */}
-      <div className="pc-selected-card">
-        <div className="pc-selected-price">{fmt(prices[selected])}</div>
-        <div className="pc-selected-desc">for {selected} guaranteed meetings at {eventName || 'this event'}</div>
-        <div className="pc-pipeline-row">
-          <div className="pc-pipe-stat">
-            <span className="pc-pipe-val">{pipe.qualified}</span>
-            <span className="pc-pipe-label">Qualified leads</span>
-          </div>
-          <div className="pc-pipe-sep" />
-          <div className="pc-pipe-stat">
-            <span className="pc-pipe-val">${pipe.pipeline}</span>
-            <span className="pc-pipe-label">Est. pipeline</span>
-          </div>
-          <div className="pc-pipe-sep" />
-          <div className="pc-pipe-stat">
-            <span className="pc-pipe-val">{pipe.closed}</span>
-            <span className="pc-pipe-label">Expected closes</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Reference table */}
+      {/* Package tier cards - same catalog as the public pricing tiers */}
       <div className="pc-table-wrap">
         <div className="pc-table-label">All packages - prices in USD</div>
         <table className="pc-table">
           <thead>
             <tr>
-              <th>Meetings</th><th>Investment (USD)</th><th>Qualified leads</th><th>Est. pipeline</th>
+              <th>Package</th><th>Investment (USD)</th><th>Outcome</th>
             </tr>
           </thead>
           <tbody>
-            {packages.map(m => {
-              const p = estimatePipeline(m, category)
+            {PACKAGE_ORDER.map(key => {
+              const pkg = PACKAGES[key]
               return (
-                <tr key={m} className={selected === m ? 'pc-row-active' : ''} onClick={() => setSelected(m)}>
-                  <td><strong>{m}</strong></td>
-                  <td className="pc-price-cell">{fmt(prices[m])}</td>
-                  <td>{p.qualified} leads</td>
-                  <td>${p.pipeline}</td>
+                <tr key={key} className={recommended.key === key ? 'pc-row-active' : ''}>
+                  <td><strong>{pkg.name}</strong>{recommended.key === key && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--c-meet)' }}>← recommended</span>}</td>
+                  <td className="pc-price-cell">{pkg.priceLabel}</td>
+                  <td>{pkg.outcome}</td>
                 </tr>
               )
             })}
@@ -301,9 +275,7 @@ function EventRow({ event, index, dealSizeCategory }) {
   const industries = (event.industry || '').split(',').filter(Boolean)
   const personas   = (event.buyer_persona || '').split(',').filter(Boolean)
 
-  // FIXED: use getAvailablePackages which always returns [5] minimum
-  const pkgs   = getAvailablePackages(event.est_attendees)
-  const prices = PRICING_MATRIX[dealSizeCategory || 'medium'] || PRICING_MATRIX.medium
+  const pkg = recommendedPackage(event.est_attendees)
 
   return (
     <>
@@ -327,19 +299,11 @@ function EventRow({ event, index, dealSizeCategory }) {
         <td style={{ textAlign: 'center' }}>
           <Verdict v={event.fit_verdict} />
         </td>
-        {/* FIXED: Always show meeting range - never show "-" */}
         <td style={{ fontSize: 11, textAlign: 'center' }}>
-          {pkgs.length > 1
-            ? `${pkgs[0]}–${pkgs[pkgs.length - 1]}`
-            : <span style={{ fontSize: 10 }}>{pkgs[0]} meetings</span>
-          }
+          <span style={{ fontSize: 10 }}>{pkg.outcome}</span>
         </td>
-        {/* FIXED: Always show package price - never show "-" */}
         <td style={{ fontSize: 11, textAlign: 'center', fontWeight: 600, color: 'var(--c-meet)', fontFamily: 'var(--font-mono)' }}>
-          {pkgs.length > 1
-            ? `${fmt(prices[pkgs[0]])} – ${fmt(prices[pkgs[pkgs.length - 1]])}`
-            : fmt(prices[5])
-          }
+          {pkg.priceLabel}
         </td>
         <td style={{ textAlign: 'center' }}>
           <button className={`expand-toggle ${open ? 'open' : ''}`} onClick={e => { e.stopPropagation(); setOpen(o => !o) }} aria-label={open ? 'Collapse' : 'Expand'}>
