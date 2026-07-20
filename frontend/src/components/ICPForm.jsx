@@ -475,6 +475,7 @@ export default function ICPForm({
         differentiator_score:   diffScore,
         client_count_range:     clientRange || '11-50',
         client_names:           clientNames,
+        email,
       }
       onSubmit(profile, email)
     }
@@ -530,6 +531,7 @@ export default function ICPForm({
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
       client_names:         clientNames,
+      email,
     }
     onSubmit && onSubmit(profile, email)
   }

@@ -252,7 +252,7 @@ export default function App() {
     setSuggestedGeos([])
 
     try {
-      const initial = await api.search({ profile })
+      const initial = await api.search({ profile: email ? { ...profile, email } : profile })
       // Search queue active (REDIS_URL set on the backend) → poll until
       // done; no queue configured → result is already attached inline.
       const res = initial.status === 'queued'
