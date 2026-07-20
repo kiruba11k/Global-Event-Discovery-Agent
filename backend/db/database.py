@@ -222,6 +222,26 @@ async def init_db():
         await conn.run_sync(EventBase.metadata.create_all)
         # Add any missing columns to existing tables
         await _add_missing_columns(conn)
+        # create_all() only creates indexes for brand-new tables — an
+        # `events` table that already existed before this unique index
+        # was added to the ORM model never gets it retroactively, which
+        # silently breaks every `ON CONFLICT (dedup_hash)` upsert (falls
+        # through to a Postgres error, 0 rows inserted). Ensure it exists
+        # on every startup, idempotent.
+        try:
+            if IS_POSTGRES:
+                await conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
+                    "ON events (dedup_hash)"
+                ))
+            elif IS_SQLITE:
+                await conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
+                    "ON events (dedup_hash)"
+                ))
+            logger.debug("events.dedup_hash unique index ensured.")
+        except Exception as e:
+            logger.warning(f"events.dedup_hash unique index check failed: {e}")
         # source_health circuit-breaker state (survives cold starts)
         try:
             from ingestion.source_health import ensure_table as _ensure_sh_table

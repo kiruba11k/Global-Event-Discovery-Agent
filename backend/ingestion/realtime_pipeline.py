@@ -24,7 +24,6 @@ from db.crud import batch_upsert_events, _expand_industry_terms   # ← fixed
 from ingestion.icp_query_builder import build_queries
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
-from ingestion.predicthq_realtime import run_predicthq_queries
 from ingestion.ita_trade_events import run_ita_queries
 from ingestion.source_health import source_health
 from models.event import EventORM
@@ -66,10 +65,9 @@ async def fetch_realtime_candidates(
     Main entry point called from /api/search.
 
     1.  build_queries()  — Groq LLM converts ICP form → targeted queries
-    2a. SerpAPI google_events   (up to 8 queries × 10 results = 80 events)
-    2b. Ticketmaster             (up to 12 queries)
-    2c. Eventbrite               (up to 9 queries with lat/lon)
-    2d. PredictHQ                (up to 6 queries)
+    2a. Ticketmaster             (up to 12 queries)
+    2b. Eventbrite               (up to 9 queries with lat/lon)
+    2c. ITA Trade Events         (up to 6 queries)
     3.  Deduplicate across all sources
     4.  Upsert new events to DB
     5.  Query DB for all matching events (existing + new)
@@ -91,12 +89,10 @@ async def fetch_realtime_candidates(
     )
 
     # ── Step 2: API key status + circuit-breaker health ────────────
-    phq_key = getattr(settings, "predicthq_key", "") or ""
     ita_key = getattr(settings, "ita_api_key", "") or ""
     key_ok = {
         "Ticketmaster": bool(settings.ticketmaster_key),
         "Eventbrite":   bool(settings.eventbrite_token),
-        "PredictHQ":    bool(phq_key),
         "ITA":          bool(ita_key),
     }
     # Skip sources whose circuit is open (401/402/404/429/… recently) —
@@ -117,7 +113,6 @@ async def fetch_realtime_candidates(
         f"keywords={query_bundle.keywords_used[:3]} | "
         f"tm={len(query_bundle.ticketmaster)} "
         f"eb={len(query_bundle.eventbrite)} "
-        f"phq={len(query_bundle.predicthq)} "
         f"ita={len(query_bundle.ita)}"
     )
 
@@ -125,29 +120,24 @@ async def fetch_realtime_candidates(
     # SerpAPI is intentionally NOT a search source here — it's reserved
     # for scoped attendee-count enrichment on the final shown events
     # (see enrichment/serp_enricher.py, called from routes_events.py).
-    # Eventbrite stays off pending a working token; Ticketmaster, PredictHQ
-    # and ITA (data.trade.gov) are live search sources.
+    # PredictHQ is disabled (invalid key / not needed). Eventbrite stays
+    # off pending a working token. Ticketmaster and ITA (data.trade.gov)
+    # are live search sources.
     tm_coro = (
         run_ticketmaster_queries(
             query_bundle.ticketmaster, settings.ticketmaster_key, date_from, date_to
         ) if api_ok["Ticketmaster"] and query_bundle.ticketmaster else _noop()
     )
     eb_coro = _noop()
-    phq_coro = (
-        run_predicthq_queries(
-            query_bundle.predicthq, phq_key, date_from, date_to
-        ) if api_ok["PredictHQ"] and query_bundle.predicthq else _noop()
-    )
     ita_coro = (
         run_ita_queries(
             query_bundle.ita, ita_key, date_from, date_to
         ) if api_ok["ITA"] and query_bundle.ita else _noop()
     )
 
-    tm_evs, eb_evs, phq_evs, ita_evs = await asyncio.gather(
+    tm_evs, eb_evs, ita_evs = await asyncio.gather(
         _safe_run(tm_coro,  "Ticketmaster"),
         _safe_run(eb_coro,  "Eventbrite"),
-        _safe_run(phq_coro, "PredictHQ"),
         _safe_run(ita_coro, "ITA"),
     )
 
@@ -155,7 +145,6 @@ async def fetch_realtime_candidates(
     for src, evs in [
         ("Ticketmaster", tm_evs),
         ("Eventbrite",   eb_evs),
-        ("PredictHQ",    phq_evs),
         ("ITA",          ita_evs),
     ]:
         if evs:
@@ -212,7 +201,7 @@ async def fetch_realtime_candidates(
     # Stage 1: hash-based dedup (existing)
     all_raw: list[dict] = []
     seen_hashes: set[str] = set()
-    for evs in [tm_evs, eb_evs, phq_evs, ita_evs]:
+    for evs in [tm_evs, eb_evs, ita_evs]:
         for ev in evs:
             dh = ev.get("dedup_hash") if isinstance(ev, dict) else getattr(ev, "dedup_hash", "")
             if dh and dh not in seen_hashes:
@@ -248,8 +237,7 @@ async def fetch_realtime_candidates(
 
     logger.info(
         f"Real-time: {len(new_events)} unique events "
-        f"(tm={len(tm_evs)} eb={len(eb_evs)} "
-        f"phq={len(phq_evs)} ita={len(ita_evs)})"
+        f"(tm={len(tm_evs)} eb={len(eb_evs)} ita={len(ita_evs)})"
     )
 
     # ── Step 5: Upsert to DB ───────────────────────────────────────
