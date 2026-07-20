@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     # AllEvents.in API (optional)
     allevents_key: str = ""
 
+    # ITA Trade Events API (data.trade.gov) — U.S. Commercial Service
+    # trade shows, missions & conferences for exporters. Free with a
+    # data.trade.gov account | https://developer.trade.gov/api-details#api=trade-events
+    ita_api_key: str = ""
+
     # ── Scraper tuning ────────────────────────────
     scrape_delay_seconds: float = 2.0
     scrape_timeout_seconds: int = 15

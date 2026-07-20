@@ -79,11 +79,19 @@ class PredictHQQuery:
 
 
 @dataclass
+class ItaQuery:
+    q:          str
+    start_from: str
+    start_to:   str
+
+
+@dataclass
 class QueryBundle:
     serpapi:      list[SerpAPIQuery]      = field(default_factory=list)
     ticketmaster: list[TicketmasterQuery] = field(default_factory=list)
     eventbrite:   list[EventbriteQuery]   = field(default_factory=list)
     predicthq:    list[PredictHQQuery]    = field(default_factory=list)
+    ita:          list[ItaQuery]          = field(default_factory=list)
     year:         str                     = "2026"
     keywords_used: list[str]             = field(default_factory=list)
 
@@ -103,6 +111,7 @@ async def build_queries(
     max_ticketmaster: int = 12,
     max_eventbrite:   int = 9,
     max_predicthq:    int = 6,
+    max_ita:          int = 6,
 ) -> QueryBundle:
     """
     Async version: uses Groq LLM to extract keywords from company description.
@@ -232,12 +241,19 @@ async def build_queries(
             if len(phq) >= max_predicthq: break
         if len(phq) >= max_predicthq: break
 
+    # ── Step 7: Build ITA Trade Events queries ──────────────────────
+    # ITA (data.trade.gov) is a plain keyword + date-range search — no
+    # geo/country resolution needed like TM/EB/PHQ.
+    ita: list[ItaQuery] = []
+    for kw in (api_keywords + ind_keywords)[:max_ita]:
+        ita.append(ItaQuery(q=kw, start_from=start, start_to=end))
+
     bundle = QueryBundle(
-        serpapi=serp, ticketmaster=tm, eventbrite=eb, predicthq=phq,
+        serpapi=serp, ticketmaster=tm, eventbrite=eb, predicthq=phq, ita=ita,
         year=year, keywords_used=all_keywords,
     )
     logger.info(
-        f"QueryBundle: serp={len(serp)} tm={len(tm)} eb={len(eb)} phq={len(phq)} | "
+        f"QueryBundle: serp={len(serp)} tm={len(tm)} eb={len(eb)} phq={len(phq)} ita={len(ita)} | "
         f"ind={ind_keywords[:2]} persona={per_keywords[:1]} api={api_keywords[:1]} | "
         f"seniority={seniority} size={company_size}"
     )
@@ -335,8 +351,11 @@ def build_queries_sync(
     phq = [PredictHQQuery(q=kw, country_code=cc, start_gte=start, end_lte=end)
            for kw in (api_keywords + per_keywords)[:3] for cc in phq_cc[:2]][:6]
 
+    ita = [ItaQuery(q=kw, start_from=start, start_to=end)
+           for kw in (api_keywords + ind_keywords)[:6]]
+
     return QueryBundle(serpapi=serp, ticketmaster=tm, eventbrite=eb,
-                       predicthq=phq, year=year, keywords_used=all_kws)
+                       predicthq=phq, ita=ita, year=year, keywords_used=all_kws)
 
 
 # ── Taxonomy expansion for crud.py DB queries ─────────────────────────
