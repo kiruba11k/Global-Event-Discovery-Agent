@@ -50,27 +50,25 @@ MEETING CONVERSION
   Blended: weight differentiator 60%, proof 40%.
 
 ══════════════════════════════════════════════════════════════════════
-PRICING (INR)
+PRICING (USD) — matches the public cost sheet
 ══════════════════════════════════════════════════════════════════════
 
   Driven by estimated meetings, not fixed tiers.
-  Low confidence → manual review, no auto-price.
 
-  3-5   meetings →  ₹5L package
-  6-10  meetings →  ₹7L package
-  10+   meetings →  Custom (contact us)
-  < 3   meetings →  Manual review recommended
-  Confidence low →  Manual review recommended
+  < 1    meetings →  Discover - free forever (top 6 ranked shows)
+  1-10   meetings →  Starter Pack - from $3,000 (10 qualified meetings)
+  11-49  meetings →  Growth Pack - from $5,000 (20 qualified meetings)
+  50+    meetings →  Full Takeover - custom (50+ meetings per event)
 
 ══════════════════════════════════════════════════════════════════════
 ROI / BREAK-EVEN
 ══════════════════════════════════════════════════════════════════════
 
-  avg_deal_inr = deal_size_category → midpoint INR
-  package_cost_inr = from pricing tier
-  break_even_deals = ceil(package_cost / avg_deal_inr)
+  avg_deal_usd = deal_size_category → midpoint USD
+  package_cost_usd = from pricing tier
+  break_even_deals = ceil(package_cost / avg_deal_usd)
   break_even_pct   = break_even_deals / estimated_meetings × 100
-  roi_if_one_deal  = (avg_deal_inr - package_cost) / package_cost × 100
+  roi_if_one_deal  = (avg_deal_usd - package_cost) / package_cost × 100
 """
 from __future__ import annotations
 
@@ -78,25 +76,28 @@ import math
 from typing import Optional
 
 
-# ── Deal size → INR midpoint (for ROI calculation) ────────────────
-# INR midpoints based on deal category labels.
-# These are not guesses - they're the midpoints of the stated bracket ranges.
-DEAL_INR_MIDPOINTS: dict[str, int] = {
-    "medium":     3_000_000,   # $10K-$50K → ~₹25L midpoint
-    "high":       6_000_000,   # $50K-$100K → ~₹60L midpoint
-    "enterprise": 25_000_000,  # $100K-$500K → ~₹250L midpoint
-    "strategic":  75_000_000,  # $500K+ → ~₹750L midpoint
+# ── Deal size → USD midpoint (for ROI calculation) ─────────────────
+# USD midpoints based on deal category labels - midpoints of the
+# stated bracket ranges.
+DEAL_USD_MIDPOINTS: dict[str, int] = {
+    "medium":     30_000,    # $10K-$50K midpoint
+    "high":       75_000,    # $50K-$100K midpoint
+    "enterprise": 300_000,   # $100K-$500K midpoint
+    "strategic":  750_000,   # $500K+ midpoint
 }
 
-# ── Pricing packages (INR) ────────────────────────────────────────
-# Driven by meeting count range, not arbitrary tiers.
+# ── Pricing packages (USD) ──────────────────────────────────────────
+# Matches the public package cost sheet (leadstrategus.com/pricing):
+#   Discover        - Free forever      - Top 6 ranked shows (this app)
+#   Starter pack     - From $3,000       - 10 qualified meetings
+#   Growth pack      - From $5,000       - 20 qualified meetings
+#   Full takeover    - Custom            - 50+ meetings per event
 PRICING_PACKAGES = [
-    # (min_meetings, max_meetings, package_name, price_inr, label)
-    (10, 999, "Flagship Event",  None,       "Custom - contact us"),
-    (6,  9,   "Growth Pack",     700_000,    "₹7L for 6-10 meetings"),
-    (3,  5,   "Starter Pack",    500_000,    "₹5L for 3-5 meetings"),
-    (1,  2,   "Manual Review",   None,       "Manual review recommended - thin audience"),
-    (0,  0,   "Manual Review",   None,       "Manual review recommended - insufficient data"),
+    # (min_meetings, max_meetings, package_name, price_usd, label)
+    (50, 999, "Full Takeover", None,   "Custom - 50+ meetings per event"),
+    (11, 49,  "Growth Pack",   5_000,  "From $5,000 for 20 qualified meetings"),
+    (1,  10,  "Starter Pack",  3_000,  "From $3,000 for 10 qualified meetings"),
+    (0,  0,   "Discover",      0,      "Free forever - top 6 ranked shows"),
 ]
 
 # ── Audience funnel ratios (documented, not arbitrary) ────────────
@@ -153,31 +154,31 @@ def _meeting_conversion_pct(diff_tier: str, proof_tier: str) -> tuple[float, str
 
 
 def _get_pricing(estimated_meetings: float, confidence: str) -> dict:
-    """Return the appropriate pricing package."""
+    """Return the appropriate pricing package (from the public cost sheet)."""
     if confidence == "low" or estimated_meetings < 1:
         return {
-            "package_name":  "Manual Review",
-            "price_inr":     None,
-            "label":         "Manual review recommended - insufficient data for auto-pricing",
+            "package_name":  "Discover",
+            "price_usd":     0,
+            "label":         "Free forever - top 6 ranked shows",
             "is_custom":     False,
-            "is_manual":     True,
+            "is_manual":     False,
         }
     m = int(math.floor(estimated_meetings))
     for min_m, max_m, name, price, label in PRICING_PACKAGES:
         if min_m <= m <= max_m or (m >= min_m and max_m == 999):
             return {
                 "package_name": name,
-                "price_inr":    price,
+                "price_usd":    price,
                 "label":        label,
-                "is_custom":    price is None and name != "Manual Review",
-                "is_manual":    name == "Manual Review",
+                "is_custom":    price is None,
+                "is_manual":    False,
             }
     return {
-        "package_name": "Manual Review",
-        "price_inr":    None,
-        "label":        "Manual review recommended",
-        "is_custom":    False,
-        "is_manual":    True,
+        "package_name": "Discover",
+        "price_usd":     0,
+        "label":         "Free forever - top 6 ranked shows",
+        "is_custom":     False,
+        "is_manual":     False,
     }
 
 
@@ -312,43 +313,43 @@ def calculate_meeting_potential(
 
     # ── 4. ROI / break-even ───────────────────────────────────────
     deal_cat     = (getattr(profile, "avg_deal_size_category", None) or "medium").lower()
-    avg_deal_inr = DEAL_INR_MIDPOINTS.get(deal_cat, DEAL_INR_MIDPOINTS["medium"])
-    pkg_cost_inr = pricing.get("price_inr")
+    avg_deal_usd = DEAL_USD_MIDPOINTS.get(deal_cat, DEAL_USD_MIDPOINTS["medium"])
+    pkg_cost_usd = pricing.get("price_usd")
 
     roi = None
-    if pkg_cost_inr and mid_meetings > 0 and avg_deal_inr > 0:
-        cost_per_meeting   = round(pkg_cost_inr / mid_meetings / 100_000, 1)  # in ₹L
-        break_even_deals   = math.ceil(pkg_cost_inr / avg_deal_inr)
-        break_even_pct     = round(break_even_deals / mid_meetings * 100)
-        roi_one_deal_pct   = round((avg_deal_inr - pkg_cost_inr) / pkg_cost_inr * 100)
-        pkg_l              = round(pkg_cost_inr / 100_000)
-        deal_l             = round(avg_deal_inr / 100_000)
+    if pkg_cost_usd and mid_meetings > 0 and avg_deal_usd > 0:
+        cost_per_meeting  = round(pkg_cost_usd / mid_meetings)
+        break_even_deals  = math.ceil(pkg_cost_usd / avg_deal_usd)
+        break_even_pct    = round(break_even_deals / mid_meetings * 100)
+        roi_one_deal_pct  = round((avg_deal_usd - pkg_cost_usd) / pkg_cost_usd * 100)
 
         roi = {
-            "avg_deal_inr":      avg_deal_inr,
-            "avg_deal_display":  f"₹{deal_l}L",
-            "package_cost_inr":  pkg_cost_inr,
-            "package_display":   f"₹{pkg_l}L",
-            "cost_per_meeting_l":cost_per_meeting,
+            "avg_deal_usd":      avg_deal_usd,
+            "avg_deal_display":  f"${avg_deal_usd:,.0f}",
+            "package_cost_usd":  pkg_cost_usd,
+            "package_display":   f"${pkg_cost_usd:,.0f}",
+            "cost_per_meeting":  cost_per_meeting,
             "break_even_deals":  break_even_deals,
             "break_even_pct":    break_even_pct,
             "roi_one_deal_pct":  roi_one_deal_pct,
             "meeting_range":    meeting_estimate.get("display", f"~{mid_meetings}"),
             "summary": (
-                f"Package: ₹{pkg_l}L | Est. {meeting_estimate.get('display', str(mid_meetings))} | "
-                f"Cost/meeting (mid): ₹{cost_per_meeting}L | "
+                f"Package: ${pkg_cost_usd:,.0f} | Est. {meeting_estimate.get('display', str(mid_meetings))} | "
+                f"Cost/meeting (mid): ${cost_per_meeting:,.0f} | "
                 f"Break-even: {break_even_deals} deal{'s' if break_even_deals>1 else ''} "
                 f"({break_even_pct}% close rate)"
             ),
         }
-    elif avg_deal_inr > 0 and mid_meetings > 0:
-        # Custom pricing - can't calculate ROI but show deal value context
-        deal_l = round(avg_deal_inr / 100_000)
+    elif avg_deal_usd > 0 and mid_meetings > 0:
+        # Free/custom pricing - can't calculate cost-based ROI, show deal value context
         roi = {
-            "avg_deal_inr":     avg_deal_inr,
-            "avg_deal_display": f"₹{deal_l}L",
-            "package_cost_inr": None,
-            "summary":          f"Custom pricing - one closed deal at ₹{deal_l}L covers most campaign costs.",
+            "avg_deal_usd":     avg_deal_usd,
+            "avg_deal_display": f"${avg_deal_usd:,.0f}",
+            "package_cost_usd": pkg_cost_usd,
+            "summary": (
+                f"Package: {pricing.get('label', '')} | one closed deal at "
+                f"${avg_deal_usd:,.0f} covers most campaign costs."
+            ),
         }
 
     # ── 5. Positioning assessment ─────────────────────────────────

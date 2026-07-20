@@ -40,6 +40,7 @@ from db.crud import (
 )
 from db.database import get_db
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
+from ingestion.platform_normaliser import _iso_date
 from ingestion.realtime_pipeline import fetch_realtime_candidates
 from models.company_profile import CompanyProfileCreate
 from models.event import EventCreate
@@ -262,8 +263,8 @@ def _split_city_country(raw):
 def _parse_csv_row(row, row_number):
     nr = {_norm(str(k)).lower().lstrip("\ufeff"): v for k, v in row.items() if k is not None}
     name       = _csv_value(nr, "name", "event_name", "title")
-    start_date = _csv_value(nr, "start_date", "start", "from_date")
-    end_date   = _csv_value(nr, "end_date", "end", "to_date")
+    start_date = _iso_date(_csv_value(nr, "start_date", "start", "from_date"))
+    end_date   = _iso_date(_csv_value(nr, "end_date", "end", "to_date"))
     if not start_date and _parse_date(end_date): start_date = end_date
     if not name or not start_date: raise ValueError(f"row {row_number}: 'name' and 'start_date' required")
     if not _parse_date(start_date): raise ValueError(f"row {row_number}: invalid start_date")

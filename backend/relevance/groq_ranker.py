@@ -881,13 +881,14 @@ async def rank_with_groq(
             0
         )
 
+        start_date = (event.start_date or "").strip()[:10]
+        end_date   = (event.end_date or "").strip()[:10]
         ranked.append(RankedEvent(
             id              = event.id,
             event_name      = event.name,
             date            = (
-                event.start_date +
-                (f" - {event.end_date}"
-                 if event.end_date and event.end_date != event.start_date else "")
+                start_date +
+                (f" - {end_date}" if end_date and end_date != start_date else "")
             ),
             place           = _place(event),
             event_link      = final_link,
