@@ -646,7 +646,13 @@ async def _run_search_pipeline(
                     enrich_events_batch(
                         events         = final_top_events,
                         serpapi_key    = settings.serpapi_key,
-                        groq_client    = None,   # LLM gateway moved to OpenAI (llm_client.py); not needed for attendees_only
+                        # `groq_client` is a legacy name — it's just a truthy
+                        # gate for the LLM-based extraction path, which now
+                        # routes through the shared OpenAI gateway
+                        # (llm_client.py) internally, not a client object.
+                        # Passing None here disables that path entirely and
+                        # falls back to weak regex parsing — must stay truthy.
+                        groq_client    = True,
                         max_enrich     = len(final_top_events),  # exactly the 6 shown events
                         attendees_only = True,
                     ),
