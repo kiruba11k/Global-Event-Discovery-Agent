@@ -38,11 +38,14 @@ _cache: dict[str, dict] = {}
 
 # How many events to enrich concurrently. SerpAPI's free tier caps
 # TOTAL requests per month (100), not requests per second, so capping
-# concurrency (rather than going fully sequential) is safe and turns a
-# ~2min wall-clock enrichment pass for 6 events into ~30-40s without
-# spending any more quota. Keep modest — this also fans out into Groq
-# validation calls per event, which share the same TPM budget.
-_ENRICH_CONCURRENCY = 3
+# concurrency (rather than going fully sequential) is safe. Callers cap
+# max_enrich at exactly the 6 shown events, so running all of them in
+# one wave (rather than 2-3 sequential waves) doesn't raise total API
+# calls — it only cuts wall-clock. This matters more now that a missing
+# attendee count can trigger up to 4 sequential queries per event (the
+# prior-edition fallback), which pushed batch wall-clock past the
+# caller's timeout budget at the old concurrency of 3.
+_ENRICH_CONCURRENCY = 6
 
 # ── Venue / hotel / social domains that are NOT event official pages ──
 _VENUE_DOMAINS: frozenset[str] = frozenset({
@@ -286,13 +289,27 @@ def _organic_text(organic: list) -> str:
     )
 
 
-def _extract_attendees(text: str) -> Optional[int]:
+def _extract_attendees(text: str, event_year: str = "") -> Optional[int]:
+    """
+    event_year excludes the event's own edition year from matching as an
+    attendee count — e.g. "FINTECH FESTIVAL SOUTH AFRICA 2027" text
+    incidentally containing "2,027" near an attendee-shaped phrase is a
+    false positive, not a real headcount.
+    """
+    try:
+        year_n = int(event_year) if event_year else None
+    except ValueError:
+        year_n = None
+
     for pat in _ATT_PATTERNS:
         m = re.search(pat, text, re.I)
         if m:
             n = _safe_int(m.group(1))
-            if n and 50 <= n <= 5_000_000:
-                return n
+            if not n or not (50 <= n <= 5_000_000):
+                continue
+            if year_n and n == year_n:
+                continue
+            return n
     return None
 
 
@@ -738,7 +755,7 @@ async def enrich_event(
 
         # Attendees (regex fallback — only if Groq didn't find it)
         if need_attendees and not result.get("est_attendees"):
-            att = _extract_attendees(full_text)
+            att = _extract_attendees(full_text, event_year=year)
             if att:
                 result["est_attendees"]      = att
                 result["enriched_attendees"] = True
