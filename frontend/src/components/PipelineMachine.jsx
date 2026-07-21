@@ -143,7 +143,7 @@ export default function PipelineMachine({ stats }) {
     <section className="pm-sect" aria-labelledby="pm-heading">
       <div className="pm-inner">
         <div className="pm-header">
-          <span className="ds-eyebrow">Inside the machine</span>
+          {/* <span className="ds-eyebrow">Inside the machine</span> */}
           <h2 className="ds-h2" id="pm-heading">
             {events} events go in. <em>Six shows come out.</em>
           </h2>
