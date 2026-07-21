@@ -713,20 +713,28 @@ def _score_attendees(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
     return round(score, 4), tier
 
 
-# Region is meant to be the PRIMARY filter on the ICP form — a user who
-# names "India" wants India results first, industry/persona second. Pure
-# additive scoring (industry 0.35 + persona 0.25 max vs geo 0.22 max)
-# let a strong industry+persona match from the WRONG country outscore a
-# weaker-but-present match from the RIGHT country — e.g. a German
-# fintech event (0.35+0.25=0.60) beating an India fintech event with a
-# non-primary industry hit (0.22+0.14=0.36), even though the user
-# explicitly asked for India. This multiplicative penalty on a real geo
-# mismatch (not "Global" scope, not virtual/hybrid) makes geography the
-# deciding factor first without making it an absolute hard filter — an
-# overwhelmingly strong foreign match can still surface (0.4 × a
-# near-max ~1.0 score ≈ 0.4, comparable to a modest in-region match), but
-# a routine industry-only win no longer buries every regional result.
-GEO_MISMATCH_PENALTY = 0.4
+# Designation (persona) is the PRIMARY filter — a user who names "CTO"
+# wants CTO-relevant shows first, full stop. Pure additive scoring let an
+# event with zero persona relevance still surface as GO purely on
+# industry+geo (e.g. a "CMO in Tech" event scoring industry 0.35 + geo
+# 0.22 = 0.57, clearing GO at 0.38, despite matching NOTHING about the
+# user's actual buyer persona). This multiplicative penalty on a total
+# persona mismatch (only applied when the profile actually specified a
+# persona) crushes such events down near/below SKIP regardless of how
+# strong their industry or geo match is, so a wrong-designation event
+# never outranks a right-designation one.
+PERSONA_MISMATCH_PENALTY = 0.15
+
+# Geography is SECONDARY, a backfill preference once designation is
+# satisfied — not a hard requirement. A persona-matching event from a
+# different country should still be able to surface (to fill out a full
+# 6-result list when the target country is thin), just ranked below an
+# equally-relevant in-country match. This is a much lighter penalty than
+# the persona one on purpose: 0.35+0.25+0.10 (industry+persona+type) with
+# no geo match still totals ~0.7 × 0.65 ≈ 0.46, comfortably GO — geo
+# mismatch alone should never be enough to hide an otherwise-strong,
+# right-designation match.
+GEO_MISMATCH_PENALTY = 0.65
 
 
 # ── Main rule scorer ───────────────────────────────────────────────
@@ -742,6 +750,11 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         ind_score + per_score + geo_score + type_score + att_score,
         4
     )
+    # Persona is the dominant gate — apply first, and only when the
+    # profile actually named a persona (an empty target_personas list
+    # means "any buyer," per_score is 0.0 with nothing to mismatch).
+    if profile.target_personas and per_score == 0.0:
+        total = round(total * PERSONA_MISMATCH_PENALTY, 4)
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
         total = round(total * GEO_MISMATCH_PENALTY, 4)
 

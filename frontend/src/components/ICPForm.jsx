@@ -403,8 +403,8 @@ export default function ICPForm({
     setGeoHintLoad(true)
     geoHintTimer.current = setTimeout(async () => {
       try {
-        const { industries } = effectiveParse(buyer)
-        const data = await api.geoHint(geos, industries)
+        const { industries, personas } = effectiveParse(buyer)
+        const data = await api.geoHint(geos, industries, personas)
         const map = {}
         for (const item of (data.coverage || [])) map[item.geo] = item
         setGeoHints(map)

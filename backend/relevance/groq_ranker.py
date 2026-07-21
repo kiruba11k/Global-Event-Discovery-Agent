@@ -456,10 +456,19 @@ CLIENT ICP:
   Company description: {profile.company_description[:300]}
 {company_block}
 
-VERDICT DEFINITIONS:
-  GO      = Strong industry + buyer role match. Clear pipeline opportunity.
-  CONSIDER = Partial overlap. Buyer profiles partially match or geography is borderline.
-  SKIP    = Weak or no alignment.
+VERDICT DEFINITIONS — buyer role match is the PRIMARY gate, not a tiebreaker:
+  GO       = Strong buyer-role match (the event's attendees clearly include
+             the client's target roles) AND industry aligns. Clear pipeline
+             opportunity.
+  CONSIDER = Buyer role is a plausible-but-unconfirmed match (event doesn't
+             explicitly list attendee roles, but industry/format suggests
+             overlap) — geography being borderline can also land here IF
+             the buyer role itself is not in doubt.
+  SKIP     = The event's actual audience is a DIFFERENT role than the
+             client's target (e.g. client wants CTOs, event is for CMOs/
+             CFOs/marketers) — this is a hard SKIP regardless of how well
+             industry or geography match. A wrong buyer role means the
+             event is not useful to this client no matter what else lines up.
 
 CRITICAL WRITING RULES:
   ✅ Use ONLY fields visible in the event data (industry_focus, description, typical_attendees, location).
@@ -689,6 +698,14 @@ _NEGATIVE_SIGNALS = (
     "poor fit", "weak fit", "no clear alignment", "does not focus",
     "unlikely to attract", "not designed for", "does not cater",
     "little overlap", "minimal overlap", "outside your target",
+    # Persona/buyer-role specific phrasing the LLM tends to use when the
+    # audience doesn't match — these were slipping through un-downgraded
+    # because they don't contain any of the generic phrases above.
+    "attendee profile is unclear for your target buyers",
+    "buyer profile is unclear",
+    "audience is unclear for your target",
+    "not your target buyers", "not the target buyer",
+    "different buyer role", "different persona",
 )
 
 
