@@ -289,17 +289,21 @@ def _organic_text(organic: list) -> str:
     )
 
 
-def _extract_attendees(text: str, event_year: str = "") -> Optional[int]:
+def _extract_attendees(text: str, event_year: str = "", exclude_years: tuple = ()) -> Optional[int]:
     """
-    event_year excludes the event's own edition year from matching as an
-    attendee count — e.g. "FINTECH FESTIVAL SOUTH AFRICA 2027" text
-    incidentally containing "2,027" near an attendee-shaped phrase is a
-    false positive, not a real headcount.
+    event_year/exclude_years exclude any calendar year mentioned in the
+    query itself (current edition, prior edition probe, etc.) from
+    matching as an attendee count — e.g. "FINTECH FESTIVAL SOUTH AFRICA
+    2027" text incidentally containing "2,027" near an attendee-shaped
+    phrase is a false positive, not a real headcount.
     """
-    try:
-        year_n = int(event_year) if event_year else None
-    except ValueError:
-        year_n = None
+    excluded: set[int] = set()
+    for y in (event_year, *exclude_years):
+        try:
+            if y:
+                excluded.add(int(y))
+        except ValueError:
+            pass
 
     for pat in _ATT_PATTERNS:
         m = re.search(pat, text, re.I)
@@ -307,7 +311,7 @@ def _extract_attendees(text: str, event_year: str = "") -> Optional[int]:
             n = _safe_int(m.group(1))
             if not n or not (50 <= n <= 5_000_000):
                 continue
-            if year_n and n == year_n:
+            if n in excluded:
                 continue
             return n
     return None
@@ -595,13 +599,18 @@ async def enrich_event(
     need_description: bool = False,
     need_link:        bool = True,
     groq_client:      object = None,   # pass AsyncGroq client for validation
+    max_queries:      int  = 4,
 ) -> dict:
     """
     Enrich one event using SerpAPI google_ai_mode + LLM extraction.
-    Tries up to 4 query strategies to maximise the chance of getting
-    useful data — including a prior-edition attendance probe when the
-    event is future-dated and its own edition has no published numbers
-    yet. Returns a dict of enriched fields; empty dict = nothing found.
+    Tries up to `max_queries` query strategies (default 4, most specific
+    to broadest, including a prior-edition attendance probe when the
+    event is future-dated) to maximise the chance of getting useful
+    data. Set max_queries=1 for a single-shot, cost-bounded lookup —
+    one SerpAPI call per event, no retries even if attendees aren't
+    found; the caller should treat a miss as "data pending", not spend
+    more quota chasing it. Returns a dict of enriched fields; empty
+    dict = nothing found.
     """
     if not serpapi_key or not _SERPAPI_OK:
         return {}
@@ -614,29 +623,43 @@ async def enrich_event(
 
     city_part  = f" {city}" if city else ""
     base_name  = re.sub(r"\b(19|20)\d{2}\b", "", clean_name).strip()  # name with year stripped
+    try:
+        prev_year = str(int(year) - 1)
+    except ValueError:
+        prev_year = year
 
-    # Query strategies — most specific to broadest. Future-dated editions
-    # (year > current) rarely have attendee figures published yet, so when
-    # attendees are still needed we also probe the PREVIOUS edition, whose
-    # numbers are the standard real-world proxy for an upcoming show.
-    queries = [
-        # 1. Quoted exact name (most specific)
-        f'"{clean_name}" {year}{city_part} official website attendees registration',
-        # 2. Unquoted name (handles DB artefacts better)
-        f'{clean_name} {year}{city_part} attendees registration fee official site',
-        # 3. First 4 words + year + city (broadest — for unusual event names)
-        f'{" ".join(clean_name.split()[:4])} {year}{city_part} conference attendees',
-    ]
-    if need_attendees:
-        try:
-            prev_year = str(int(year) - 1)
-        except ValueError:
-            prev_year = year
-        # 4. Previous edition, phrased purely around turnout — this is the
-        #    query most likely to surface a number for a not-yet-held show.
-        queries.append(
-            f'{base_name} {prev_year} how many attendees visitors "last edition" turnout'
-        )
+    if max_queries <= 1 and need_attendees and not (need_price or need_description or need_link):
+        # Single-shot, cost-bounded lookup (e.g. attendees_only enrichment
+        # capped at 1 SerpAPI call per event). Ask for both the current
+        # AND prior-edition figure in one query — since there's no second
+        # attempt, phrase for the best chance of a number in one shot
+        # rather than the broader "official website / registration" query
+        # used for the general multi-strategy case below.
+        queries = [
+            f'{clean_name} {year}{city_part} how many attendees visitors expected turnout '
+            f'OR {base_name} {prev_year} attendees "last edition"'
+        ]
+    else:
+        # Query strategies — most specific to broadest. Future-dated editions
+        # (year > current) rarely have attendee figures published yet, so when
+        # attendees are still needed we also probe the PREVIOUS edition, whose
+        # numbers are the standard real-world proxy for an upcoming show.
+        queries = [
+            # 1. Quoted exact name (most specific)
+            f'"{clean_name}" {year}{city_part} official website attendees registration',
+            # 2. Unquoted name (handles DB artefacts better)
+            f'{clean_name} {year}{city_part} attendees registration fee official site',
+            # 3. First 4 words + year + city (broadest — for unusual event names)
+            f'{" ".join(clean_name.split()[:4])} {year}{city_part} conference attendees',
+        ]
+        if need_attendees:
+            # 4. Previous edition, phrased purely around turnout — this is
+            #    the query most likely to surface a number for a
+            #    not-yet-held show.
+            queries.append(
+                f'{base_name} {prev_year} how many attendees visitors "last edition" turnout'
+            )
+        queries = queries[:max_queries] if max_queries else queries
 
     raw:    dict = {}
     result: dict = {}   # persists and merges across query attempts
@@ -755,7 +778,7 @@ async def enrich_event(
 
         # Attendees (regex fallback — only if Groq didn't find it)
         if need_attendees and not result.get("est_attendees"):
-            att = _extract_attendees(full_text, event_year=year)
+            att = _extract_attendees(full_text, event_year=year, exclude_years=(prev_year,))
             if att:
                 result["est_attendees"]      = att
                 result["enriched_attendees"] = True
@@ -1018,6 +1041,10 @@ async def enrich_events_batch(
                 need_description = need_desc,
                 need_link        = need_link,
                 groq_client      = groq_client,
+                # attendees_only mode: one SerpAPI call per event, no
+                # retries. A miss becomes "attendee data pending" for
+                # this search rather than spending more quota chasing it.
+                max_queries      = 1 if attendees_only else 4,
             )
             result = dict(data) if data else {}
 
