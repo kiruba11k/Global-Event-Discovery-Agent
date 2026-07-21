@@ -28,7 +28,7 @@ export default function SocialProof() {
     <section className="ld-proof" id="problem" aria-labelledby="proof-heading">
       <div className="ld-proof-inner">
         <div className="ld-proof-header">
-          <span className="ds-eyebrow" style={{ color: 'var(--c-meet)' }}>Sound familiar?</span>
+          {/* <span className="ds-eyebrow" style={{ color: 'var(--c-meet)' }}>Sound familiar?</span> */}
           <h2 className="ds-h2" id="proof-heading">
             Most tradeshow budgets buy <em>hope, not meetings.</em>
           </h2>
