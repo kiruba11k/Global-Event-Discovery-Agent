@@ -560,9 +560,11 @@ async def enrich_event(
     groq_client:      object = None,   # pass AsyncGroq client for validation
 ) -> dict:
     """
-    Enrich one event using SerpAPI google_ai_mode.
-    Tries 3 query strategies to maximise the chance of getting useful data.
-    Returns a dict of enriched fields; empty dict = nothing reliable found.
+    Enrich one event using SerpAPI google_ai_mode + LLM extraction.
+    Tries up to 4 query strategies to maximise the chance of getting
+    useful data — including a prior-edition attendance probe when the
+    event is future-dated and its own edition has no published numbers
+    yet. Returns a dict of enriched fields; empty dict = nothing found.
     """
     if not serpapi_key or not _SERPAPI_OK:
         return {}
@@ -574,8 +576,12 @@ async def enrich_event(
         return _cache[cache_key]
 
     city_part  = f" {city}" if city else ""
+    base_name  = re.sub(r"\b(19|20)\d{2}\b", "", clean_name).strip()  # name with year stripped
 
-    # 3 query strategies — most specific to broadest
+    # Query strategies — most specific to broadest. Future-dated editions
+    # (year > current) rarely have attendee figures published yet, so when
+    # attendees are still needed we also probe the PREVIOUS edition, whose
+    # numbers are the standard real-world proxy for an upcoming show.
     queries = [
         # 1. Quoted exact name (most specific)
         f'"{clean_name}" {year}{city_part} official website attendees registration',
@@ -584,8 +590,19 @@ async def enrich_event(
         # 3. First 4 words + year + city (broadest — for unusual event names)
         f'{" ".join(clean_name.split()[:4])} {year}{city_part} conference attendees',
     ]
+    if need_attendees:
+        try:
+            prev_year = str(int(year) - 1)
+        except ValueError:
+            prev_year = year
+        # 4. Previous edition, phrased purely around turnout — this is the
+        #    query most likely to surface a number for a not-yet-held show.
+        queries.append(
+            f'{base_name} {prev_year} how many attendees visitors "last edition" turnout'
+        )
 
-    raw: dict = {}
+    raw:    dict = {}
+    result: dict = {}   # persists and merges across query attempts
 
     for i, query in enumerate(queries):
         # ── Try google_ai_mode first ───────────────────────────────
@@ -639,8 +656,6 @@ async def enrich_event(
 
         # ── We have relevant content — extract data ────────────────
         logger.debug(f"SerpAPI query [{i+1}] OK for '{clean_name[:40]}' ({matched} tokens, {len(full_text)} chars)")
-
-        result: dict = {}
 
                 # ── Groq validation: extract real values from AI Mode text ──
         # Runs ONLY when groq_client is provided.
@@ -740,13 +755,22 @@ async def enrich_event(
             for item in organic[:6]
         ]
 
-        _cache[cache_key] = result
-        return result
+        # Stop as soon as everything we still need is satisfied. If
+        # attendees are needed and still missing, keep trying the
+        # remaining queries (including the prior-edition probe) instead
+        # of returning early with a partial result.
+        still_need_attendees = need_attendees and not result.get("est_attendees")
+        if not still_need_attendees or i == len(queries) - 1:
+            _cache[cache_key] = result
+            return result
 
-    # All 3 queries failed or returned irrelevant results
-    logger.debug(f"SerpAPI: no useful data found for '{clean_name[:50]}' after 3 queries")
-    _cache[cache_key] = {}
-    return {}
+        logger.debug(f"SerpAPI query [{i+1}] found other data but no attendees for "
+                     f"'{clean_name[:40]}' — trying next query")
+
+    # All queries failed or returned irrelevant results
+    logger.debug(f"SerpAPI: no useful data found for '{clean_name[:50]}' after {len(queries)} queries")
+    _cache[cache_key] = result
+    return result
 
 
 # ── Batch enricher ─────────────────────────────────────────────────
