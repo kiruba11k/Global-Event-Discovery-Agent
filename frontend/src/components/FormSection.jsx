@@ -14,7 +14,7 @@ export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats
           viewport={{ once: true, margin: '-60px' }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          <span className="ds-eyebrow">Start here - free</span>
+          {/* <span className="ds-eyebrow">Start here - free</span> */}
           <h2 className="ds-h2" id="form-heading">
             Describe your buyer. <em>Get your show list.</em>
           </h2>
