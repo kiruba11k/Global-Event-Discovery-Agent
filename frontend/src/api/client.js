@@ -137,8 +137,8 @@ export const api = {
     }),
 
   // ── Geo hint - live event counts + neighbour suggestions ─
-  geoHint: (geos = [], industries = []) =>
-    request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}`),
+  geoHint: (geos = [], industries = [], personas = []) =>
+    request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}&personas=${encodeURIComponent(personas.join(','))}`),
 
 
 

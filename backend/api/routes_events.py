@@ -1176,6 +1176,7 @@ async def parse_icp(payload: dict):
 async def geo_hint(
     geos:       str = Query(""),
     industries: str = Query(""),
+    personas:   str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -1184,21 +1185,40 @@ async def geo_hint(
     - status: 'good' (>=10), 'sparse' (1-9), 'none' (0)
     - suggestions: top neighbour geos with their live counts (when status != 'good')
 
-    Counts are live DB queries — not hardcoded.
+    Counts are live DB queries — not hardcoded. When personas are given,
+    the count narrows to geo + industry + persona and only falls back to
+    the looser geo(+industry) count if that comes up empty — audience_personas
+    is sparsely populated on many rows, so a strict persona-only count would
+    misleadingly read as "no events" for a designation that's simply not
+    tagged yet, not one the app has no coverage for.
     """
     from sqlalchemy import select as _sel, func as _func, or_ as _or
     from models.event import EventORM as _ORM
 
     geo_list = [g.strip() for g in geos.split(",") if g.strip()]
     ind_list = [i.strip() for i in industries.split(",") if i.strip()]
+    per_list = [p.strip() for p in personas.split(",") if p.strip()]
     if not geo_list:
         return {"coverage": []}
 
     today = date.today().isoformat()
 
-    async def _count_geo(geo: str, with_industries: bool = True) -> int:
-        """Live count of future events matching a geo string (+ optional industry filter).
-        Falls back to geo-only if industry-filtered count is 0.
+    def _persona_filters():
+        filters = []
+        for per in per_list[:5]:
+            stem = per.lower()[:8]
+            filters += [
+                _ORM.audience_personas.ilike(f"%{stem}%"),
+                _ORM.description.ilike(f"%{stem}%"),
+                _ORM.name.ilike(f"%{stem}%"),
+            ]
+        return filters
+
+    async def _count_geo(geo: str, with_industries: bool = True, with_personas: bool = True) -> int:
+        """Live count of future events matching a geo string (+ optional
+        industry/persona filters). Falls back progressively — persona+industry
+        → industry-only → geo-only — so a sparsely-tagged persona never makes
+        the count read as zero coverage.
         """
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
@@ -1216,19 +1236,32 @@ async def geo_hint(
             _ORM.start_date >= today,
             _or(*geo_filters),
         )
+
+        ind_filters = []
         if with_industries and ind_list:
-            ind_filters = []
             for ind in ind_list[:5]:
                 stem = ind.lower()[:8]
                 ind_filters += [
                     _ORM.industry_tags.ilike(f"%{stem}%"),
                     _ORM.related_industries.ilike(f"%{stem}%"),
                 ]
-            icp_stmt = base_stmt.where(_or(*ind_filters))
-            result = await db.execute(icp_stmt)
-            cnt = result.scalar() or 0
+
+        per_filters = _persona_filters() if (with_personas and per_list) else []
+
+        # Tightest: geo + industry + persona
+        if ind_filters and per_filters:
+            stmt = base_stmt.where(_or(*ind_filters)).where(_or(*per_filters))
+            cnt = (await db.execute(stmt)).scalar() or 0
             if cnt > 0:
                 return cnt
+
+        # Next: geo + industry only
+        if ind_filters:
+            stmt = base_stmt.where(_or(*ind_filters))
+            cnt = (await db.execute(stmt)).scalar() or 0
+            if cnt > 0:
+                return cnt
+
         # Fall back to geo-only count
         result = await db.execute(base_stmt)
         return result.scalar() or 0
@@ -1237,11 +1270,14 @@ async def geo_hint(
         """
         Query DB for countries/regions that actually have the most future
         ICP-matching events — fully dynamic, works for any user input.
-        First tries with industry filter; falls back to all industries.
+        Tries persona+industry first, then industry only, then no filter —
+        these are the "same designation, different country" backfill
+        suggestions, so persona (when it narrows to a real result) takes
+        priority over a plain industry match.
         """
         exclude_lower = {g.strip().lower() for g in exclude_geos}
 
-        async def _query_top(with_ind: bool):
+        async def _query_top(with_ind: bool, with_per: bool = False):
             stmt = (
                 _sel(_ORM.country, _func.count(_ORM.id).label("cnt"))
                 .where(
@@ -1262,6 +1298,8 @@ async def geo_hint(
                         _ORM.related_industries.ilike(f"%{stem}%"),
                     ]
                 stmt = stmt.where(_or(*ind_filters))
+            if with_per and per_list:
+                stmt = stmt.where(_or(*_persona_filters()))
             result = await db.execute(stmt)
             rows = result.fetchall()
             out = []
@@ -1274,9 +1312,11 @@ async def geo_hint(
                     break
             return out
 
-        results = await _query_top(with_ind=True)
+        results = await _query_top(with_ind=True, with_per=True)
         if not results:
-            results = await _query_top(with_ind=False)
+            results = await _query_top(with_ind=True, with_per=False)
+        if not results:
+            results = await _query_top(with_ind=False, with_per=False)
         return results
 
     coverage = []
