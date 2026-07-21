@@ -244,18 +244,38 @@ def _is_generic_description(text: str) -> bool:
 
 
 def _flatten_blocks(text_blocks: list) -> str:
-    """Flatten google_ai_mode text_blocks into a string."""
+    """
+    Flatten google_ai_mode text_blocks into a string.
+
+    A "type": "list" block has NO top-level "snippet" — its content lives
+    nested in a "list" array of {"snippet": "..."} items (see SerpAPI's
+    google_ai_mode response schema). List blocks are exactly where
+    structured facts like "attracts 15,000 attendees" tend to show up
+    (bulleted key-facts), so missing them was silently dropping a large
+    share of the AI Mode answer.
+    """
     parts: list[str] = []
     for block in (text_blocks or []):
         if isinstance(block, str):
             parts.append(block)
-        elif isinstance(block, dict):
-            text = (
-                block.get("snippet") or block.get("text")
-                or block.get("body") or block.get("content") or ""
-            )
-            if text:
-                parts.append(str(text))
+            continue
+        if not isinstance(block, dict):
+            continue
+
+        text = (
+            block.get("snippet") or block.get("text")
+            or block.get("body") or block.get("content") or ""
+        )
+        if text:
+            parts.append(str(text))
+
+        for item in (block.get("list") or []):
+            if isinstance(item, dict):
+                item_text = item.get("snippet") or item.get("text") or ""
+                if item_text:
+                    parts.append(str(item_text))
+            elif isinstance(item, str):
+                parts.append(item)
     return " ".join(parts)
 
 
@@ -560,9 +580,11 @@ async def enrich_event(
     groq_client:      object = None,   # pass AsyncGroq client for validation
 ) -> dict:
     """
-    Enrich one event using SerpAPI google_ai_mode.
-    Tries 3 query strategies to maximise the chance of getting useful data.
-    Returns a dict of enriched fields; empty dict = nothing reliable found.
+    Enrich one event using SerpAPI google_ai_mode + LLM extraction.
+    Tries up to 4 query strategies to maximise the chance of getting
+    useful data — including a prior-edition attendance probe when the
+    event is future-dated and its own edition has no published numbers
+    yet. Returns a dict of enriched fields; empty dict = nothing found.
     """
     if not serpapi_key or not _SERPAPI_OK:
         return {}
@@ -574,8 +596,12 @@ async def enrich_event(
         return _cache[cache_key]
 
     city_part  = f" {city}" if city else ""
+    base_name  = re.sub(r"\b(19|20)\d{2}\b", "", clean_name).strip()  # name with year stripped
 
-    # 3 query strategies — most specific to broadest
+    # Query strategies — most specific to broadest. Future-dated editions
+    # (year > current) rarely have attendee figures published yet, so when
+    # attendees are still needed we also probe the PREVIOUS edition, whose
+    # numbers are the standard real-world proxy for an upcoming show.
     queries = [
         # 1. Quoted exact name (most specific)
         f'"{clean_name}" {year}{city_part} official website attendees registration',
@@ -584,8 +610,19 @@ async def enrich_event(
         # 3. First 4 words + year + city (broadest — for unusual event names)
         f'{" ".join(clean_name.split()[:4])} {year}{city_part} conference attendees',
     ]
+    if need_attendees:
+        try:
+            prev_year = str(int(year) - 1)
+        except ValueError:
+            prev_year = year
+        # 4. Previous edition, phrased purely around turnout — this is the
+        #    query most likely to surface a number for a not-yet-held show.
+        queries.append(
+            f'{base_name} {prev_year} how many attendees visitors "last edition" turnout'
+        )
 
-    raw: dict = {}
+    raw:    dict = {}
+    result: dict = {}   # persists and merges across query attempts
 
     for i, query in enumerate(queries):
         # ── Try google_ai_mode first ───────────────────────────────
@@ -603,7 +640,12 @@ async def enrich_event(
         blocks  = raw.get("text_blocks", []) or []
         organic = raw.get("organic_results", []) or []
 
-        ai_text  = _flatten_blocks(blocks)
+        # reconstructed_markdown is SerpAPI's own flattened rendering of
+        # the full AI Mode answer — a superset of text_blocks that's
+        # already merged the list items in, so combine both rather than
+        # relying on our own block-walk alone.
+        md_text  = str(raw.get("reconstructed_markdown") or "")
+        ai_text  = " ".join(p for p in (md_text, _flatten_blocks(blocks)) if p)
         org_text = _organic_text(organic)
         full_text = f"{ai_text} {org_text}".strip()
 
@@ -639,8 +681,6 @@ async def enrich_event(
 
         # ── We have relevant content — extract data ────────────────
         logger.debug(f"SerpAPI query [{i+1}] OK for '{clean_name[:40]}' ({matched} tokens, {len(full_text)} chars)")
-
-        result: dict = {}
 
                 # ── Groq validation: extract real values from AI Mode text ──
         # Runs ONLY when groq_client is provided.
@@ -740,13 +780,22 @@ async def enrich_event(
             for item in organic[:6]
         ]
 
-        _cache[cache_key] = result
-        return result
+        # Stop as soon as everything we still need is satisfied. If
+        # attendees are needed and still missing, keep trying the
+        # remaining queries (including the prior-edition probe) instead
+        # of returning early with a partial result.
+        still_need_attendees = need_attendees and not result.get("est_attendees")
+        if not still_need_attendees or i == len(queries) - 1:
+            _cache[cache_key] = result
+            return result
 
-    # All 3 queries failed or returned irrelevant results
-    logger.debug(f"SerpAPI: no useful data found for '{clean_name[:50]}' after 3 queries")
-    _cache[cache_key] = {}
-    return {}
+        logger.debug(f"SerpAPI query [{i+1}] found other data but no attendees for "
+                     f"'{clean_name[:40]}' — trying next query")
+
+    # All queries failed or returned irrelevant results
+    logger.debug(f"SerpAPI: no useful data found for '{clean_name[:50]}' after {len(queries)} queries")
+    _cache[cache_key] = result
+    return result
 
 
 # ── Batch enricher ─────────────────────────────────────────────────
