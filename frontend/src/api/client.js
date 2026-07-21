@@ -10,12 +10,30 @@ function apiError(message, status) {
   return err
 }
 
+// Random id persisted per-browser, sent as X-Device-Id so the backend's
+// daily search limit (api/rate_limit.py) can key on "one person" instead
+// of raw IP — IP alone false-positives for anyone sharing a network
+// (home WiFi, office, mobile carrier CGNAT) with someone who already
+// used their quota.
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem('device_id')
+    if (!id) {
+      id = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      localStorage.setItem('device_id', id)
+    }
+    return id
+  } catch {
+    return ''   // localStorage unavailable (private mode, etc.) — server falls back to IP-only
+  }
+}
+
 async function request(path, options = {}) {
   const url = `${BASE}/api${path}`
   let res
   try {
     res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { 'Content-Type': 'application/json', 'X-Device-Id': getDeviceId(), ...options.headers },
       ...options,
     })
   } catch (networkErr) {
@@ -36,8 +54,8 @@ export const api = {
   // {status:'queued', job_id} (search queue is active — REDIS_URL is
   // set on the backend) or {status:'done', job_id:null, result}
   // (no queue configured, ran inline same as before this existed).
-  // Also throws a 429 (via request()'s apiError) if this IP already
-  // used its one search for the day.
+  // Also throws a 429 (via request()'s apiError) if this browser
+  // (X-Device-Id) has used its daily search allowance.
   search: (payload) =>
     request('/search', {
       method: 'POST',
