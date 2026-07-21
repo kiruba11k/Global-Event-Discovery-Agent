@@ -175,7 +175,7 @@ export default function HowItWorks({ stats }) {
     <section className="ld-how" id="how" aria-labelledby="how-heading">
       <div className="ld-how-inner">
         <div className="ld-how-header">
-          <span className="ds-eyebrow">How it works</span>
+          {/* <span className="ds-eyebrow">How it works</span> */}
           <h2 className="ds-h2" id="how-heading">
             Right show. Right people. <em>Right words.</em>
           </h2>
