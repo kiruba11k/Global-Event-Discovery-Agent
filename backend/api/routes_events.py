@@ -1075,9 +1075,9 @@ async def search_events(
     from api.rate_limit import enforce_daily_search_limit
     from queueing.search_queue import enqueue
 
-    ip = await enforce_daily_search_limit(http_request)
-
     profile = request.profile
+    ip = await enforce_daily_search_limit(http_request, email=profile.email or "")
+
     profile_dict = profile.model_dump()
 
     submission = await create_search_submission(
