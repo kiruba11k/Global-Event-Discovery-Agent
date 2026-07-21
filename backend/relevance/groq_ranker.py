@@ -889,6 +889,27 @@ async def rank_with_groq(
             verdict   = tier
             rationale = build_fallback_rationale(event, profile, detail, score, tier)
 
+        # Hard persona override — don't trust the LLM's verdict when the
+        # rule-based scorer already found ZERO persona relevance. Matching
+        # specific phrases in the LLM's rationale (_consistent_verdict) is
+        # too fragile — it phrases a mismatch differently every time
+        # ("targets CIOs and not CEOs directly" doesn't match any fixed
+        # phrase list). The scorer's persona_missed flag is the ground
+        # truth: computed once, deterministically, from the same
+        # profile.target_personas the LLM was given. If the profile named
+        # a persona and this event matched none of it, it's a hard SKIP
+        # no matter how favourably the LLM wrote it up.
+        if profile.target_personas and detail.get("persona_missed") and verdict != "SKIP":
+            logger.info(
+                f"Persona hard-override {verdict}→SKIP (rule-based persona miss): "
+                f"'{event.name[:50]}'"
+            )
+            verdict   = "SKIP"
+            # Replace the rationale too — an LLM-written "plausible
+            # opportunity" blurb next to a SKIP badge reads as broken, not
+            # honest. build_fallback_rationale explains the actual miss.
+            rationale = build_fallback_rationale(event, profile, detail, score, verdict)
+
         # Link resolution: DB/SerpAPI only — LLM output never used for links
         final_link = _best_link(event, ev_en)
         final_att  = (
