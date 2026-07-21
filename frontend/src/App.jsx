@@ -88,7 +88,7 @@ function PathCards({ onScrollToForm }) {
     <section className="ld-paths" aria-label="How we help">
       <div className="ld-paths-inner">
         <div className="ld-paths-header">
-          <span className="ds-eyebrow">Two ways to win a show</span>
+          {/* <span className="ds-eyebrow">Two ways to win a show</span> */}
           <h2 className="ds-h2">Walking the floor <em>or holding a booth.</em></h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
             The room is the same. What you do with it isn't. We forecast the buyers either way.
@@ -129,7 +129,7 @@ function FooterCTA({ onScrollToForm }) {
         viewport={{ once: true, margin: '-60px' }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
-        <span className="ds-eyebrow ld-footer-cta-eyebrow">Ready to stop guessing?</span>
+        {/* <span className="ds-eyebrow ld-footer-cta-eyebrow">Ready to stop guessing?</span> */}
         <h2 className="ld-footer-cta-h2">
           The right show. The right people.<br />The right words.
         </h2>
