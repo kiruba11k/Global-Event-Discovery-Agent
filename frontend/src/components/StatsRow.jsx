@@ -10,14 +10,13 @@ import '../landing.css'
 export default function StatsRow({ stats }) {
   const totalEvents = stats?.total_events_in_db > 0 ? stats.total_events_in_db : null
   const countries   = stats?.countries_covered  > 0 ? stats.countries_covered  : null
-  // live_sources is normalized server-side (connector families, not raw
-  // scraper-run labels) - never count events_by_source keys, they're noisy
-  const sources     = stats?.live_sources > 0 ? stats.live_sources : null
 
+  // "live data sources" cell removed from display — kept the stat wired
+  // server-side (stats.live_sources) in case it's needed again, just not
+  // shown here since a low connector count reads as an unimpressive number.
   const CELLS = [
     { end: totalEvents ?? 10000, suffix: totalEvents ? '' : '+', label: 'B2B tradeshows indexed', live: !!totalEvents },
     { end: countries ?? 20,      suffix: countries ? '' : '+',   label: 'countries covered',      live: !!countries },
-    { end: sources ?? 12,        suffix: '',                     label: 'live data sources',      live: !!sources },
     { end: 90,                   suffix: 's',                    label: 'to your ranked shortlist', live: true },
   ]
 
