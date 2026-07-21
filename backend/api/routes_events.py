@@ -656,10 +656,19 @@ async def _run_search_pipeline(
                         max_enrich     = len(final_top_events),  # exactly the 6 shown events
                         attendees_only = True,
                     ),
-                    timeout=60,
+                    # The prior-edition-attendance fallback (added when
+                    # attendees are still missing after the first 3 query
+                    # strategies) can push a single event's enrichment past
+                    # 10-15s including LLM validation; at concurrency=6 for
+                    # 6 events that's a single wave, but worst case still
+                    # needs real headroom. On timeout wait_for() cancels the
+                    # WHOLE batch coroutine, discarding any events that had
+                    # already finished — so this budget must comfortably
+                    # cover the realistic worst case, not just the typical one.
+                    timeout=150,
                 )
             except _aio_timeout.TimeoutError:
-                logger.warning("SerpAPI enrichment exceeded 60s budget — showing un-enriched results")
+                logger.warning("SerpAPI enrichment exceeded 150s budget — showing un-enriched results")
                 enrichments = {}
             if enrichments:
                 logger.info(
