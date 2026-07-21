@@ -1255,7 +1255,17 @@ async def geo_hint(
             if cnt > 0:
                 return cnt
 
-        # Next: geo + industry only
+        # Next: geo + persona only — persona takes priority over industry
+        # when both were given but the combination came up empty. Relaxing
+        # industry first (not persona) keeps the count honest about
+        # designation, which is what actually gates results downstream.
+        if per_filters:
+            stmt = base_stmt.where(_or(*per_filters))
+            cnt = (await db.execute(stmt)).scalar() or 0
+            if cnt > 0:
+                return cnt
+
+        # Next: geo + industry only (persona genuinely has no matches here)
         if ind_filters:
             stmt = base_stmt.where(_or(*ind_filters))
             cnt = (await db.execute(stmt)).scalar() or 0

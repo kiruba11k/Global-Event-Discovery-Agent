@@ -175,11 +175,14 @@ export default function ShowRankingPage({
   // Apply date filter to top-6 ranked events
   const dateFiltered = applyDateFilter(events, dateWindow)
 
-  // Apply date filter to remaining relevant events
-  const relevantFiltered = applyDateFilter(allRelevantEvents, dateWindow)
-
-  // Full pool for EventTable: ranked top 6 + all remaining relevant events
-  const fullEventPool = [...dateFiltered, ...relevantFiltered]
+  // Full pool for EventTable: ONLY the top-6 ranked events. allRelevantEvents
+  // (everything beyond the top 6) never goes through the LLM ranker — no
+  // rationale, no What It's About, no Key Numbers, nothing to back up its
+  // GO/CONSIDER badge — so it doesn't belong in a table whose whole premise
+  // is "expand any row for AI analysis." Showing 6 (or fewer, after date
+  // filtering) genuinely-analyzed events beats padding the table with rows
+  // that display a verdict nobody can actually explain.
+  const fullEventPool = dateFiltered
 
   // Top 6 shown in ranked list
   // Rows 1–3 free, rows 4–6 email-gated
@@ -366,9 +369,9 @@ export default function ShowRankingPage({
               Next {m} months
             </button>
           ))}
-          {fullEventPool.length !== (events.length + allRelevantEvents.length) && (
+          {fullEventPool.length !== events.length && (
             <span className="rk-date-count">
-              {fullEventPool.length} of {events.length + allRelevantEvents.length} events
+              {fullEventPool.length} of {events.length} events
             </span>
           )}
         </div>
