@@ -244,18 +244,38 @@ def _is_generic_description(text: str) -> bool:
 
 
 def _flatten_blocks(text_blocks: list) -> str:
-    """Flatten google_ai_mode text_blocks into a string."""
+    """
+    Flatten google_ai_mode text_blocks into a string.
+
+    A "type": "list" block has NO top-level "snippet" — its content lives
+    nested in a "list" array of {"snippet": "..."} items (see SerpAPI's
+    google_ai_mode response schema). List blocks are exactly where
+    structured facts like "attracts 15,000 attendees" tend to show up
+    (bulleted key-facts), so missing them was silently dropping a large
+    share of the AI Mode answer.
+    """
     parts: list[str] = []
     for block in (text_blocks or []):
         if isinstance(block, str):
             parts.append(block)
-        elif isinstance(block, dict):
-            text = (
-                block.get("snippet") or block.get("text")
-                or block.get("body") or block.get("content") or ""
-            )
-            if text:
-                parts.append(str(text))
+            continue
+        if not isinstance(block, dict):
+            continue
+
+        text = (
+            block.get("snippet") or block.get("text")
+            or block.get("body") or block.get("content") or ""
+        )
+        if text:
+            parts.append(str(text))
+
+        for item in (block.get("list") or []):
+            if isinstance(item, dict):
+                item_text = item.get("snippet") or item.get("text") or ""
+                if item_text:
+                    parts.append(str(item_text))
+            elif isinstance(item, str):
+                parts.append(item)
     return " ".join(parts)
 
 
@@ -620,7 +640,12 @@ async def enrich_event(
         blocks  = raw.get("text_blocks", []) or []
         organic = raw.get("organic_results", []) or []
 
-        ai_text  = _flatten_blocks(blocks)
+        # reconstructed_markdown is SerpAPI's own flattened rendering of
+        # the full AI Mode answer — a superset of text_blocks that's
+        # already merged the list items in, so combine both rather than
+        # relying on our own block-walk alone.
+        md_text  = str(raw.get("reconstructed_markdown") or "")
+        ai_text  = " ".join(p for p in (md_text, _flatten_blocks(blocks)) if p)
         org_text = _organic_text(organic)
         full_text = f"{ai_text} {org_text}".strip()
 
