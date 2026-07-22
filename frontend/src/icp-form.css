@@ -393,14 +393,16 @@
 }
 .icp-email-icon {
   position: absolute;
-  left:     14px;
+  left:     16px;
   top:      50%;
+  width:    16px;
+  height:   16px;
   transform:translateY(-50%);
   color:    var(--ink-faint, #8A959C);
   pointer-events: none;
 }
 .icp-input--email {
-  padding-left: 60px;
+  padding-left: 48px !important;
 }
 .icp-privacy {
   font-size:  10px;
