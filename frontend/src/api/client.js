@@ -140,6 +140,9 @@ export const api = {
   geoHint: (geos = [], industries = [], personas = []) =>
     request(`/geo-hint?geos=${encodeURIComponent(geos.join(','))}&industries=${encodeURIComponent(industries.join(','))}&personas=${encodeURIComponent(personas.join(','))}`),
 
+  // ── Live country list from the DB (for geography autocomplete) ─
+  geoList: () => request('/geo-list'),
+
 
 
   // ── CSV export URL helper ─────────────────────────────
