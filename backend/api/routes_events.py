@@ -460,47 +460,13 @@ async def _run_search_pipeline(
         "peru":      ["latin america", "usa"],
     }
 
+    # NOTE: geography is a strict, hard requirement from the ICP form.
+    # We intentionally do NOT broaden to neighbouring/regional countries
+    # here — if the requested geography has too few (or zero) matching
+    # events, the result must stay scoped to that geography rather than
+    # silently backfilling with events from other countries.
     region_fallback_note: Optional[str] = None
     original_geos = list(profile.target_geographies or [])
-
-    if candidates and len(candidates) < 3 and original_geos:
-        # Check if specific non-global geos were requested
-        non_global = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
-        if non_global:
-            # Try broadening to regional equivalents
-            broader_geos: list[str] = []
-            for geo in non_global:
-                geo_l = geo.lower().strip()
-                for key, regions in _GEO_REGION_MAP.items():
-                    if key in geo_l or geo_l in key:
-                        broader_geos.extend(regions)
-                        break
-                else:
-                    # Generic: just try the continent/region implicitly
-                    broader_geos.append(geo)
-            broader_geos = list(dict.fromkeys(broader_geos))  # deduplicate
-
-            if broader_geos:
-                # Re-fetch with broader geo set
-                from db.crud import get_candidate_events as _gce
-                broader_candidates = await _gce(
-                    db,
-                    geographies  = broader_geos,
-                    industries   = profile.target_industries or [],
-                    date_from    = profile.date_from,
-                    date_to      = profile.date_to,
-                    limit        = 400,
-                )
-                if profile.date_from or profile.date_to:
-                    broader_candidates = [e for e in broader_candidates if _within_dates(e, profile.date_from, profile.date_to)]
-
-                if len(broader_candidates) > len(candidates):
-                    region_fallback_note = (
-                        f"No events found in {', '.join(non_global)}. "
-                        f"Showing events from the broader region ({', '.join(broader_geos[:3])}) instead."
-                    )
-                    candidates = broader_candidates
-                    logger.info(f"Regional fallback: {', '.join(non_global)} → {', '.join(broader_geos[:3])} ({len(candidates)} candidates)")
 
     if not candidates:
         logger.info("No candidates after date filter.")

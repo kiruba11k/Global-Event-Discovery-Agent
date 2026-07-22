@@ -891,7 +891,23 @@ def score_candidates(
     semantic_active = bool(cosine_scores)
     results: list = []
 
+    # Geography is a HARD filter: when the ICP form names specific
+    # geographies (and hasn't opted into "global"/"any"), events that don't
+    # match one of those geographies (and aren't virtual/hybrid) must not
+    # appear at all — not even demoted. If nothing in that geography
+    # matches, the result list is empty rather than backfilling with
+    # events from other countries.
+    strict_geo = bool(profile.target_geographies) and not any(
+        g.lower().strip() in ("global", "worldwide", "international", "any")
+        for g in profile.target_geographies
+    )
+
     for event in events:
+        if strict_geo:
+            geo_score, geo_matched = _score_geo(event, profile)
+            if geo_score == 0.0 and geo_matched not in ("Global", "Virtual/Hybrid"):
+                continue
+
         cosine = cosine_scores.get(event.id, 0.0)
         rule, detail = _rule_score(event, profile)
 
