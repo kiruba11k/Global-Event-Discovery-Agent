@@ -15,12 +15,12 @@ Field priority used throughout this file:
   link      → website             → SerpAPI enriched → source_url (eventseye page)
                                   → Google search fallback
 
-After SerpAPI enrichment, event dicts sent to the LLM include:
-  est_attendees      (filled by SerpAPI or still 0 if not found)
-  price_description  (filled by SerpAPI or "See website")
-  audience_personas  (inferred from industry)
-  event_link         (official site from SerpAPI organic results)
-  serpapi_text       (AI-mode text blocks for LLM context)
+Ranking runs ONCE, before SerpAPI enrichment — its verdict/score/order are
+frozen. Enrichment (est_attendees, pricing, description refinement) is
+applied afterward as a display-only patch, not fed back through a second
+LLM ranking pass. Event dicts sent to the LLM are limited to 5 structured
+fields (description, est_attendees, pricing, typical_attendees/audience,
+industry_focus) plus identity/date/location — no raw SerpAPI text blocks.
 """
 from __future__ import annotations
 
@@ -474,11 +474,10 @@ CRITICAL WRITING RULES:
   ✅ Use ONLY fields visible in the event data (industry_focus, description, typical_attendees, location).
   ✅ Describe what the event ACTUALLY covers based on its industry_focus and description.
   ✅ Explain WHY it's relevant (or not) in terms of sales opportunity.
-  ✅ If serpapi_text has attendee or pricing data, extract it accurately.
   ✅ Use event_link from the event data for the link field.
 
   ❌ NEVER say an event covers "AI/ML", "Technology", "Cloud" unless those words appear
-     in the event's own industry_focus, description, or serpapi_text.
+     in the event's own industry_focus or description.
   ❌ NEVER project the client's target industries onto the event.
   ❌ NEVER use code field names like event.industry_tags, profile.target_personas.
   ❌ Do not fabricate attendee numbers or prices — use "See event website" if unknown.
@@ -523,8 +522,6 @@ def _event_dict(
         "typical_attendees":    _personas(event, enrichments),
         "pricing":              _pricing(event, enrichments),
         "event_link":           _best_link(event, enrichments),
-        "serpapi_text":         enrichments.get("serpapi_text", "")[:2000],
-        "serpapi_results":      enrichments.get("serpapi_results", []),
         "pre_score":            score,
         "pre_tier":             tier,
         "rule_matched_industries": detail.get("industry_matched", []),
@@ -566,9 +563,9 @@ EVENTS:
 For each event:
 - what_its_about: describe based on industry_focus + description fields ONLY
 - buyer_persona: use typical_attendees field, or infer from industry_focus
-- pricing: use pricing field from event data, or extract from serpapi_text
-- est_attendees: extract number from serpapi_text if available, else 0
-- key_numbers: attendee count + any numeric facts from serpapi_text; empty string if unknown
+- pricing: use pricing field from event data, or "See website" if unknown
+- est_attendees: use est_attendees field from event data, or 0 if unknown
+- key_numbers: attendee count if known, else empty string
 - verdict_notes: explain the relevance in plain sales-analyst language
 
 DO NOT generate or guess any URLs. Links are resolved from the database separately.
@@ -580,10 +577,10 @@ Return JSON:
       "id": "<id>",
       "fit_verdict": "GO|CONSIDER|SKIP",
       "verdict_notes": "<2-3 sentences about what the event is and its sales relevance>",
-      "key_numbers": "<numbers from serpapi_text or empty string>",
+      "key_numbers": "<attendee count or empty string>",
       "what_its_about": "<what this event covers based on its own data>",
       "buyer_persona": "<who attends based on industry>",
-      "pricing": "<from serpapi_text or 'See website'>",
+      "pricing": "<from event data or 'See website'>",
       "est_attendees": 0
     }}
   ]
@@ -618,13 +615,11 @@ def _chunk_events_by_budget(events_dicts: list, system: str, profile_dict: dict)
 
     for ev in events_dicts:
         ev_tokens = estimate_tokens(json.dumps(ev, indent=2))
-        # A single oversized event (huge serpapi payload) must still fit:
-        # slim its enrichment bulk rather than guarantee a 413.
+        # A single oversized event must still fit: slim its description
+        # rather than guarantee a 413.
         if fixed_tokens + ev_tokens + _completion_budget(1) > settings.openai_tpm_limit * 0.9:
             ev = dict(ev)
-            ev.pop("serpapi_results", None)
-            ev["serpapi_text"] = (ev.get("serpapi_text") or "")[:600]
-            ev["description"]  = (ev.get("description") or "")[:200]
+            ev["description"] = (ev.get("description") or "")[:200]
             ev_tokens = estimate_tokens(json.dumps(ev, indent=2))
         # Would adding this event still fit (incl. per-event completion budget)?
         prospective = fixed_tokens + current_tokens + ev_tokens \

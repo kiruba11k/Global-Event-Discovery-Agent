@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     rule_weight: float = 0.35
     go_threshold: float = 0.68
     consider_threshold: float = 0.42
-    top_k_for_llm: int = 15   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
+    top_k_for_llm: int = 10   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
 
     # ── Scheduler ────────────────────────────────
     refresh_interval_hours: int = 24
