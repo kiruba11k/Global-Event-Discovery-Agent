@@ -245,6 +245,54 @@ async def embed_missing(db: AsyncSession, events: Iterable, limit: Optional[int]
 
 # ── Read path ──────────────────────────────────────────────────────
 
+async def semantic_matches(
+    db:         AsyncSession,
+    query_text: str,
+    date_from:  Optional[str] = None,
+    top_k:      Optional[int] = None,
+    min_cosine: float = 0.55,
+) -> List[dict]:
+    """
+    Whole-index semantic search that also returns each hit's geo fields
+    (country/city/event_cities), so a caller can filter by region itself
+    — used by /api/geo-hint so its live counts include events a semantic
+    match would surface even without a literal keyword hit, the same
+    recall the main search pipeline already gets via semantic_scores().
+    Empty list on any unavailability or empty query text.
+    """
+    if not query_text.strip() or not is_active() or not await ensure_schema(db):
+        return []
+    top_k = top_k or settings.pgvector_top_k
+
+    vecs = await _embed([query_text])
+    if not vecs:
+        return []
+    q = _vec_literal(vecs[0])
+
+    try:
+        rows = (await db.execute(
+            text(
+                "SELECT id, country, city, event_cities, "
+                "1 - (embedding <=> CAST(:q AS vector)) AS cos "
+                "FROM events "
+                "WHERE embedding IS NOT NULL "
+                "  AND start_date >= :dfrom "
+                "ORDER BY embedding <=> CAST(:q AS vector) "
+                "LIMIT :k"
+            ),
+            {"q": q, "dfrom": date_from or "0000-01-01", "k": top_k},
+        )).fetchall()
+    except Exception as exc:
+        logger.warning(f"pgvector: geo semantic search failed ({exc})")
+        return []
+
+    return [
+        {"id": row[0], "country": row[1] or "", "city": row[2] or "",
+         "event_cities": row[3] or "", "cosine": max(0.0, float(row[4]))}
+        for row in rows if float(row[4]) >= min_cosine
+    ]
+
+
 async def semantic_scores(
     db: AsyncSession,
     profile,

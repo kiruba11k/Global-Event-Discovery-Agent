@@ -1172,12 +1172,17 @@ async def geo_hint(
 
     Counts are live DB queries — not hardcoded. When industries/personas are
     given, the count strictly requires geo + industry + persona together
-    (no silent fallback to a looser number), and `suggestions` uses that
-    same strictness — a suggested region always has at least one event
-    that will actually show up if the user switches to it.
+    (no silent fallback to a looser number), UNIONed with pgvector semantic
+    matches for the same query text (when pgvector is enabled) — the main
+    search pipeline can surface an event via semantic similarity alone, so
+    this hint counts it too, or it would under-report real coverage.
+    `suggestions` applies the same strict-plus-semantic combination, so a
+    suggested region always has at least one event that will actually show
+    up if the user switches to it.
     """
-    from sqlalchemy import select as _sel, func as _func, or_ as _or
+    from sqlalchemy import select as _sel, or_ as _or
     from models.event import EventORM as _ORM
+    import re as _re
 
     geo_list = [g.strip() for g in geos.split(",") if g.strip()]
     ind_list = [i.strip() for i in industries.split(",") if i.strip()]
@@ -1198,13 +1203,46 @@ async def geo_hint(
             ]
         return filters
 
+    # ── Semantic recall (pgvector) ──────────────────────────────────
+    # The main search pipeline now blends in semantic similarity
+    # (score_candidates → pgvector_store.semantic_scores), so an event
+    # can clear GO/CONSIDER without ever containing the literal
+    # industry/persona keywords the ILIKE filters below look for. If
+    # this hint only counted ILIKE hits, it would under-report coverage
+    # search will actually find — reintroducing the same
+    # hint-vs-reality mismatch already fixed for the ILIKE-only path.
+    # Fetched once and reused across every geo/neighbour in this request.
+    semantic_rows: list[dict] = []
+    if ind_list or per_list:
+        try:
+            from relevance import pgvector_store
+            semantic_rows = await pgvector_store.semantic_matches(
+                db, " ".join(ind_list + per_list), date_from=today,
+            )
+        except Exception as exc:
+            logger.debug(f"geo-hint: semantic recall skipped ({exc})")
+
+    def _geo_words(geo: str) -> list[str]:
+        return [w for w in _re.split(r"[\s,/\-]+", geo.lower()) if len(w) > 2]
+
+    def _semantic_ids_for_geo(geo: str) -> set[str]:
+        words = _geo_words(geo)
+        if not words or not semantic_rows:
+            return set()
+        ids: set[str] = set()
+        for row in semantic_rows:
+            loc = f"{row['country']} {row['city']} {row['event_cities']}".lower()
+            if any(w in loc for w in words):
+                ids.add(row["id"])
+        return ids
+
     async def _count_geo(geo: str, with_industries: bool = True, with_personas: bool = True) -> int:
         """Live count of future events matching a geo string, strictly
         combined with industry/persona filters when the ICP form provided
-        them. This must report the SAME strictness the results pipeline
-        actually applies — no silent fallback to a looser geo-only number,
-        since that would show a coverage count the search can never
-        deliver on.
+        them, UNIONed with pgvector semantic matches for the same geo —
+        together this is the same strictness + recall the results
+        pipeline actually applies, so this count never promises more (or
+        less) than the search can deliver.
         """
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
@@ -1217,8 +1255,9 @@ async def geo_hint(
                 geo_filters.append(_ORM.city.ilike(f"%{part}%"))
                 geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
         if not geo_filters:
-            return 0
-        stmt = _sel(_func.count(_ORM.id)).where(
+            return len(_semantic_ids_for_geo(geo)) if with_industries and with_personas else 0
+
+        stmt = _sel(_ORM.id).where(
             _ORM.start_date >= today,
             _or(*geo_filters),
         )
@@ -1238,7 +1277,12 @@ async def geo_hint(
             stmt = stmt.where(_or(*per_filters))
 
         result = await db.execute(stmt)
-        return result.scalar() or 0
+        ids = {row[0] for row in result.all()}
+
+        if with_industries and with_personas:
+            ids |= _semantic_ids_for_geo(geo)
+
+        return len(ids)
 
     async def _top_available_regions(exclude_geos: list[str], limit: int = 5) -> list[dict]:
         """
@@ -1254,16 +1298,18 @@ async def geo_hint(
         exclude_lower = {g.strip().lower() for g in exclude_geos}
 
         async def _query_top(with_ind: bool, with_per: bool = False):
+            # Fetch id+country rows (not a grouped count) so semantic
+            # matches can be unioned per-country without double-counting
+            # an event that hits both the ILIKE filter and the vector
+            # search — same reasoning as _count_geo above.
             stmt = (
-                _sel(_ORM.country, _func.count(_ORM.id).label("cnt"))
+                _sel(_ORM.id, _ORM.country)
                 .where(
                     _ORM.start_date >= today,
                     _ORM.country.isnot(None),
                     _ORM.country != "",
                 )
-                .group_by(_ORM.country)
-                .order_by(_func.count(_ORM.id).desc())
-                .limit(30)
+                .limit(2000)
             )
             if with_ind and ind_list:
                 ind_filters = []
@@ -1277,16 +1323,26 @@ async def geo_hint(
             if with_per and per_list:
                 stmt = stmt.where(_or(*_persona_filters()))
             result = await db.execute(stmt)
-            rows = result.fetchall()
-            out = []
-            for row in rows:
-                country = (row[0] or "").strip()
-                cnt     = row[1] or 0
-                if country and country.lower() not in exclude_lower and cnt > 0:
-                    out.append({"geo": country, "count": cnt})
-                if len(out) >= limit:
-                    break
-            return out
+
+            ids_by_country: dict[str, set] = {}
+            for row in result.all():
+                country = (row[1] or "").strip()
+                if country:
+                    ids_by_country.setdefault(country, set()).add(row[0])
+
+            if with_ind and with_per:
+                for row in semantic_rows:
+                    country = (row["country"] or "").strip()
+                    if country:
+                        ids_by_country.setdefault(country, set()).add(row["id"])
+
+            out = [
+                {"geo": country, "count": len(ids)}
+                for country, ids in ids_by_country.items()
+                if country.lower() not in exclude_lower and ids
+            ]
+            out.sort(key=lambda x: -x["count"])
+            return out[:limit]
 
         if per_list:
             # Persona was specified — require geo+industry+persona together,
