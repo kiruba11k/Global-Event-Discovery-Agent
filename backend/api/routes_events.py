@@ -200,29 +200,15 @@ def _sort_ranked(ranked: list) -> list:
 
 def _apply_result_mix(ranked: Iterable) -> list:
     """
-    Always return exactly RESULT_LIMIT (6) events.
-    Priority: GO events first, then CONSIDER, then best SKIP (by relevance_score).
+    Return the genuine GO/CONSIDER matches, verdict-then-score order,
+    capped at RESULT_LIMIT (6) — never padded. If only 3 events truly
+    match the ICP, show 3; if 40 match, show the top 6; SKIP events are
+    never used to pad up to 6.
     """
     all_ranked      = list(ranked)
     go_events       = [r for r in all_ranked if r.fit_verdict == "GO"]
     consider_events = [r for r in all_ranked if r.fit_verdict == "CONSIDER"]
-    skip_events     = [r for r in all_ranked if r.fit_verdict == "SKIP"]
-
-    selected_go  = go_events[:GO_RESULT_COUNT]
-    remaining    = RESULT_LIMIT - len(selected_go)
-    selected_con = consider_events[:remaining]
-    remaining    = RESULT_LIMIT - len(selected_go) - len(selected_con)
-
-    # Fill remaining slots with best-scored SKIP events so we always return 6
-    selected_skip = skip_events[:remaining] if remaining > 0 else []
-
-    result = selected_go + selected_con + selected_skip
-    # Final safety: if still short, append any remaining events
-    if len(result) < RESULT_LIMIT:
-        used_ids = {r.id for r in result}
-        extras   = [r for r in all_ranked if r.id not in used_ids]
-        result  += extras[:RESULT_LIMIT - len(result)]
-    return result[:RESULT_LIMIT]
+    return (go_events + consider_events)[:RESULT_LIMIT]
 
 
 # ── CSV helpers ────────────────────────────────────────────────────
@@ -546,9 +532,6 @@ async def _run_search_pipeline(
         threshold = 0.10
 
     all_relevant = [(e, s, t, d) for e, s, t, d in scored if s >= threshold]
-    # Safety: always include at least RESULT_LIMIT events
-    if len(all_relevant) < RESULT_LIMIT:
-        all_relevant = scored[:max(RESULT_LIMIT, len(all_relevant))]
 
     shows_worth_considering_count = len(all_relevant)
 
@@ -1181,10 +1164,12 @@ async def geo_hint(
         return filters
 
     async def _count_geo(geo: str, with_industries: bool = True, with_personas: bool = True) -> int:
-        """Live count of future events matching a geo string (+ optional
-        industry/persona filters). Falls back progressively — persona+industry
-        → industry-only → geo-only — so a sparsely-tagged persona never makes
-        the count read as zero coverage.
+        """Live count of future events matching a geo string, strictly
+        combined with industry/persona filters when the ICP form provided
+        them. This must report the SAME strictness the results pipeline
+        actually applies — no silent fallback to a looser geo-only number,
+        since that would show a coverage count the search can never
+        deliver on.
         """
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
@@ -1198,48 +1183,26 @@ async def geo_hint(
                 geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
         if not geo_filters:
             return 0
-        base_stmt = _sel(_func.count(_ORM.id)).where(
+        stmt = _sel(_func.count(_ORM.id)).where(
             _ORM.start_date >= today,
             _or(*geo_filters),
         )
 
-        ind_filters = []
         if with_industries and ind_list:
+            ind_filters = []
             for ind in ind_list[:5]:
                 stem = ind.lower()[:8]
                 ind_filters += [
                     _ORM.industry_tags.ilike(f"%{stem}%"),
                     _ORM.related_industries.ilike(f"%{stem}%"),
                 ]
+            stmt = stmt.where(_or(*ind_filters))
 
         per_filters = _persona_filters() if (with_personas and per_list) else []
-
-        # Tightest: geo + industry + persona
-        if ind_filters and per_filters:
-            stmt = base_stmt.where(_or(*ind_filters)).where(_or(*per_filters))
-            cnt = (await db.execute(stmt)).scalar() or 0
-            if cnt > 0:
-                return cnt
-
-        # Next: geo + persona only — persona takes priority over industry
-        # when both were given but the combination came up empty. Relaxing
-        # industry first (not persona) keeps the count honest about
-        # designation, which is what actually gates results downstream.
         if per_filters:
-            stmt = base_stmt.where(_or(*per_filters))
-            cnt = (await db.execute(stmt)).scalar() or 0
-            if cnt > 0:
-                return cnt
+            stmt = stmt.where(_or(*per_filters))
 
-        # Next: geo + industry only (persona genuinely has no matches here)
-        if ind_filters:
-            stmt = base_stmt.where(_or(*ind_filters))
-            cnt = (await db.execute(stmt)).scalar() or 0
-            if cnt > 0:
-                return cnt
-
-        # Fall back to geo-only count
-        result = await db.execute(base_stmt)
+        result = await db.execute(stmt)
         return result.scalar() or 0
 
     async def _top_available_regions(exclude_geos: list[str], limit: int = 5) -> list[dict]:
