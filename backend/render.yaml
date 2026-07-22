@@ -76,17 +76,26 @@ services:
       - key: FRONTEND_ORIGIN
         sync: false
 
-      # ── Embedding (disabled — exceeds 512 MB free tier RAM) ──────
+      # ── Embedding ──────────────────────────────────────────────────
+      # ENABLE_SEMANTIC_SEARCH controls the LEGACY in-process FAISS path
+      # only (sentence-transformers, loads a local model — too much RAM
+      # for the free tier). Semantic search here runs on pgvector
+      # instead: no local model, embeddings come from the Jina API and
+      # live in the events.embedding column on Neon.
       - key: ENABLE_SEMANTIC_SEARCH
         value: "false"
       - key: PRELOAD_INDEX_ON_STARTUP
         value: "false"
+      - key: PGVECTOR_ENABLED
+        value: "true"
+      - key: JINA_API_KEY
+        sync: false   # ← set in Render dashboard, not here (keep secret)
 
-      # ── Scoring (rules-only on free tier) ─────────────────────────
+      # ── Scoring (hybrid: semantic + rules, matches scorer.py defaults) ─
       - key: COSINE_WEIGHT
-        value: "0.0"
+        value: "0.65"
       - key: RULE_WEIGHT
-        value: "1.0"
+        value: "0.35"
 
       # ── Scraper tuning ────────────────────────────────────────────
       - key: SCRAPE_DELAY_SECONDS
@@ -94,7 +103,7 @@ services:
       - key: SCRAPE_TIMEOUT_SECONDS
         value: "15"
       - key: TOP_K_FOR_LLM
-        value: "20"
+        value: "10"
 
       # ── Seed protection ───────────────────────────────────────────
       - key: SEED_ADMIN_TOKEN

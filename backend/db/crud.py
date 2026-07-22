@@ -523,8 +523,16 @@ async def update_event_enrichment(
     """
     Update enrichment fields on an existing event row.
     Only updates non-None values.  Marks serpapi_enriched=True.
+
+    `description` and `audience_personas` feed the pgvector embedding
+    text (relevance/pgvector_store.py build_event_text). If either
+    changes here, the event's existing embedding no longer reflects its
+    content, so it's cleared back to NULL — the next search that touches
+    this event will lazily re-embed it (embed_missing() only fills rows
+    WHERE embedding IS NULL). Harmless no-op when pgvector is off or the
+    column doesn't exist (SQLite, or Postgres before ensure_schema runs).
     """
-    from sqlalchemy import update as _update
+    from sqlalchemy import update as _update, text as _text
     allowed = {
         "est_attendees", "registration_url", "website",
         "start_date", "end_date", "price_description",
@@ -535,10 +543,28 @@ async def update_event_enrichment(
         return False
     payload["serpapi_enriched"] = True
     payload["last_verified_at"] = datetime.utcnow()
+    from config import get_settings as _get_settings
+    embedding_stale = (
+        ("description" in payload or "audience_personas" in payload)
+        and _get_settings().pgvector_enabled
+    )
     try:
         await db.execute(
             _update(EventORM).where(EventORM.id == event_id).values(**payload)
         )
+        if embedding_stale:
+            # Best-effort, in its own SAVEPOINT: if the embedding column
+            # doesn't exist yet (schema not provisioned), this rolls back
+            # to the savepoint only — it can't poison the enrichment
+            # update above or force it to be discarded too.
+            try:
+                async with db.begin_nested():
+                    await db.execute(
+                        _text("UPDATE events SET embedding = NULL WHERE id = :id"),
+                        {"id": event_id},
+                    )
+            except Exception as exc:
+                logger.debug(f"embedding invalidation skipped [{event_id[:8]}]: {exc}")
         await db.commit()
         return True
     except Exception as exc:
