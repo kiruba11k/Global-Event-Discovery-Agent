@@ -1225,6 +1225,26 @@ async def geo_hint(
     def _geo_words(geo: str) -> list[str]:
         return [w for w in _re.split(r"[\s,/\-]+", geo.lower()) if len(w) > 2]
 
+    # Job-title/designation words that have no business appearing as a
+    # "country" — guards against corrupted DB rows (e.g. a scrape/import
+    # bug that wrote a persona or description string into events.country)
+    # ever surfacing as a "Switch to: <region>" suggestion. A real country/
+    # city name never contains these tokens.
+    _NON_GEO_WORDS = {
+        "officer", "chief", "director", "president", "manager", "head",
+        "vp", "vice", "ceo", "cfo", "coo", "cto", "cmo", "cio", "chro",
+        "founder", "executive", "lead", "specialist", "engineer",
+    }
+
+    def _looks_like_geo(name: str) -> bool:
+        n = (name or "").strip()
+        if not n or len(n) > 40:
+            return False
+        words = [w for w in _re.split(r"[\s,/\-]+", n.lower()) if w]
+        if len(words) > 4:
+            return False
+        return not any(w in _NON_GEO_WORDS for w in words)
+
     def _semantic_ids_for_geo(geo: str) -> set[str]:
         words = _geo_words(geo)
         if not words or not semantic_rows:
@@ -1340,6 +1360,7 @@ async def geo_hint(
                 {"geo": country, "count": len(ids)}
                 for country, ids in ids_by_country.items()
                 if country.lower() not in exclude_lower and ids
+                and _looks_like_geo(country)
             ]
             out.sort(key=lambda x: -x["count"])
             return out[:limit]
