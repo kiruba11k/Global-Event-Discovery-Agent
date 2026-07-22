@@ -70,6 +70,28 @@ _LAST_RESULTS_MAX     = 500   # dead state otherwise grows unbounded — nothing
                                # built), but keep a cap so it can't leak memory under sustained load
 RESULT_LIMIT          = 6
 GO_RESULT_COUNT       = 3
+
+# Job-title/designation words that have no business appearing as a
+# "country" — guards against corrupted DB rows (e.g. a scrape/import bug
+# that wrote a persona or description string into events.country) ever
+# surfacing as a region in the ICP form's geography list or "Switch to:"
+# suggestions. A real country/city name never contains these tokens.
+_NON_GEO_WORDS = {
+    "officer", "chief", "director", "president", "manager", "head",
+    "vp", "vice", "ceo", "cfo", "coo", "cto", "cmo", "cio", "chro",
+    "founder", "executive", "lead", "specialist", "engineer",
+}
+
+
+def _looks_like_geo(name: str) -> bool:
+    import re as _re_mod
+    n = (name or "").strip()
+    if not n or len(n) > 40:
+        return False
+    words = [w for w in _re_mod.split(r"[\s,/\-]+", n.lower()) if w]
+    if len(words) > 4:
+        return False
+    return not any(w in _NON_GEO_WORDS for w in words)
 CONSIDER_RESULT_COUNT = 3
 
 def _store_last_results(profile_id: str, value: list) -> None:
@@ -1225,26 +1247,6 @@ async def geo_hint(
     def _geo_words(geo: str) -> list[str]:
         return [w for w in _re.split(r"[\s,/\-]+", geo.lower()) if len(w) > 2]
 
-    # Job-title/designation words that have no business appearing as a
-    # "country" — guards against corrupted DB rows (e.g. a scrape/import
-    # bug that wrote a persona or description string into events.country)
-    # ever surfacing as a "Switch to: <region>" suggestion. A real country/
-    # city name never contains these tokens.
-    _NON_GEO_WORDS = {
-        "officer", "chief", "director", "president", "manager", "head",
-        "vp", "vice", "ceo", "cfo", "coo", "cto", "cmo", "cio", "chro",
-        "founder", "executive", "lead", "specialist", "engineer",
-    }
-
-    def _looks_like_geo(name: str) -> bool:
-        n = (name or "").strip()
-        if not n or len(n) > 40:
-            return False
-        words = [w for w in _re.split(r"[\s,/\-]+", n.lower()) if w]
-        if len(words) > 4:
-            return False
-        return not any(w in _NON_GEO_WORDS for w in words)
-
     def _semantic_ids_for_geo(geo: str) -> set[str]:
         words = _geo_words(geo)
         if not words or not semantic_rows:
@@ -1415,6 +1417,39 @@ async def geo_hint(
         })
 
     return {"coverage": coverage}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# GET /api/geo-list  —  live distinct countries actually in the DB, for
+# the ICP form's geography autocomplete (replaces/extends the hardcoded
+# GEO_OPTIONS list on the frontend so newly-ingested countries show up
+# without a frontend deploy, and corrupted country values can never
+# appear as a selectable option).
+# ══════════════════════════════════════════════════════════════════════
+
+@router.get("/geo-list")
+async def geo_list(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select as _sel, func as _func
+    from models.event import EventORM as _ORM
+
+    today = date.today().isoformat()
+    result = await db.execute(
+        _sel(_ORM.country, _func.count(_ORM.id).label("cnt"))
+        .where(
+            _ORM.start_date >= today,
+            _ORM.country.isnot(None),
+            _ORM.country != "",
+        )
+        .group_by(_ORM.country)
+        .order_by(_func.count(_ORM.id).desc())
+        .limit(500)
+    )
+    countries = [
+        {"country": (row[0] or "").strip(), "count": row[1] or 0}
+        for row in result.all()
+        if _looks_like_geo(row[0] or "")
+    ]
+    return {"countries": countries}
 
 
 # ══════════════════════════════════════════════════════════════════════

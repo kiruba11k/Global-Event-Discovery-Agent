@@ -313,6 +313,74 @@ function getDefaultDateWindow() {
   return { date_from: fmt(from), date_to: fmt(to) }
 }
 
+// ── Country → [lat, lon] centroids, for the globe marker ─────────
+// Deliberately approximate (country-level, not city-level) — good
+// enough to show "roughly where" on a small decorative globe. Falls
+// back to hiding the marker for anything not listed here.
+const COUNTRY_COORDS = {
+  'india': [21, 78], 'usa': [39, -98], 'uk': [54, -2], 'uae': [24, 54],
+  'uae - united arab emirates': [24, 54], 'germany': [51, 10], 'france': [47, 2],
+  'netherlands': [52, 5], 'australia': [-25, 133], 'japan': [36, 138],
+  'south korea': [36, 128], 'saudi arabia': [24, 45], 'south africa': [-29, 24],
+  'canada': [56, -106], 'brazil': [-10, -55], 'indonesia': [-2, 118],
+  'singapore': [1.35, 103.8], 'malaysia': [4, 102], 'thailand': [15, 101],
+  'vietnam': [16, 108], 'philippines': [13, 122], 'poland': [52, 20],
+  'spain': [40, -4], 'tunisia': [34, 9], 'lebanon': [34, 36], 'china': [35, 105],
+  'belgium': [50.5, 4.5], 'czechia': [50, 15], 'morocco': [32, -6],
+  'egypt': [26, 30], 'nigeria': [9, 8], 'kenya': [1, 38], 'mexico': [23, -102],
+  'italy': [42, 12], 'sweden': [62, 15], 'norway': [61, 8], 'denmark': [56, 10],
+  'turkey': [39, 35], 'pakistan': [30, 70], 'bangladesh': [24, 90],
+  'sri lanka': [7, 81], 'new zealand': [-41, 174], 'argentina': [-38, -64],
+  'colombia': [4, -72], 'chile': [-35, -71], 'peru': [-10, -76],
+  'portugal': [39, -8], 'switzerland': [47, 8], 'austria': [47, 14],
+  'ireland': [53, -8], 'finland': [64, 26], 'greece': [39, 22],
+  'israel': [31, 35], 'qatar': [25, 51], 'kuwait': [29, 47.5],
+  'bahrain': [26, 50.5], 'oman': [21, 57], 'jordan': [31, 36],
+  'hong kong': [22, 114], 'taiwan': [24, 121], 'romania': [46, 25],
+  'hungary': [47, 19], 'ghana': [8, -1], 'ethiopia': [9, 40],
+  'global': null,
+}
+
+function countryCoords(name) {
+  if (!name) return null
+  const key = name.trim().toLowerCase()
+  if (key in COUNTRY_COORDS) return COUNTRY_COORDS[key]
+  // Loose match: "UAE - United Arab Emirates" style compound labels
+  const found = Object.keys(COUNTRY_COORDS).find(k => key.includes(k) || k.includes(key))
+  return found ? COUNTRY_COORDS[found] : null
+}
+
+// Equirectangular projection onto a circle-clipped globe face: lon → x,
+// lat → y, both as 0-100% within the globe's bounding box.
+function latLonToXY([lat, lon]) {
+  const x = ((lon + 180) / 360) * 100
+  const y = ((90 - lat) / 180) * 100
+  return { x, y }
+}
+
+// ── Small decorative globe: slow ambient rotation + a glowing marker
+// that eases to the currently-focused country's approximate position.
+// Purely decorative (aria-hidden) — never blocks or delays the form.
+function GeoGlobe({ activeCountry }) {
+  const coords = countryCoords(activeCountry)
+  const pos = coords ? latLonToXY(coords) : null
+  return (
+    <div className="icp-globe" aria-hidden="true">
+      <div className="icp-globe-sphere">
+        <div className="icp-globe-meridians" />
+        <div className="icp-globe-shade" />
+        {pos && (
+          <span
+            className="icp-globe-marker"
+            style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+            key={activeCountry}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════
 export default function ICPForm({
   onSubmit,
@@ -355,6 +423,25 @@ export default function ICPForm({
   const [geoHints,     setGeoHints]     = useState({})   // { "Indonesia": {count,status,suggestions} }
   const [geoHintLoad,  setGeoHintLoad]  = useState(false)
   const geoHintTimer = useRef(null)
+
+  // ── Live country list from the DB — replaces the static GEO_OPTIONS
+  // fallback once loaded, so the dropdown always reflects what's
+  // actually in the event catalog (falls back to GEO_OPTIONS on error).
+  const [dbGeoOptions, setDbGeoOptions] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    api.geoList()
+      .then(data => {
+        if (cancelled) return
+        const names = (data?.countries || []).map(c => c.country).filter(Boolean)
+        if (names.length) setDbGeoOptions(names)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const geoOptionList = dbGeoOptions && dbGeoOptions.length
+    ? [...dbGeoOptions, 'Global']
+    : GEO_OPTIONS
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeSubmitted, setUpgradeSubmitted] = useState(false)
 
@@ -447,8 +534,8 @@ export default function ICPForm({
     setErrors(p => ({ ...p, geos: '' }))
   }
 
-  const filteredGeos = GEO_OPTIONS.filter(g => g.toLowerCase().includes(geoSearch.toLowerCase()))
-  const typedIsNew   = geoSearch.trim().length > 0 && !GEO_OPTIONS.some(g => g.toLowerCase() === geoSearch.trim().toLowerCase()) && !geos.map(g => g.toLowerCase()).includes(geoSearch.trim().toLowerCase())
+  const filteredGeos = geoOptionList.filter(g => g.toLowerCase().includes(geoSearch.toLowerCase()))
+  const typedIsNew   = geoSearch.trim().length > 0 && !geoOptionList.some(g => g.toLowerCase() === geoSearch.trim().toLowerCase()) && !geos.map(g => g.toLowerCase()).includes(geoSearch.trim().toLowerCase())
 
   // Swap one geo for a suggested neighbour + auto-resubmit if form was already submitted
   const swapGeo = useCallback((oldGeo, newGeo) => {
@@ -593,10 +680,15 @@ export default function ICPForm({
 
       {/* Field 2: Geography */}
       <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
-          Where in the world?<span className="icp-required">*</span>
-        </label>
-        <p className="icp-hint">Regions where your buyers attend events</p>
+        <div className="icp-geo-heading-row">
+          <div>
+            <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+              Where in the world?<span className="icp-required">*</span>
+            </label>
+            <p className="icp-hint">Regions where your buyers attend events</p>
+          </div>
+          <GeoGlobe activeCountry={geoSearch.trim() || geos[geos.length - 1]} />
+        </div>
         {geos.length > 0 && (
           <div className="icp-geo-selected" role="list">
             {geos.map(g => (
