@@ -9,11 +9,15 @@ POST /api/search:
                                     ingestion/realtime_pipeline.py); this
                                     just runs the tiered DB query.
   3. score_candidates()          — rule-based + optional pgvector/FAISS scoring
-  4. rank_with_groq()            — LLM ranking + anti-hallucination validator
-                                    (OpenAI now, see relevance/llm_client.py;
-                                    the old SerpAPI enrichment step is also
-                                    disabled — see Step 9 below)
+  4. rank_with_groq()            — LLM ranking + anti-hallucination validator,
+                                    runs ONCE (OpenAI now, see
+                                    relevance/llm_client.py). Verdict/score/
+                                    order are frozen after this call.
   5. _apply_result_mix()         — enforce 3 GO + 3 CONSIDER
+  6. SerpAPI enrichment (Step 9) + _patch_ranked_with_enrichment() —
+                                    display-only field patch (est_attendees,
+                                    pricing, link, description), no second
+                                    LLM ranking/validation pass
 
 GET /api/stats — shows realtime_apis status so frontend can warn about missing keys.
 """
@@ -209,6 +213,41 @@ def _apply_result_mix(ranked: Iterable) -> list:
     go_events       = [r for r in all_ranked if r.fit_verdict == "GO"]
     consider_events = [r for r in all_ranked if r.fit_verdict == "CONSIDER"]
     return (go_events + consider_events)[:RESULT_LIMIT]
+
+
+def _patch_ranked_with_enrichment(ranked: list, enrichments: dict) -> None:
+    """
+    Splice SerpAPI enrichment data into already-ranked events in place —
+    no LLM call. fit_verdict/verdict_notes/relevance_score/order are
+    untouched (frozen from the first ranking pass); only factual display
+    fields are updated with the now-known values.
+    """
+    for r in ranked:
+        eid = getattr(r, "event_id", None) or r.id
+        data = enrichments.get(eid)
+        if not data:
+            continue
+
+        att = data.get("est_attendees")
+        if att:
+            r.est_attendees = att
+            if not r.key_numbers or r.key_numbers.strip() in ("", "See event website"):
+                r.key_numbers = f"{att:,} attendees"
+
+        price = data.get("price_description")
+        if price:
+            r.pricing = price
+
+        link = data.get("website") or data.get("registration_url") or data.get("event_link")
+        if link:
+            r.website     = link
+            r.pricing_link = r.pricing_link or link
+
+        desc = data.get("description")
+        if desc and (not r.what_its_about or len(r.what_its_about) < 20):
+            r.what_its_about = desc[:400]
+
+        r.serpapi_enriched = True
 
 
 # ── CSV helpers ────────────────────────────────────────────────────
@@ -641,17 +680,14 @@ async def _run_search_pipeline(
         except Exception as exc:
             logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
 
-    # Re-rank the final 6 with enrichment data now available
+    # Apply enrichment as a display-only patch — verdict/score/order from
+    # the first (and only) LLM ranking pass are frozen here. SerpAPI's own
+    # LLM validator (_groq_validate_enrichment in serp_enricher.py) already
+    # disambiguates attendee counts from other numbers (years, prices) before
+    # they reach `enrichments`, so a plain field copy is safe — no second
+    # full rank+validate round-trip needed just to refresh these values.
     if enrichments:
-        ranked = await rank_with_groq(
-            events=final_top_events, profile=profile,
-            pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
-            company_ctx=company_ctx, enrichments=enrichments,
-            deal_size_category=deal_size,
-        )
-        # Verdict-aware order + result mix must be reapplied here too —
-        # a raw score sort after re-ranking put CONSIDER events above GO.
-        ranked = _apply_result_mix(_sort_ranked(ranked))
+        _patch_ranked_with_enrichment(ranked, enrichments)
         _store_last_results(profile_id, ranked)
 
     # ── Step 10: Calculate 5-factor fit scores + ICP counts ──────────
