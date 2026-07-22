@@ -1170,12 +1170,11 @@ async def geo_hint(
     - status: 'good' (>=10), 'sparse' (1-9), 'none' (0)
     - suggestions: top neighbour geos with their live counts (when status != 'good')
 
-    Counts are live DB queries — not hardcoded. When personas are given,
-    the count narrows to geo + industry + persona and only falls back to
-    the looser geo(+industry) count if that comes up empty — audience_personas
-    is sparsely populated on many rows, so a strict persona-only count would
-    misleadingly read as "no events" for a designation that's simply not
-    tagged yet, not one the app has no coverage for.
+    Counts are live DB queries — not hardcoded. When industries/personas are
+    given, the count strictly requires geo + industry + persona together
+    (no silent fallback to a looser number), and `suggestions` uses that
+    same strictness — a suggested region always has at least one event
+    that will actually show up if the user switches to it.
     """
     from sqlalchemy import select as _sel, func as _func, or_ as _or
     from models.event import EventORM as _ORM
@@ -1245,10 +1244,12 @@ async def geo_hint(
         """
         Query DB for countries/regions that actually have the most future
         ICP-matching events — fully dynamic, works for any user input.
-        Tries persona+industry first, then industry only, then no filter —
-        these are the "same designation, different country" backfill
-        suggestions, so persona (when it narrows to a real result) takes
-        priority over a plain industry match.
+        Uses the SAME strict geo+industry+persona combination as
+        _count_geo above — a looser industry-only or no-filter fallback
+        here would show e.g. "India: 2" as a suggestion for a CIO/Fintech
+        search, when those 2 events don't actually match the persona, so
+        selecting India would then show 0 results. Consistency with what
+        the user will actually see beats always having a non-empty list.
         """
         exclude_lower = {g.strip().lower() for g in exclude_geos}
 
@@ -1287,12 +1288,14 @@ async def geo_hint(
                     break
             return out
 
-        results = await _query_top(with_ind=True, with_per=True)
-        if not results:
-            results = await _query_top(with_ind=True, with_per=False)
-        if not results:
-            results = await _query_top(with_ind=False, with_per=False)
-        return results
+        if per_list:
+            # Persona was specified — require geo+industry+persona together,
+            # same as _count_geo, so a suggested region always has at least
+            # one event that will actually appear if the user switches to it.
+            return await _query_top(with_ind=True, with_per=True)
+        # No persona given at all — industry(+geo) is the strictest filter
+        # that applies, so that's the honest floor here.
+        return await _query_top(with_ind=True, with_per=False)
 
     coverage = []
     for geo in geo_list:
