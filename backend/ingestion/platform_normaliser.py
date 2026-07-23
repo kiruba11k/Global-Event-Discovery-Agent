@@ -119,8 +119,12 @@ def _iso_date(val: Any) -> str:
     s = str(val).strip()
     # Already ISO
     if re.match(r"\d{4}-\d{2}-\d{2}", s): return s[:10]
-    # Try common formats
-    for fmt in ("%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%B %d %Y", "%b %d %Y"):
+    # Try common formats — includes comma variants ("Aug 1, 2026",
+    # "August 1, 2026") seen in manually-curated CSV exports.
+    for fmt in (
+        "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y",
+        "%B %d %Y", "%b %d %Y", "%B %d, %Y", "%b %d, %Y",
+    ):
         try: return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
         except: pass
     return s
