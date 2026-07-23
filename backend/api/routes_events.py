@@ -324,16 +324,26 @@ def _parse_csv_row(row, row_number):
     if (not city or not country) and ec:
         fc, fco = _split_city_country(ec)
         city = city or fc; country = country or fco
-    ind = _csv_value(nr, "related_industries", "industry_tags", "industries", "industry")
+    ind = _csv_value(
+        nr, "related_industries", "industry_tags", "industries", "industry",
+        "industry relevant for", "relevant_keywords", "relevant keywords",
+    )
     src = _csv_value(nr, "source", "source_platform")
     return EventCreate(
         id=event_id, dedup_hash=_csv_dedup_hash(name, start_date, city, country),
         source_platform=src or "CSV_UPLOAD",
         source_url=source_url or f"https://example.com/event/{event_id}",
         name=name, description=_csv_value(nr, "description", "summary"),
-        short_summary=_csv_value(nr, "short_summary"), edition_number=_csv_value(nr, "edition_number"),
+        short_summary=_csv_value(
+            nr, "short_summary", "two liner description of the event",
+            "two-liner description", "short description",
+        ),
+        edition_number=_csv_value(nr, "edition_number"),
         industry_tags=ind, related_industries=ind,
-        audience_personas=_csv_value(nr, "audience_personas", "buyer_persona"),
+        audience_personas=_csv_value(
+            nr, "audience_personas", "buyer_persona",
+            "designations attending", "designation", "designations",
+        ),
         start_date=start_date, end_date=end_date or start_date,
         duration_days=_csv_int(nr, "duration_days", default=1),
         venue_name=_csv_value(nr, "venue", "venue_name"), event_venues=_csv_value(nr, "event_venues"),
