@@ -103,6 +103,14 @@ try:
 except ImportError as e:
     logger.warning(f"Admin routes not loaded: {e}")
 
+# Analytics: session/activity tracking (write) + dashboard read API
+try:
+    from api.routes_analytics import router as analytics_router
+    app.include_router(analytics_router, prefix="/api", tags=["analytics"])
+    logger.info("Analytics routes mounted at /api/analytics")
+except ImportError as e:
+    logger.warning(f"Analytics routes not loaded: {e}")
+
 
 @app.get("/health", tags=["health"])
 async def health():

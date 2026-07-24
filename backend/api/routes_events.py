@@ -1062,6 +1062,7 @@ async def _process_search_job(payload: dict) -> dict:
             if submission_id:
                 async with AsyncSessionLocal() as db_err:
                     await update_search_submission_status(db_err, submission_id, status="error", error="pipeline failed")
+                    await _analytics_track_complete(db_err, submission_id, "error", {}, error="pipeline failed")
             raise
 
     if submission_id:
@@ -1070,6 +1071,7 @@ async def _process_search_job(payload: dict) -> dict:
                 db2, submission_id, status="done",
                 result_total_found=result.get("total_found", 0),
             )
+            await _analytics_track_complete(db2, submission_id, "done", result)
     return result
 
 
@@ -1083,6 +1085,38 @@ async def _process_search_job(payload: dict) -> dict:
 # Falls back to running the pipeline inline (old synchronous behavior)
 # if REDIS_URL isn't configured — see queueing/search_queue.enqueue().
 # ══════════════════════════════════════════════════════════════════════
+
+async def _analytics_track_start(db: AsyncSession, submission_id: str, session_id: str, ip: str, profile) -> None:
+    """Best-effort — analytics is a monitoring concern, never allowed to
+    fail or slow down a real search."""
+    try:
+        from db import analytics_crud as _ac
+        await _ac.create_icp_submission(
+            db, submission_id, session_id, ip,
+            profile.company_name or "", profile.email or "",
+            profile.target_industries or [], profile.target_personas or [],
+            profile.target_geographies or [], getattr(profile, "avg_deal_size_category", "") or "",
+            profile.date_from or "", profile.date_to or "",
+        )
+    except Exception as exc:
+        logger.debug(f"analytics submission-start skipped: {exc}")
+
+
+async def _analytics_track_complete(db: AsyncSession, submission_id: str, status: str, result: dict, error: str = "") -> None:
+    try:
+        from db import analytics_crud as _ac
+        events = (result or {}).get("events", [])
+        go       = sum(1 for e in events if e.get("fit_verdict") == "GO")
+        consider = sum(1 for e in events if e.get("fit_verdict") == "CONSIDER")
+        await _ac.complete_icp_submission(
+            db, submission_id, status, total_found=(result or {}).get("total_found", 0),
+            go_count=go, consider_count=consider, error=error,
+        )
+        if events:
+            await _ac.record_shown_results(db, submission_id, events)
+    except Exception as exc:
+        logger.debug(f"analytics submission-complete skipped: {exc}")
+
 
 @router.post("/search", status_code=202)
 async def search_events(
@@ -1107,6 +1141,8 @@ async def search_events(
         company_profile_id   = request.company_profile_id or "",
         job_id                = "",
     )
+    session_id = http_request.headers.get("x-session-id", "")
+    await _analytics_track_start(db, submission.id, session_id, ip, profile)
 
     payload = {
         "profile":             profile_dict,
@@ -1127,10 +1163,12 @@ async def search_events(
             )
         except Exception as exc:
             await update_search_submission_status(db, submission.id, status="error", error=str(exc))
+            await _analytics_track_complete(db, submission.id, "error", {}, error=str(exc))
             raise
         await update_search_submission_status(
             db, submission.id, status="done", result_total_found=result.get("total_found", 0),
         )
+        await _analytics_track_complete(db, submission.id, "done", result)
         return {"status": "done", "job_id": None, "result": result}
 
     submission.job_id = job_id

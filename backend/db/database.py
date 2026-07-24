@@ -216,6 +216,10 @@ async def init_db():
     from models.event import Base as EventBase
     from models.company_profile import CompanyProfileORM  # noqa: registers table
     from models.search_submission import SearchSubmissionORM  # noqa: registers table
+    from models.analytics import (  # noqa: registers tables
+        AnalyticsEventORM, AnalyticsICPSubmissionORM,
+        AnalyticsSearchResultORM, AnalyticsSessionORM,
+    )
 
     async with engine.begin() as conn:
         # Create tables that don't exist yet
