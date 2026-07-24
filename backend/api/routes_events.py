@@ -1183,12 +1183,14 @@ async def geo_hint(
         return ids
 
     async def _count_geo(geo: str, with_industries: bool = True, with_personas: bool = True) -> int:
-        """Live count of future events matching a geo string, strictly
-        combined with industry/persona filters when the ICP form provided
-        them, UNIONed with pgvector semantic matches for the same geo —
-        together this is the same strictness + recall the results
-        pipeline actually applies, so this count never promises more (or
-        less) than the search can deliver.
+        """Live count of future events for a geo, run through the SAME
+        rule-based scorer + GO/CONSIDER tiering the real search pipeline
+        uses, then capped at RESULT_LIMIT — the results screen can never
+        show more than RESULT_LIMIT events no matter how many "match" in
+        a loose keyword sense, so a hint number bigger than that was
+        always going to disagree with what's actually shown. Counting
+        raw ILIKE/semantic hits (the old approach) let this number report
+        candidates that would go on to score as SKIP and never appear.
         """
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
@@ -1201,34 +1203,61 @@ async def geo_hint(
                 geo_filters.append(_ORM.city.ilike(f"%{part}%"))
                 geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
         if not geo_filters:
-            return len(_semantic_ids_for_geo(geo)) if with_industries and with_personas else 0
+            candidate_ids = set(_semantic_ids_for_geo(geo)) if with_industries and with_personas else set()
+        else:
+            stmt = _sel(_ORM.id).where(
+                _ORM.start_date >= today,
+                _or(*geo_filters),
+            )
 
-        stmt = _sel(_ORM.id).where(
-            _ORM.start_date >= today,
-            _or(*geo_filters),
+            if with_industries and ind_list:
+                ind_filters = []
+                for ind in ind_list[:5]:
+                    stem = ind.lower()[:8]
+                    ind_filters += [
+                        _ORM.industry_tags.ilike(f"%{stem}%"),
+                        _ORM.related_industries.ilike(f"%{stem}%"),
+                    ]
+                stmt = stmt.where(_or(*ind_filters))
+
+            per_filters = _persona_filters() if (with_personas and per_list) else []
+            if per_filters:
+                stmt = stmt.where(_or(*per_filters))
+
+            result = await db.execute(stmt)
+            candidate_ids = {row[0] for row in result.all()}
+
+            if with_industries and with_personas:
+                candidate_ids |= _semantic_ids_for_geo(geo)
+
+        if not candidate_ids:
+            return 0
+        if not (with_industries or with_personas):
+            # Loose "how many events exist here at all" callers (neighbour
+            # suggestions without ind/per context) — raw count is fine,
+            # nothing downstream claims these will all be shown.
+            return len(candidate_ids)
+
+        from models.event import EventORM as _EvtORM
+        from models.icp_profile import ICPProfile as _ICP
+        from relevance.scorer import score_candidates as _score_cands, TIER_GO as _GO, TIER_CONSIDER as _CONSIDER
+
+        rows = (await db.execute(
+            _sel(_EvtORM).where(_EvtORM.id.in_(list(candidate_ids)[:500]))
+        )).scalars().all()
+        if not rows:
+            return 0
+
+        mini_profile = _ICP(
+            company_name="", company_description="",
+            target_industries=ind_list if with_industries else [],
+            target_personas=per_list if with_personas else [],
+            target_geographies=[geo],
+            preferred_event_types=[],
         )
-
-        if with_industries and ind_list:
-            ind_filters = []
-            for ind in ind_list[:5]:
-                stem = ind.lower()[:8]
-                ind_filters += [
-                    _ORM.industry_tags.ilike(f"%{stem}%"),
-                    _ORM.related_industries.ilike(f"%{stem}%"),
-                ]
-            stmt = stmt.where(_or(*ind_filters))
-
-        per_filters = _persona_filters() if (with_personas and per_list) else []
-        if per_filters:
-            stmt = stmt.where(_or(*per_filters))
-
-        result = await db.execute(stmt)
-        ids = {row[0] for row in result.all()}
-
-        if with_industries and with_personas:
-            ids |= _semantic_ids_for_geo(geo)
-
-        return len(ids)
+        scored = _score_cands(rows, mini_profile, {})
+        relevant = sum(1 for _, _, tier, _ in scored if tier in (_GO, _CONSIDER))
+        return min(relevant, RESULT_LIMIT)
 
     async def _top_available_regions(exclude_geos: list[str], limit: int = 5) -> list[dict]:
         """
