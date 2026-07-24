@@ -46,6 +46,7 @@ from loguru import logger
 from config import get_settings
 from models.event import EventORM
 from models.icp_profile import ICPProfile
+from relevance.geo_aliases import expand_geo
 
 settings = get_settings()
 
@@ -655,12 +656,12 @@ def _score_geo(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
 
     geo_text = _get_geo_text(event)
     for geo in profile.target_geographies:
-        geo_words = [
-            w for w in re.split(r"[\s,/\-]+", geo.lower())
-            if len(w) > 2
-        ]
-        if any(_word_in_text(w, geo_text) for w in geo_words):
-            return 0.22, geo
+        for variant in expand_geo(geo):
+            if variant in geo_text:
+                return 0.22, geo
+            geo_words = [w for w in re.split(r"[\s,/\-]+", variant) if len(w) > 2]
+            if any(_word_in_text(w, geo_text) for w in geo_words):
+                return 0.22, geo
 
     if event.is_virtual or event.is_hybrid:
         return 0.12, "Virtual/Hybrid"
