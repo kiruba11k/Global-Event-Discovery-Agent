@@ -871,3 +871,80 @@ async def backfill_embeddings(background: BackgroundTasks, _auth: None = Depends
 @router.get("/backfill-embeddings/status", summary="Progress of the pgvector embedding backfill")
 async def backfill_embeddings_status(_auth: None = Depends(_check_admin)):
     return _backfill_status
+
+
+# ─────────────────────────────────────────────────────────────────
+# Route: LLM designation/persona backfill
+#
+# Fills audience_personas for events that have none — the actual data
+# gap behind weak rule-based AND semantic persona matching (see
+# relevance/scorer.py's PERSONA_UNKNOWN_PENALTY). Same background-task
+# + status-polling shape as the embedding backfill above.
+# ─────────────────────────────────────────────────────────────────
+
+_persona_backfill_status: dict = {
+    "running": False, "tagged": 0, "skipped_no_evidence": 0,
+    "started_at": None, "finished_at": None, "error": None,
+}
+
+
+async def _run_backfill_personas() -> None:
+    from db.database import AsyncSessionLocal
+    from db.crud import update_event_enrichment
+    from relevance.groq_tagger import infer_event_personas_batch
+
+    _persona_backfill_status.update({
+        "running": True, "tagged": 0, "skipped_no_evidence": 0,
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "finished_at": None, "error": None,
+    })
+    try:
+        async with AsyncSessionLocal() as db:
+            while True:
+                rows = (await db.execute(
+                    select(EventORM.id, EventORM.name, EventORM.description, EventORM.industry_tags)
+                    .where((EventORM.audience_personas == "") | (EventORM.audience_personas.is_(None)))
+                    .limit(50)
+                )).all()
+                if not rows:
+                    break
+
+                batch = [
+                    {"id": r[0], "title": r[1] or "", "description": r[2] or "", "industry_tags": r[3] or ""}
+                    for r in rows
+                ]
+                inferred = await infer_event_personas_batch(batch)
+
+                for event_id, personas_str in inferred.items():
+                    if not personas_str:
+                        _persona_backfill_status["skipped_no_evidence"] += 1
+                        continue
+                    ok = await update_event_enrichment(
+                        db, event_id, {"audience_personas": personas_str}, mark_serpapi_enriched=False,
+                    )
+                    if ok:
+                        _persona_backfill_status["tagged"] += 1
+
+                logger.info(
+                    f"admin persona backfill: {_persona_backfill_status['tagged']} tagged, "
+                    f"{_persona_backfill_status['skipped_no_evidence']} skipped (no evidence) so far"
+                )
+    except Exception as exc:
+        logger.error(f"admin persona backfill failed: {exc}")
+        _persona_backfill_status["error"] = str(exc)
+    finally:
+        _persona_backfill_status["running"] = False
+        _persona_backfill_status["finished_at"] = datetime.utcnow().isoformat() + "Z"
+
+
+@router.post("/backfill-personas", summary="Start LLM designation/persona backfill in the background")
+async def backfill_personas(background: BackgroundTasks, _auth: None = Depends(_check_admin)):
+    if _persona_backfill_status["running"]:
+        raise HTTPException(409, "Backfill already running — check /admin/backfill-personas/status")
+    background.add_task(_run_backfill_personas)
+    return {"started": True, "status_url": "/admin/backfill-personas/status"}
+
+
+@router.get("/backfill-personas/status", summary="Progress of the LLM designation/persona backfill")
+async def backfill_personas_status(_auth: None = Depends(_check_admin)):
+    return _persona_backfill_status

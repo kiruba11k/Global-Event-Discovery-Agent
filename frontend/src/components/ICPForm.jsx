@@ -423,7 +423,12 @@ export default function ICPForm({
     geoHintTimer.current = setTimeout(async () => {
       try {
         const { industries, personas } = effectiveParse(buyer)
-        const data = await api.geoHint(geos, industries, personas)
+        // Must match the fallback applied at submit time (target_industries
+        // below) — otherwise the hint checks a looser filter (geo+persona
+        // only) than the search actually applies (geo+persona+industry),
+        // so the coverage count promises more than the search can deliver.
+        const hintIndustries = industries.length ? industries : ['Technology']
+        const data = await api.geoHint(geos, hintIndustries, personas)
         const map = {}
         for (const item of (data.coverage || [])) map[item.geo] = item
         setGeoHints(map)
@@ -723,9 +728,9 @@ export default function ICPForm({
                       {geo}
                     </span>
                     <span style={{ color: '#4C5A63' }}>
-                      {isGood   && `- ${hint.count} events available in our index`}
-                      {isSparse && `- only ${hint.count} event${hint.count !== 1 ? 's' : ''} found, consider a nearby hub`}
-                      {isNone   && '- no events in our index for this region'}
+                      {isGood   && `- ${hint.count} events match your criteria here; final results depend on deeper relevance ranking`}
+                      {isSparse && `- only ${hint.count} event${hint.count !== 1 ? 's' : ''} match, consider a nearby hub`}
+                      {isNone   && '- no matching events for this region'}
                     </span>
                   </div>
                   {(isSparse || isNone) && (

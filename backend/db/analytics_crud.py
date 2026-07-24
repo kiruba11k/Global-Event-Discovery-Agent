@@ -20,6 +20,14 @@ from models.analytics import (
     AnalyticsSearchResultORM, AnalyticsSessionORM,
 )
 
+
+def _norm_sid(session_id: Optional[str]) -> Optional[str]:
+    """FK columns must get NULL, never '', for an unknown session — an
+    empty string is a real value that would need a matching
+    analytics_sessions row to satisfy the constraint and never has one."""
+    return session_id or None
+
+
 # ── Sessions ─────────────────────────────────────────────────────────
 
 async def start_session(
@@ -65,8 +73,8 @@ async def log_event(
     submission_id: str = "", event_id: str = "", metadata: Optional[dict] = None,
 ) -> AnalyticsEventORM:
     row = AnalyticsEventORM(
-        id=str(uuid.uuid4()), session_id=session_id, event_type=event_type,
-        submission_id=submission_id, event_id=event_id,
+        id=str(uuid.uuid4()), session_id=_norm_sid(session_id), event_type=event_type,
+        submission_id=_norm_sid(submission_id), event_id=_norm_sid(event_id),
         metadata_json=json.dumps(metadata or {})[:4000],
     )
     db.add(row)
@@ -82,17 +90,32 @@ async def log_event(
 
 async def create_icp_submission(
     db: AsyncSession, submission_id: str, session_id: str, ip_address: str,
-    company_name: str, email: str, target_industries: List[str],
-    target_personas: List[str], target_geographies: List[str],
-    deal_size_bracket: str, date_from: str, date_to: str,
+    profile: dict,
 ) -> AnalyticsICPSubmissionORM:
+    """`profile` is ICPProfile.model_dump() — every field the ICP form
+    actually collects, not a hand-picked subset. Keeping this a dict
+    (rather than N positional args) means a new ICPProfile field just
+    needs a column added here, not a signature change at every call site."""
     row = AnalyticsICPSubmissionORM(
-        id=submission_id, session_id=session_id, ip_address=ip_address,
-        company_name=company_name, email=email,
-        target_industries=", ".join(target_industries or []),
-        target_personas=", ".join(target_personas or []),
-        target_geographies=", ".join(target_geographies or []),
-        deal_size_bracket=deal_size_bracket or "", date_from=date_from or "", date_to=date_to or "",
+        id=submission_id, session_id=_norm_sid(session_id), ip_address=ip_address,
+        company_name=profile.get("company_name") or "",
+        email=profile.get("email") or "",
+        company_description=profile.get("company_description") or "",
+        buyer_description=profile.get("buyer_description") or "",
+        target_industries=", ".join(profile.get("target_industries") or []),
+        target_personas=", ".join(profile.get("target_personas") or []),
+        target_geographies=", ".join(profile.get("target_geographies") or []),
+        preferred_event_types=", ".join(profile.get("preferred_event_types") or []),
+        extra_keywords=", ".join(profile.get("extra_keywords") or []),
+        deal_size_bracket=profile.get("avg_deal_size_category") or "",
+        budget_usd=profile.get("budget_usd"),
+        date_from=profile.get("date_from") or "",
+        date_to=profile.get("date_to") or "",
+        min_attendees=profile.get("min_attendees") or 0,
+        max_results=profile.get("max_results") or 30,
+        differentiator_score=profile.get("differentiator_score") or 5,
+        client_count_range=profile.get("client_count_range") or "",
+        client_names=", ".join(profile.get("client_names") or []),
     )
     db.add(row)
     try:
@@ -134,7 +157,7 @@ async def record_shown_results(db: AsyncSession, submission_id: str, events: Lis
         AnalyticsSearchResultORM(
             id=f"{submission_id}:{e.get('id','')}",
             submission_id=submission_id,
-            event_id=e.get("id", ""),
+            event_id=_norm_sid(e.get("id")),
             event_name=(e.get("event_name") or e.get("name") or "")[:300],
             rank_position=i,
             fit_verdict=e.get("fit_verdict", ""),

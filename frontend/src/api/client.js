@@ -28,12 +28,37 @@ function getDeviceId() {
   }
 }
 
+// Same persistence pattern as device_id, but this is the key the
+// analytics_* tables (models/analytics.py) actually join on — without
+// it, analytics_icp_submissions/analytics_events have no way to link
+// back to an analytics_sessions row (that's the "no common key between
+// tables" gap). Sent as X-Session-Id on every request so every backend
+// endpoint that reads that header (search, email-report, analytics/*)
+// gets it for free, no per-call-site wiring needed.
+export function getSessionId() {
+  try {
+    let id = localStorage.getItem('session_id')
+    if (!id) {
+      id = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      localStorage.setItem('session_id', id)
+    }
+    return id
+  } catch {
+    return ''
+  }
+}
+
 async function request(path, options = {}) {
   const url = `${BASE}/api${path}`
   let res
   try {
     res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', 'X-Device-Id': getDeviceId(), ...options.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Device-Id':  getDeviceId(),
+        'X-Session-Id': getSessionId(),
+        ...options.headers,
+      },
       ...options,
     })
   } catch (networkErr) {
@@ -143,7 +168,28 @@ export const api = {
   // ── Live country list from the DB (for geography autocomplete) ─
   geoList: () => request('/geo-list'),
 
-
+  // ── Analytics: session lifecycle + generic event tracking ─────
+  // session_id is auto-attached as X-Session-Id on every request
+  // (see getSessionId() above) — these calls create the row that
+  // header actually points at, and keep it fresh.
+  analyticsSessionStart: (referrer = '', landingPage = '') =>
+    request('/analytics/session/start', {
+      method: 'POST',
+      body:   JSON.stringify({ session_id: getSessionId(), referrer, landing_page: landingPage }),
+    }),
+  analyticsHeartbeat: (deltaSeconds) =>
+    request('/analytics/session/heartbeat', {
+      method: 'POST',
+      body:   JSON.stringify({ session_id: getSessionId(), delta_seconds: deltaSeconds }),
+    }),
+  trackEvent: (eventType, { submissionId = '', eventId = '', metadata = {} } = {}) =>
+    request('/analytics/event', {
+      method: 'POST',
+      body:   JSON.stringify({
+        session_id: getSessionId(), event_type: eventType,
+        submission_id: submissionId, event_id: eventId, metadata,
+      }),
+    }).catch(() => {}),   // tracking must never surface an error to the UI
 
   // ── CSV export URL helper ─────────────────────────────
   exportCsvUrl: (profileId) => `${BASE}/api/export/csv?profile_id=${profileId}`,

@@ -76,6 +76,15 @@ _TAXONOMY_LOWER: frozenset[str] = frozenset(t.lower() for t in INDUSTRY_TAXONOMY
 # Taxonomy joined for prompt injection
 _TAXONOMY_STR: str = "\n".join(f"  - {t}" for t in INDUSTRY_TAXONOMY)
 
+# Same fixed-taxonomy anti-hallucination pattern as INDUSTRY_TAXONOMY above,
+# reusing the canonical persona list icp_parser.py already normalises
+# user-typed designations against — so an inferred persona always matches
+# something the ICP form's own parser can recognise.
+from relevance.icp_parser import CANONICAL_PERSONAS  # noqa: E402
+
+_PERSONA_TAXONOMY_LOWER: frozenset[str] = frozenset(p.lower() for p in CANONICAL_PERSONAS)
+_PERSONA_TAXONOMY_STR: str = "\n".join(f"  - {p}" for p in CANONICAL_PERSONAS)
+
 
 # ── Pydantic schemas ────────────────────────────────────────────────
 
@@ -180,6 +189,39 @@ class EventTagItem(BaseModel):
 class EventTagsResponse(BaseModel):
     """Batch response for event tag inference."""
     events: list[EventTagItem] = []
+
+    model_config = {"extra": "ignore"}
+
+
+class EventPersonaItem(BaseModel):
+    """Inferred attending designations for a single event — same
+    anti-hallucination shape as EventTagItem, validated against
+    CANONICAL_PERSONAS instead of INDUSTRY_TAXONOMY."""
+    event_id:   str
+    personas:   list[str] = []
+    evidence:   str = ""
+
+    model_config = {"extra": "ignore"}
+
+    @field_validator("personas")
+    @classmethod
+    def validate_personas(cls, v: list[str]) -> list[str]:
+        validated = []
+        for p in v:
+            p = p.strip()
+            if p.lower() not in _PERSONA_TAXONOMY_LOWER:
+                logger.debug(f"Rejected hallucinated persona: {p!r}")
+                continue
+            for canonical in CANONICAL_PERSONAS:
+                if canonical.lower() == p.lower():
+                    validated.append(canonical)
+                    break
+        return list(dict.fromkeys(validated))[:5]
+
+
+class EventPersonasResponse(BaseModel):
+    """Batch response for event persona/designation inference."""
+    events: list[EventPersonaItem] = []
 
     model_config = {"extra": "ignore"}
 
@@ -510,6 +552,150 @@ async def infer_event_tags_batch(
             )
 
     return results
+
+
+# ══════════════════════════════════════════════════════════════════════
+# FUNCTION 3: infer_event_personas_batch
+# Fills audience_personas for events where it's empty — the actual data
+# gap behind weak rule-based + semantic persona matching, see
+# scorer.py's PERSONA_UNKNOWN_PENALTY. Only INFERS from what the event
+# text already implies (e.g. "CIO Summit" → CIO); never invents a
+# designation the text gives no evidence for.
+# ══════════════════════════════════════════════════════════════════════
+
+_PERSONAS_SYSTEM = f"""You are a B2B event analyst. Infer which buyer designations (job roles) are likely to attend each event, based ONLY on its title and description.
+
+STRICT RULES — violating ANY rule makes your response invalid:
+  1. You MUST ONLY use designations from this exact list:
+{_PERSONA_TAXONOMY_STR}
+
+  2. NEVER invent or use any designation not in the list above.
+  3. Only assign a designation if the event title/description gives real evidence
+     it's relevant to that role (explicit role mention, or a clear functional
+     theme — e.g. "Cybersecurity Summit" implies CISO/CIO, "Supply Chain Expo"
+     implies VP Supply Chain/COO). Do not guess from weak/generic wording.
+  4. If there's no reasonable evidence for any specific role, return an empty list —
+     do NOT default to a generic executive role just to have an answer.
+  5. Maximum 4 designations per event.
+  6. The "evidence" field must quote or closely paraphrase the exact words that justify each designation.
+
+Return ONLY this JSON (no text before or after):
+{{
+  "events": [
+    {{
+      "event_id": "...",
+      "personas": ["CISO", "CIO"],
+      "evidence": "explicit cybersecurity leadership theme in the title"
+    }}
+  ]
+}}"""
+
+
+async def infer_event_personas_batch(
+    events: list[dict],  # list of {"id": str, "title": str, "description": str, "industry_tags": str}
+    batch_size: int = 20,
+) -> dict[str, str]:
+    """
+    Use Groq/OpenAI to infer likely attending designations for events
+    whose audience_personas is currently empty. Same anti-hallucination
+    shape as infer_event_tags_batch — fixed taxonomy, evidence required,
+    Pydantic-validated, silent fallback on failure.
+
+    Output: dict {event_id → comma-separated CANONICAL_PERSONAS string}.
+    Callers should only write this into audience_personas when the
+    result is non-empty — an empty inference means "no confident
+    evidence," not "definitely no one relevant attends."
+    """
+    if not events:
+        return {}
+
+    results: dict[str, str] = {}
+
+    for i in range(0, len(events), batch_size):
+        chunk = events[i: i + batch_size]
+
+        events_text = json.dumps([
+            {
+                "event_id":     ev["id"],
+                "title":        ev["title"][:200],
+                "description":  ev.get("description", "")[:300],
+                "industry_tags": ev.get("industry_tags", "")[:150],
+            }
+            for ev in chunk
+        ], indent=2)
+
+        user_prompt = (
+            f"Infer attending designations for the following {len(chunk)} events.\n"
+            "Use ONLY the allowed designation list. Quote evidence from the event text.\n\n"
+            f"EVENTS:\n{events_text}"
+        )
+
+        parsed = await llm.chat_json(
+            _PERSONAS_SYSTEM,
+            user_prompt,
+            label=f"event_persona_tagger_batch_{i}",
+            schema=EventPersonasResponse,
+            max_completion_tokens=800,
+            temperature=0,
+            timeout=15,
+            cache_ttl=3600,
+        )
+
+        if parsed is None:
+            for ev in chunk:
+                results[ev["id"]] = _fallback_infer_personas(
+                    ev.get("title", "") + " " + ev.get("description", "")
+                )
+            continue
+
+        accepted = 0; empty = 0
+        for item in parsed.events:
+            if item.personas:
+                results[item.event_id] = ", ".join(item.personas)
+                accepted += 1
+            else:
+                empty += 1
+        logger.info(
+            f"Groq persona tagging batch {i//batch_size + 1}: "
+            f"{accepted} tagged, {empty} no-confident-evidence"
+        )
+
+    for ev in events:
+        if ev["id"] not in results:
+            results[ev["id"]] = _fallback_infer_personas(
+                ev.get("title", "") + " " + ev.get("description", "")
+            )
+
+    return results
+
+
+def _fallback_infer_personas(text: str) -> str:
+    """
+    Simple keyword-based persona inference — used when the LLM is
+    unavailable. Deliberately conservative: only fires on strong,
+    unambiguous role/theme signals, returns "" (no guess) otherwise.
+    """
+    t = text.lower()
+    matched: list[str] = []
+    checks = [
+        (["cio", "chief information officer", "it leadership"], "CIO"),
+        (["cto", "chief technology officer", "engineering leadership"], "CTO"),
+        (["ciso", "cybersecurity leadership", "chief information security"], "CISO"),
+        (["cfo", "chief financial officer", "finance leadership"], "CFO"),
+        (["coo", "chief operating officer", "operations leadership"], "COO"),
+        (["ceo", "chief executive officer"], "CEO"),
+        (["cmo", "chief marketing officer", "marketing leadership"], "CMO"),
+        (["chro", "chief human resources", "hr leadership", "people leadership"], "CHRO"),
+        (["cdo", "chief data officer", "data leadership"], "CDO"),
+        (["supply chain", "logistics leadership", "procurement"], "VP Supply Chain"),
+        (["vp engineering", "engineering vp"], "VP Engineering"),
+        (["vp sales", "sales leadership"], "VP Sales"),
+        (["founder", "startup leadership"], "Founder"),
+    ]
+    for kws, persona in checks:
+        if any(kw in t for kw in kws) and persona not in matched:
+            matched.append(persona)
+    return ", ".join(matched[:4])
 
 
 def _fallback_infer_tags(text: str, query: str = "") -> str:
