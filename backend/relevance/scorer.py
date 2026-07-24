@@ -757,7 +757,16 @@ GEO_MISMATCH_PENALTY = 0.65
 # (industry taxonomy coverage is inherently fuzzier — a real miss is more
 # likely than with the explicit persona alias map), but non-zero so an
 # industry-blank match no longer rides purely on persona+geo into GO.
+#
+# Same "unknown vs. actively wrong" split already made for personas:
+# _get_industry() returning "" (related_industries, industry_tags AND
+# category all empty — common for events not yet backfilled from a
+# curated CSV) is not evidence the event is a bad fit, just that we
+# never learned its industry. A populated industry_tags string that
+# still didn't match anything in the taxonomy bridge is stronger
+# evidence of a real mismatch and gets the harsher penalty.
 INDUSTRY_MISMATCH_PENALTY = 0.50
+INDUSTRY_UNKNOWN_PENALTY  = 0.75
 
 
 # ── Main rule scorer ───────────────────────────────────────────────
@@ -787,7 +796,8 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
         total = round(total * GEO_MISMATCH_PENALTY, 4)
     if profile.target_industries and ind_score == 0.0:
-        total = round(total * INDUSTRY_MISMATCH_PENALTY, 4)
+        penalty = INDUSTRY_MISMATCH_PENALTY if _get_industry(event).strip() else INDUSTRY_UNKNOWN_PENALTY
+        total = round(total * penalty, 4)
 
     detail = {
         "industry_matched":  ind_matched[:4],
