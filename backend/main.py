@@ -24,13 +24,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Database URL : {str(settings.database_url)[:60]}...")
     logger.info("=" * 60)
     await init_db()
-    # Init profile_feedback table (separate from events schema)
-    try:
-        from relevance.profile_store import init_profile_feedback_table
-        from db.database import engine as _engine
-        await init_profile_feedback_table(_engine)
-    except Exception as _e:
-        logger.warning(f"ProfileStore init skipped: {_e}")
+    # NOTE: profile_feedback table init intentionally removed — the
+    # table stored recall-boost data that's being retired (see
+    # relevance/profile_store.py). Not calling init_profile_feedback_table()
+    # here means the table won't be silently recreated after it's dropped.
     # Restore circuit-breaker state so a cold start on a free-tier host
     # (Render spins idle instances down) doesn't re-probe endpoints we
     # already know are dead/quota-exhausted from before the restart.
@@ -102,6 +99,14 @@ try:
     logger.info("Admin routes mounted at /admin")
 except ImportError as e:
     logger.warning(f"Admin routes not loaded: {e}")
+
+# Analytics: session/activity tracking (write) + dashboard read API
+try:
+    from api.routes_analytics import router as analytics_router
+    app.include_router(analytics_router, prefix="/api", tags=["analytics"])
+    logger.info("Analytics routes mounted at /api/analytics")
+except ImportError as e:
+    logger.warning(f"Analytics routes not loaded: {e}")
 
 
 @app.get("/health", tags=["health"])

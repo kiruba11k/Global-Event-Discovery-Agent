@@ -39,24 +39,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from db.crud import (
     batch_upsert_events, count_events,
-    create_company_profile, create_search_submission, get_all_events,
-    get_company_profile, get_event_by_id, get_event_by_dedup_hash,
-    update_event_enrichment, update_search_submission_status,
+    get_all_events, get_event_by_id, get_event_by_dedup_hash,
+    update_event_enrichment,
 )
 from db.database import get_db
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from ingestion.platform_normaliser import _iso_date
 from ingestion.realtime_pipeline import fetch_realtime_candidates
-from models.company_profile import CompanyProfileCreate
 from models.event import EventCreate
 from models.icp_profile import CompanyContext, ICPProfile, SearchRequest, SearchResponse
 from relevance.groq_ranker import rank_with_groq
 from relevance.scorer import score_candidates
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
-from relevance.profile_store import (
-    get_recall_boosts, record_search_results,
-    profile_core_hash, profile_window_hash,
-)
+from relevance.profile_store import profile_core_hash
 from relevance.meeting_calculator import calculate_meeting_potential
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
@@ -370,42 +365,12 @@ def _extract_pdf_text(fb):
         return ""
 
 
-# ══════════════════════════════════════════════════════════════════════
-# POST /api/company-profile
-# ══════════════════════════════════════════════════════════════════════
-
-@router.post("/company-profile")
-async def save_company_profile(company_data: str = Form(...), deck: UploadFile = File(None),
-                                db: AsyncSession = Depends(get_db)):
-    try:
-        pd = CompanyProfileCreate(**json.loads(company_data))
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid JSON: {exc}")
-    deck_text = deck_filename = ""
-    if deck and deck.filename:
-        deck_filename = deck.filename
-        fb = await deck.read()
-        if deck.filename.lower().endswith(".pdf"):
-            deck_text = _extract_pdf_text(fb)
-    co = await create_company_profile(db, pd, deck_text, deck_filename)
-    return {"id": co.id, "message": "Saved.", "deck_extracted": bool(deck_text)}
-
-
-@router.get("/company-profile/{profile_id}")
-async def fetch_company_profile(profile_id: str, db: AsyncSession = Depends(get_db)):
-    cp = await get_company_profile(db, profile_id)
-    if not cp: raise HTTPException(status_code=404, detail="Not found.")
-    import json as _json
-    client_names = []
-    try:
-        client_names = _json.loads(cp.client_names or "[]") if cp.client_names else []
-    except Exception:
-        client_names = [n.strip() for n in (cp.client_names or "").split(",") if n.strip()]
-    return {"id": cp.id, "company_name": cp.company_name, "founded_year": cp.founded_year,
-            "location": cp.location, "what_we_do": cp.what_we_do, "what_we_need": cp.what_we_need,
-            "deck_filename": cp.deck_filename, "has_deck": bool(cp.deck_text),
-            "client_names": client_names}
-
+# NOTE: POST /company-profile and GET /company-profile/{id} were removed —
+# the company_profiles table stored mostly-empty rows (frontend never
+# actually collects founded_year/location/what_we_do/what_we_need, and
+# no frontend code ever called GET to reload a saved profile). Retired
+# in favor of the analytics_icp_submissions table (models/analytics.py),
+# which captures the real per-submission data that mattered.
 
 # ══════════════════════════════════════════════════════════════════════
 # POST /api/search  —  REAL-TIME PIPELINE
@@ -436,15 +401,10 @@ async def _run_search_pipeline(
     )
 
     # ── Company context ─────────────────────────────────────────────
+    # company_profile_id is accepted for backward API compatibility but
+    # no longer resolved — the company_profiles table it pointed at was
+    # retired (see note above the old /company-profile endpoints).
     company_ctx: CompanyContext | None = company_context
-    if company_profile_id and not company_ctx:
-        cp = await get_company_profile(db, company_profile_id)
-        if cp:
-            company_ctx = CompanyContext(
-                company_name=cp.company_name, founded_year=cp.founded_year,
-                location=cp.location, what_we_do=cp.what_we_do,
-                what_we_need=cp.what_we_need, deck_text=cp.deck_text,
-            )
 
     # ── Step 1-4: Real-time pipeline ────────────────────────────────
     # SerpAPI + Ticketmaster + Eventbrite + PredictHQ → DB → EventORM list
@@ -575,22 +535,6 @@ async def _run_search_pipeline(
             logger.warning(f"Semantic search: {exc}")
 
     # ── Step 6: Rule-based scoring ───────────────────────────────────
-    # ── Profile recall: pre-boost known high-converting events ─────────
-    # Checks profile_feedback table for events that performed well for this
-    # ICP (or similar ICPs). Boost multiplier applied to cosine_scores dict
-    # so high-recall events get a head-start in scoring.
-    # Handles expiry: past events ignored, stale windows get smaller boost.
-    recall_boosts: dict[str, float] = {}
-    try:
-        recall_boosts = await get_recall_boosts(db, profile)
-        if recall_boosts:
-            # Merge recall boosts into cosine_scores (additive boost)
-            for eid, mult in recall_boosts.items():
-                existing = cosine_scores.get(eid, 0.0)
-                cosine_scores[eid] = min(existing * mult + (mult - 1.0) * 0.3, 1.0)
-    except Exception as _e:
-        logger.debug(f"Recall boost error: {_e}")
-
     scored = score_candidates(candidates, profile, cosine_scores)
 
     # ── Determine relevance threshold dynamically ─────────────────
@@ -994,49 +938,6 @@ async def _run_search_pipeline(
     resp_dict["suggested_geos"]        = suggested_geos   # [{geo, count}] live neighbour suggestions
     resp_dict["all_relevant_events"]   = all_relevant_events
 
-    # ── Record search results for future recall (async, non-blocking) ─
-    # Stores top events so future similar searches benefit from this data.
-    try:
-        import asyncio as _asyncio
-        from db.database import AsyncSessionLocal as _SL
-        _prof_snap = profile
-        _evts_snap = serialised_events[:20]
-        async def _record():
-            async with _SL() as _db2:
-                await record_search_results(_db2, _prof_snap, _evts_snap)
-        _asyncio.ensure_future(_record())
-    except Exception as _e:
-      logger.debug(f"Record search results error: {_e}")
-
-      
-           # ── Persist client names to company profile if provided ───────────
-    _cp_id_snap = company_profile_id or None
-    _cl_snap    = list(getattr(profile, "client_names", None) or [])
-    if _cl_snap:
-        try:
-            import asyncio as _aio2, json as _json2
-            from db.database import AsyncSessionLocal as _SL2
-            from db.crud import (
-                update_company_profile_client_names as _ucn,
-                create_company_profile              as _ccp,
-            )
-            from models.company_profile import CompanyProfileCreate as _CPC
-            _company_snap = profile.company_name or ""
-            async def _save_clients():
-                async with _SL2() as _db3:
-                    if _cp_id_snap:
-                        # Update the existing profile record
-                        await _ucn(_db3, _cp_id_snap, _cl_snap)
-                    else:
-                        # No profile ID yet — create a minimal record to store the names
-                        await _ccp(_db3, _CPC(
-                            company_name = _company_snap,
-                            client_names = _cl_snap,
-                        ))
-            _aio2.ensure_future(_save_clients())
-        except Exception as _ce:
-            logger.debug(f"Client names persist: {_ce}")
-
     return resp_dict
 
 
@@ -1061,15 +962,12 @@ async def _process_search_job(payload: dict) -> dict:
         except Exception:
             if submission_id:
                 async with AsyncSessionLocal() as db_err:
-                    await update_search_submission_status(db_err, submission_id, status="error", error="pipeline failed")
+                    await _analytics_track_complete(db_err, submission_id, "error", {}, error="pipeline failed")
             raise
 
     if submission_id:
         async with AsyncSessionLocal() as db2:
-            await update_search_submission_status(
-                db2, submission_id, status="done",
-                result_total_found=result.get("total_found", 0),
-            )
+            await _analytics_track_complete(db2, submission_id, "done", result)
     return result
 
 
@@ -1084,6 +982,38 @@ async def _process_search_job(payload: dict) -> dict:
 # if REDIS_URL isn't configured — see queueing/search_queue.enqueue().
 # ══════════════════════════════════════════════════════════════════════
 
+async def _analytics_track_start(db: AsyncSession, submission_id: str, session_id: str, ip: str, profile) -> None:
+    """Best-effort — analytics is a monitoring concern, never allowed to
+    fail or slow down a real search."""
+    try:
+        from db import analytics_crud as _ac
+        await _ac.create_icp_submission(
+            db, submission_id, session_id, ip,
+            profile.company_name or "", profile.email or "",
+            profile.target_industries or [], profile.target_personas or [],
+            profile.target_geographies or [], getattr(profile, "avg_deal_size_category", "") or "",
+            profile.date_from or "", profile.date_to or "",
+        )
+    except Exception as exc:
+        logger.debug(f"analytics submission-start skipped: {exc}")
+
+
+async def _analytics_track_complete(db: AsyncSession, submission_id: str, status: str, result: dict, error: str = "") -> None:
+    try:
+        from db import analytics_crud as _ac
+        events = (result or {}).get("events", [])
+        go       = sum(1 for e in events if e.get("fit_verdict") == "GO")
+        consider = sum(1 for e in events if e.get("fit_verdict") == "CONSIDER")
+        await _ac.complete_icp_submission(
+            db, submission_id, status, total_found=(result or {}).get("total_found", 0),
+            go_count=go, consider_count=consider, error=error,
+        )
+        if events:
+            await _ac.record_shown_results(db, submission_id, events)
+    except Exception as exc:
+        logger.debug(f"analytics submission-complete skipped: {exc}")
+
+
 @router.post("/search", status_code=202)
 async def search_events(
     request: SearchRequest,
@@ -1097,22 +1027,15 @@ async def search_events(
     ip = await enforce_daily_search_limit(http_request, email=profile.email or "")
 
     profile_dict = profile.model_dump()
-
-    submission = await create_search_submission(
-        db,
-        ip_address          = ip,
-        profile_json         = json.dumps(profile_dict),
-        company_name         = profile.company_name or "",
-        email                = profile.email or "",
-        company_profile_id   = request.company_profile_id or "",
-        job_id                = "",
-    )
+    submission_id = str(uuid.uuid4())
+    session_id = http_request.headers.get("x-session-id", "")
+    await _analytics_track_start(db, submission_id, session_id, ip, profile)
 
     payload = {
         "profile":             profile_dict,
         "company_context":     request.company_context.model_dump() if request.company_context else None,
         "company_profile_id":  request.company_profile_id,
-        "submission_id":       submission.id,
+        "submission_id":       submission_id,
     }
 
     job_id = await enqueue(payload)
@@ -1126,15 +1049,10 @@ async def search_events(
                 profile, request.company_context, request.company_profile_id, db,
             )
         except Exception as exc:
-            await update_search_submission_status(db, submission.id, status="error", error=str(exc))
+            await _analytics_track_complete(db, submission_id, "error", {}, error=str(exc))
             raise
-        await update_search_submission_status(
-            db, submission.id, status="done", result_total_found=result.get("total_found", 0),
-        )
+        await _analytics_track_complete(db, submission_id, "done", result)
         return {"status": "done", "job_id": None, "result": result}
-
-    submission.job_id = job_id
-    await db.commit()
 
     return {"status": "queued", "job_id": job_id}
 

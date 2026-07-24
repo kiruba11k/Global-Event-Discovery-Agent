@@ -182,6 +182,9 @@ class Settings(BaseSettings):
     # ── Seed protection ───────────────────────────
     seed_admin_token: str = ""
 
+    # ── Analytics dashboard API (external app reads via this token) ──
+    analytics_api_token: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
