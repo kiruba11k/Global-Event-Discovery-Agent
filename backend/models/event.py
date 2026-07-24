@@ -139,6 +139,7 @@ class EventBase(BaseModel):
     event_cities:      str = ""        # NEW
 
     est_attendees:     int = 0
+    exhibitor_count:   int = 0          # NEW — "total exhibitors" in curated CSVs
     ticket_price_usd:  float = 0.0
     price_description: str = ""
 

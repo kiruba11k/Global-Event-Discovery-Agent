@@ -329,6 +329,7 @@ async def upsert_event(db: AsyncSession, event) -> bool:
                 industry_tags     = d.get("industry_tags", ""),
                 audience_personas = d.get("audience_personas", ""),
                 est_attendees     = int(d.get("est_attendees") or 0),
+                exhibitor_count   = int(d.get("exhibitor_count") or 0),
                 price_description = d.get("price_description", ""),
                 registration_url  = d.get("registration_url", ""),
                 website           = d.get("website", ""),
@@ -392,6 +393,7 @@ async def batch_upsert_events(
             industry_tags     = d.get("industry_tags", ""),
             audience_personas = d.get("audience_personas", ""),
             est_attendees     = int(d.get("est_attendees") or 0),
+            exhibitor_count   = int(d.get("exhibitor_count") or 0),
             price_description = d.get("price_description", ""),
             registration_url  = d.get("registration_url", ""),
             website           = d.get("website", ""),
@@ -551,7 +553,7 @@ async def update_event_enrichment(
     """
     from sqlalchemy import update as _update, text as _text
     allowed = {
-        "est_attendees", "registration_url", "website",
+        "est_attendees", "exhibitor_count", "registration_url", "website",
         "start_date", "end_date", "price_description",
         "audience_personas", "description",
         "industry_tags", "related_industries", "short_summary",

@@ -346,7 +346,8 @@ def _parse_csv_row(row, row_number):
         event_cities=ec or f"{city}, {country}".strip(", "),
         address=_csv_value(nr, "address"), city=city, country=country,
         is_virtual=_csv_bool(nr, "is_virtual"), is_hybrid=_csv_bool(nr, "is_hybrid"),
-        est_attendees=_csv_int(nr, "est_attendees", "estimated_attendees", "attendees"),
+        est_attendees=_csv_int(nr, "est_attendees", "estimated_attendees", "attendees", "total attendees"),
+        exhibitor_count=_csv_int(nr, "exhibitor_count", "total exhibitors", "exhibitors"),
         category=_csv_value(nr, "category"),
         ticket_price_usd=_csv_float(nr, "ticket_price_usd", "price_usd"),
         price_description=_csv_value(nr, "price_description", "pricing"),
@@ -1506,12 +1507,11 @@ async def update_events_from_csv(file: UploadFile = File(...), db: AsyncSession 
       - matched by dedup_hash to an existing event → UPDATE only the
         fields this endpoint is meant for (audience_personas always
         overwritten when the CSV has a value — legacy rows have this
-        empty; industry_tags/related_industries/short_summary filled
-        in only where the existing value is empty, so a better-curated
-        CSV value never clobbers already-good scraped data)
+        empty; industry_tags/related_industries/short_summary/
+        est_attendees/exhibitor_count filled in only where the existing
+        value is empty/zero, so a better-curated CSV value never
+        clobbers already-good scraped or SerpAPI-enriched data)
       - no match → inserted as a new event, same as /events/upload-csv
-
-    Never touches est_attendees, pricing, or other SerpAPI-owned fields.
     """
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a .csv file")
@@ -1545,6 +1545,10 @@ async def update_events_from_csv(file: UploadFile = File(...), db: AsyncSession 
             patch["related_industries"] = ev.related_industries
         if ev.short_summary and not existing.short_summary:
             patch["short_summary"] = ev.short_summary
+        if ev.est_attendees and not existing.est_attendees:
+            patch["est_attendees"] = ev.est_attendees
+        if ev.exhibitor_count and not existing.exhibitor_count:
+            patch["exhibitor_count"] = ev.exhibitor_count
         if patch and await update_event_enrichment(db, existing.id, patch, mark_serpapi_enriched=False):
             updated += 1
 
