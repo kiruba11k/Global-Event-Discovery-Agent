@@ -1210,6 +1210,17 @@ async def geo_hint(
                 geo_filters.append(_ORM.country.ilike(f"%{part}%"))
                 geo_filters.append(_ORM.city.ilike(f"%{part}%"))
                 geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
+        # NOTE: industry/persona are intentionally NOT filtered in SQL here.
+        # The ILIKE 8-char-stem match used to be applied at the SQL layer
+        # (as an AND alongside geo), but that stem match is far weaker than
+        # score_candidates' own industry/persona matching (taxonomy/synonym
+        # bridge, persona alias map, etc.) — the real search pipeline never
+        # pre-filters candidates that way, it hands score_candidates the
+        # full geo-scoped candidate set and lets IT decide industry/persona
+        # fit. Pre-filtering here with a cruder rule silently dropped events
+        # the real pipeline would score GO/CONSIDER (e.g. industry_tags=
+        # "Software" never matched an ILIKE stem of "technolo"), causing
+        # this hint to under-report versus the actual search results.
         if not geo_filters:
             candidate_ids = set(_semantic_ids_for_geo(geo)) if with_industries and with_personas else set()
         else:
@@ -1217,20 +1228,6 @@ async def geo_hint(
                 _ORM.start_date >= today,
                 _or(*geo_filters),
             )
-
-            if with_industries and ind_list:
-                ind_filters = []
-                for ind in ind_list[:5]:
-                    stem = ind.lower()[:8]
-                    ind_filters += [
-                        _ORM.industry_tags.ilike(f"%{stem}%"),
-                        _ORM.related_industries.ilike(f"%{stem}%"),
-                    ]
-                stmt = stmt.where(_or(*ind_filters))
-
-            per_filters = _persona_filters() if (with_personas and per_list) else []
-            if per_filters:
-                stmt = stmt.where(_or(*per_filters))
 
             result = await db.execute(stmt)
             candidate_ids = {row[0] for row in result.all()}
