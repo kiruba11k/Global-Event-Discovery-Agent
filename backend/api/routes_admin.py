@@ -918,6 +918,30 @@ async def _run_backfill_personas() -> None:
                 for event_id, personas_str in inferred.items():
                     if not personas_str:
                         _persona_backfill_status["skipped_no_evidence"] += 1
+                        # Mark as "checked, no evidence" with a single space —
+                        # NOT empty, so the WHERE filter above excludes it on
+                        # the next iteration. Leaving audience_personas as ""
+                        # here means this exact row (and the whole batch,
+                        # since the query has no ORDER BY/OFFSET to advance
+                        # past it) gets re-fetched and re-skipped forever,
+                        # which is why skipped_no_evidence could already
+                        # exceed the total event count — this loop was never
+                        # terminating. scorer.py's `.strip()` check on
+                        # audience_personas still treats " " as empty, so
+                        # PERSONA_UNKNOWN_PENALTY (not the harsher mismatch
+                        # penalty) still applies at query time.
+                        #
+                        # Direct UPDATE (not update_event_enrichment) on
+                        # purpose — that helper nulls out the pgvector
+                        # embedding whenever audience_personas changes, which
+                        # would force a costly Jina re-embed of all ~51K
+                        # skipped events for a change that carries no new
+                        # semantic content.
+                        await db.execute(
+                            update(EventORM).where(EventORM.id == event_id)
+                            .values(audience_personas=" ")
+                        )
+                        await db.commit()
                         continue
                     ok = await update_event_enrichment(
                         db, event_id, {"audience_personas": personas_str}, mark_serpapi_enriched=False,
