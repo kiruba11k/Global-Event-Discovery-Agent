@@ -987,13 +987,7 @@ async def _analytics_track_start(db: AsyncSession, submission_id: str, session_i
     fail or slow down a real search."""
     try:
         from db import analytics_crud as _ac
-        await _ac.create_icp_submission(
-            db, submission_id, session_id, ip,
-            profile.company_name or "", profile.email or "",
-            profile.target_industries or [], profile.target_personas or [],
-            profile.target_geographies or [], getattr(profile, "avg_deal_size_category", "") or "",
-            profile.date_from or "", profile.date_to or "",
-        )
+        await _ac.create_icp_submission(db, submission_id, session_id, ip, profile.model_dump())
     except Exception as exc:
         logger.debug(f"analytics submission-start skipped: {exc}")
 

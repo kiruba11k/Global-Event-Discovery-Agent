@@ -206,6 +206,24 @@ export default function App() {
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
+  // ── Analytics session lifecycle ────────────────────────────────
+  // Registers the analytics_sessions row this browser's X-Session-Id
+  // header (see api/client.js) points at — without this call the
+  // header still gets sent everywhere, but every analytics_* write
+  // that references it is an orphaned foreign key with nothing to
+  // join to. Heartbeat keeps last_seen_at/total_time_spent_seconds
+  // current while the tab is actually visible/foreground.
+  useEffect(() => {
+    api.analyticsSessionStart(document.referrer || '', window.location.pathname).catch(() => {})
+    const HEARTBEAT_SECONDS = 20
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        api.analyticsHeartbeat(HEARTBEAT_SECONDS).catch(() => {})
+      }
+    }, HEARTBEAT_SECONDS * 1000)
+    return () => clearInterval(id)
+  }, [])
+
   // Server-down / network-unreachable / 5xx errors get the full ErrorPage
   // (the user can't do anything useful until the backend is back); normal
   // 4xx validation errors ("no results", bad input) stay as a toast so

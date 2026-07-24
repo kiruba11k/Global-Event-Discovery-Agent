@@ -8,12 +8,20 @@ Shares Base with EventORM (models/event.py) so db.database.init_db()'s
 `EventBase.metadata.create_all` picks these tables up automatically —
 importing this module anywhere before init_db() runs is enough to
 register them (see db/database.py's import list).
+
+Common key: `session_id` (AnalyticsSessionORM.id) links a visitor to
+every submission and event they generate; `submission_id`
+(AnalyticsICPSubmissionORM.id) links a search to every result it
+produced. Both are enforced with real ForeignKey constraints — NULL
+when unknown (e.g. session tracking failed client-side), never an
+empty string, so the constraint stays meaningful instead of silently
+accepting orphaned "" values.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from models.event import Base
 
@@ -41,11 +49,13 @@ class AnalyticsICPSubmissionORM(Base):
     """One row per ICP form submission — normalized columns (not just a
     JSON blob) so an external dashboard can filter/aggregate by
     industry, persona, geography, deal size, status, etc. directly in
-    SQL without parsing JSON."""
+    SQL without parsing JSON. Captures every field the ICP form
+    actually collects (models/icp_profile.py's ICPProfile), not just a
+    subset."""
     __tablename__ = "analytics_icp_submissions"
 
     id                    = Column(String, primary_key=True)
-    session_id             = Column(String, index=True, default="")
+    session_id             = Column(String, ForeignKey("analytics_sessions.id"), nullable=True, index=True)
 
     submitted_at           = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at           = Column(DateTime, nullable=True)
@@ -56,13 +66,26 @@ class AnalyticsICPSubmissionORM(Base):
     ip_address              = Column(String, default="")
     company_name            = Column(String, default="")
     email                    = Column(String, default="", index=True)
+    company_description      = Column(Text, default="")
+    buyer_description        = Column(Text, default="")
 
     target_industries        = Column(Text, default="")   # comma-joined, for quick display
     target_personas          = Column(Text, default="")
     target_geographies       = Column(Text, default="")
+    preferred_event_types    = Column(Text, default="")
+    extra_keywords           = Column(Text, default="")
+
     deal_size_bracket        = Column(String, default="")
+    budget_usd                = Column(Float, nullable=True)
     date_from                = Column(String, default="")
     date_to                  = Column(String, default="")
+    min_attendees             = Column(Integer, default=0)
+    max_results               = Column(Integer, default=30)
+
+    # ── Meeting-potential calculator inputs ──────────────────────
+    differentiator_score      = Column(Integer, default=5)     # 1-10 slider
+    client_count_range        = Column(String, default="")     # "0-10"|"11-50"|...
+    client_names              = Column(Text, default="")       # comma-joined — "Who are some of your clients?"
 
     total_found              = Column(Integer, default=0)
     go_count                 = Column(Integer, default=0)
@@ -77,8 +100,8 @@ class AnalyticsSearchResultORM(Base):
     __tablename__ = "analytics_search_results"
 
     id                = Column(String, primary_key=True)   # f"{submission_id}:{event_id}"
-    submission_id      = Column(String, index=True, default="")
-    event_id           = Column(String, index=True, default="")
+    submission_id      = Column(String, ForeignKey("analytics_icp_submissions.id"), nullable=False, index=True)
+    event_id           = Column(String, ForeignKey("events.id"), nullable=True, index=True)
     event_name         = Column(String, default="")        # denormalized, avoids a join for display
     rank_position       = Column(Integer, default=0)
     fit_verdict         = Column(String, default="")        # GO | CONSIDER | SKIP
@@ -96,9 +119,9 @@ class AnalyticsEventORM(Base):
     __tablename__ = "analytics_events"
 
     id             = Column(String, primary_key=True)
-    session_id      = Column(String, index=True, default="")
+    session_id      = Column(String, ForeignKey("analytics_sessions.id"), nullable=True, index=True)
     event_type      = Column(String, index=True, default="")   # page_view | icp_form_submitted | results_viewed | result_clicked | email_report_requested | ...
-    submission_id   = Column(String, index=True, default="")
-    event_id        = Column(String, index=True, default="")   # catalog event, when relevant (e.g. result_clicked)
+    submission_id   = Column(String, ForeignKey("analytics_icp_submissions.id"), nullable=True, index=True)
+    event_id        = Column(String, ForeignKey("events.id"), nullable=True, index=True)   # catalog event, when relevant (e.g. result_clicked)
     metadata_json   = Column(Text, default="")
     created_at       = Column(DateTime, default=datetime.utcnow, index=True)
