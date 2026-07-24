@@ -725,6 +725,16 @@ def _score_attendees(event: EventORM, profile: ICPProfile) -> Tuple[float, str]:
 # never outranks a right-designation one.
 PERSONA_MISMATCH_PENALTY = 0.15
 
+# "No persona data at all" is NOT the same as "persona data exists and
+# it's the wrong one" — many events (especially not yet backfilled from
+# a curated CSV, see the "Designations attending" column) simply have an
+# empty audience_personas field, not a confirmed-wrong one. Crushing
+# those as hard as a real mismatch throws away events that may well be
+# relevant — the semantic/cosine score (built from whatever text does
+# exist) is a better signal here than a rule that has nothing to check
+# against. Genuinely wrong persona data still gets the harsh penalty above.
+PERSONA_UNKNOWN_PENALTY = 0.55
+
 # Geography is SECONDARY, a backfill preference once designation is
 # satisfied — not a hard requirement. A persona-matching event from a
 # different country should still be able to surface (to fill out a full
@@ -753,8 +763,14 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     # Persona is the dominant gate — apply first, and only when the
     # profile actually named a persona (an empty target_personas list
     # means "any buyer," per_score is 0.0 with nothing to mismatch).
+    # Distinguish "no persona data to check" (event.audience_personas
+    # empty — lighter penalty, let semantic score carry more weight)
+    # from "persona data exists and it's a different role" (harsh
+    # penalty — this event told us who attends, and it isn't who the
+    # profile wants).
     if profile.target_personas and per_score == 0.0:
-        total = round(total * PERSONA_MISMATCH_PENALTY, 4)
+        penalty = PERSONA_MISMATCH_PENALTY if (event.audience_personas or "").strip() else PERSONA_UNKNOWN_PENALTY
+        total = round(total * penalty, 4)
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
         total = round(total * GEO_MISMATCH_PENALTY, 4)
 
