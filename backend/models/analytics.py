@@ -16,6 +16,13 @@ produced. Both are enforced with real ForeignKey constraints — NULL
 when unknown (e.g. session tracking failed client-side), never an
 empty string, so the constraint stays meaningful instead of silently
 accepting orphaned "" values.
+
+`event_id` (the catalog event referenced by AnalyticsSearchResultORM
+and AnalyticsEventORM) is deliberately NOT a ForeignKey to events.id —
+the live `events` table has no PRIMARY KEY/UNIQUE constraint on `id`
+in production (only `dedup_hash` does), so Postgres rejects it as an
+FK target outright; referencing it crashes table creation at app
+startup. Join it at query time instead (events.id = analytics_*.event_id).
 """
 from __future__ import annotations
 
@@ -101,7 +108,12 @@ class AnalyticsSearchResultORM(Base):
 
     id                = Column(String, primary_key=True)   # f"{submission_id}:{event_id}"
     submission_id      = Column(String, ForeignKey("analytics_icp_submissions.id"), nullable=False, index=True)
-    event_id           = Column(String, ForeignKey("events.id"), nullable=True, index=True)
+    # NOT a ForeignKey to events.id — the live events table's `id` column
+    # has no PRIMARY KEY/UNIQUE constraint in production (only dedup_hash
+    # does), so Postgres can't accept it as an FK target. Referencing it
+    # anyway breaks table creation outright (InvalidForeignKeyError,
+    # crashes app startup). Indexed String, enforced at the app layer.
+    event_id           = Column(String, index=True, nullable=True)
     event_name         = Column(String, default="")        # denormalized, avoids a join for display
     rank_position       = Column(Integer, default=0)
     fit_verdict         = Column(String, default="")        # GO | CONSIDER | SKIP
@@ -122,6 +134,7 @@ class AnalyticsEventORM(Base):
     session_id      = Column(String, ForeignKey("analytics_sessions.id"), nullable=True, index=True)
     event_type      = Column(String, index=True, default="")   # page_view | icp_form_submitted | results_viewed | result_clicked | email_report_requested | ...
     submission_id   = Column(String, ForeignKey("analytics_icp_submissions.id"), nullable=True, index=True)
-    event_id        = Column(String, ForeignKey("events.id"), nullable=True, index=True)   # catalog event, when relevant (e.g. result_clicked)
+    # NOT a ForeignKey — see the identical note on AnalyticsSearchResultORM.event_id above.
+    event_id        = Column(String, index=True, nullable=True)   # catalog event, when relevant (e.g. result_clicked)
     metadata_json   = Column(Text, default="")
     created_at       = Column(DateTime, default=datetime.utcnow, index=True)
