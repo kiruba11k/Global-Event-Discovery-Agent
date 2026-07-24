@@ -1319,12 +1319,29 @@ async def geo_hint(
                     if country:
                         ids_by_country.setdefault(country, set()).add(row["id"])
 
-            out = [
-                {"geo": country, "count": len(ids)}
-                for country, ids in ids_by_country.items()
-                if country.lower() not in exclude_lower and ids
-                and _looks_like_geo(country)
-            ]
+            # This loose ILIKE/semantic tally is only used to narrow down
+            # which countries are worth precisely re-checking — NOT as the
+            # displayed count. Reported "United States: 32" here while
+            # selecting United States then showed only 2 real results,
+            # because this count and _count_geo's count came from two
+            # different methods. Re-run the exact same rule-scored +
+            # RESULT_LIMIT-capped count _count_geo uses for the candidate
+            # countries so a suggestion's number always matches what
+            # switching to it will actually show.
+            loose = sorted(
+                (
+                    (country, ids) for country, ids in ids_by_country.items()
+                    if country.lower() not in exclude_lower and ids
+                    and _looks_like_geo(country)
+                ),
+                key=lambda item: -len(item[1]),
+            )[: max(limit * 3, limit + 5)]
+
+            out = []
+            for country, _ids in loose:
+                precise = await _count_geo(country, with_industries=with_ind, with_personas=with_per)
+                if precise > 0:
+                    out.append({"geo": country, "count": precise})
             out.sort(key=lambda x: -x["count"])
             return out[:limit]
 
