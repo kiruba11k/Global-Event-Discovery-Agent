@@ -746,6 +746,19 @@ PERSONA_UNKNOWN_PENALTY = 0.55
 # right-designation match.
 GEO_MISMATCH_PENALTY = 0.65
 
+# Industry is the HIGHEST-weighted single factor (0.35) but previously had
+# no mismatch penalty at all — an event that matched persona + geo but
+# NOTHING about the target industry could still clear GO purely on those
+# two (e.g. an HR-industry event scoring persona 0.15 + geo 0.22 + type
+# 0.07 = 0.44, well past the 0.38 GO bar, despite the event having no
+# connection whatsoever to the buyer's actual industry). This let
+# industry-irrelevant events surface as top recommendations whenever they
+# happened to name the right job title. Lighter than the persona penalty
+# (industry taxonomy coverage is inherently fuzzier — a real miss is more
+# likely than with the explicit persona alias map), but non-zero so an
+# industry-blank match no longer rides purely on persona+geo into GO.
+INDUSTRY_MISMATCH_PENALTY = 0.50
+
 
 # ── Main rule scorer ───────────────────────────────────────────────
 
@@ -773,6 +786,8 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         total = round(total * penalty, 4)
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
         total = round(total * GEO_MISMATCH_PENALTY, 4)
+    if profile.target_industries and ind_score == 0.0:
+        total = round(total * INDUSTRY_MISMATCH_PENALTY, 4)
 
     detail = {
         "industry_matched":  ind_matched[:4],
