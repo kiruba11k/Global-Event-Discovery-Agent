@@ -157,14 +157,12 @@ _FORCE_TEXT_COLUMNS = [
 
 async def _add_missing_columns(conn):
     """
-    Add new columns to `events` and `company_profiles` without dropping data.
+    Add new columns to `events` without dropping data.
     Uses IF NOT EXISTS — safe to run on every startup.
     """
     # (table, column_name, sql_type, default_value)
     _TABLE_COLUMNS = [
         ("events", col, typ, dflt) for col, typ, dflt in _NEW_COLUMNS
-    ] + [
-        ("company_profiles", "client_names", "TEXT", "''"),
     ]
 
     if IS_POSTGRES:
@@ -214,8 +212,12 @@ async def init_db():
     Idempotent — safe to call on every startup.
     """
     from models.event import Base as EventBase
-    from models.company_profile import CompanyProfileORM  # noqa: registers table
-    from models.search_submission import SearchSubmissionORM  # noqa: registers table
+    # NOTE: company_profiles and search_submissions are retired — no
+    # longer imported here, so create_all() won't recreate them after
+    # they're dropped. See models/company_profile.py and
+    # models/search_submission.py for why (superseded by
+    # models/analytics.py's analytics_icp_submissions, which captures
+    # the same submission data with normalized, actually-populated columns).
     from models.analytics import (  # noqa: registers tables
         AnalyticsEventORM, AnalyticsICPSubmissionORM,
         AnalyticsSearchResultORM, AnalyticsSessionORM,
