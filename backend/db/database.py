@@ -167,6 +167,29 @@ _FORCE_TEXT_COLUMNS = [
 ]
 
 
+async def _run_isolated(conn, description: str, coro_fn):
+    """
+    Run one DDL/DML step in its own SAVEPOINT (conn.begin_nested()) so a
+    failure there can't poison the rest of init_db()'s shared outer
+    transaction. Without this, Postgres aborts the ENTIRE transaction on
+    the first statement that errors — every later statement on the same
+    connection then fails with PendingRollbackError regardless of what it
+    is, which is what turned one failing "ADD COLUMN IF NOT EXISTS" into
+    a full application-startup crash in production. The individual
+    try/except blocks around each statement never actually isolated
+    anything: catching the exception in Python doesn't roll back the
+    Postgres transaction state, so every step after the first failure
+    was doomed before it even ran.
+    """
+    try:
+        async with conn.begin_nested():
+            await coro_fn()
+        return True
+    except Exception as e:
+        logger.debug(f"{description}: {e}")
+        return False
+
+
 async def _add_missing_columns(conn):
     """
     Add new columns to `events` without dropping data.
@@ -179,31 +202,30 @@ async def _add_missing_columns(conn):
 
     if IS_POSTGRES:
         for table, col_name, col_type, default in _TABLE_COLUMNS:
-            try:
-                await conn.execute(text(
-                    f"ALTER TABLE {table} "
-                    f"ADD COLUMN IF NOT EXISTS {col_name} {col_type} DEFAULT {default}"
-                ))
+            ok = await _run_isolated(
+                conn, f"{table}.{col_name} check",
+                lambda t=table, c=col_name, ty=col_type, d=default: conn.execute(text(
+                    f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {c} {ty} DEFAULT {d}"
+                )),
+            )
+            if ok:
                 logger.debug(f"{table}.{col_name} ensured.")
-            except Exception as e:
-                logger.debug(f"{table}.{col_name} check: {e}")
 
         # Fix columns a CSV console-import may have auto-typed as TIMESTAMP
         # instead of TEXT (see _FORCE_TEXT_COLUMNS comment above).
         for table, col_name in _FORCE_TEXT_COLUMNS:
-            try:
+            async def _fix_text_column(t=table, c=col_name):
                 row = (await conn.execute(text(
                     "SELECT data_type FROM information_schema.columns "
                     "WHERE table_name = :t AND column_name = :c"
-                ), {"t": table, "c": col_name})).fetchone()
+                ), {"t": t, "c": c})).fetchone()
                 if row and row[0] not in ("text", "character varying"):
                     await conn.execute(text(
-                        f"ALTER TABLE {table} ALTER COLUMN {col_name} "
-                        f"TYPE TEXT USING {col_name}::text"
+                        f"ALTER TABLE {t} ALTER COLUMN {c} "
+                        f"TYPE TEXT USING {c}::text"
                     ))
-                    logger.info(f"{table}.{col_name} converted {row[0]} → TEXT")
-            except Exception as e:
-                logger.warning(f"{table}.{col_name} type fix failed: {e}")
+                    logger.info(f"{t}.{c} converted {row[0]} → TEXT")
+            await _run_isolated(conn, f"{table}.{col_name} type fix failed", _fix_text_column)
     elif IS_SQLITE:
         for table, col_name, col_type, default in _TABLE_COLUMNS:
             try:
@@ -246,26 +268,19 @@ async def init_db():
         # silently breaks every `ON CONFLICT (dedup_hash)` upsert (falls
         # through to a Postgres error, 0 rows inserted). Ensure it exists
         # on every startup, idempotent.
-        try:
-            if IS_POSTGRES:
-                await conn.execute(text(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
-                    "ON events (dedup_hash)"
-                ))
-            elif IS_SQLITE:
-                await conn.execute(text(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
-                    "ON events (dedup_hash)"
-                ))
+        async def _ensure_dedup_index():
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
+                "ON events (dedup_hash)"
+            ))
+        if await _run_isolated(conn, "events.dedup_hash unique index check failed", _ensure_dedup_index):
             logger.debug("events.dedup_hash unique index ensured.")
-        except Exception as e:
-            logger.warning(f"events.dedup_hash unique index check failed: {e}")
+
         # source_health circuit-breaker state (survives cold starts)
-        try:
+        async def _ensure_source_health():
             from ingestion.source_health import ensure_table as _ensure_sh_table
             await _ensure_sh_table(conn)
-        except Exception as e:
-            logger.debug(f"source_health table: {e}")
+        await _run_isolated(conn, "source_health table", _ensure_source_health)
 
     # SQLite performance tweaks
     if IS_SQLITE:
