@@ -498,12 +498,14 @@ export default function ICPForm({
         extra_keywords:         extra_keywords || [],
         differentiator_score:   diffScore,
         client_count_range:     clientRange || '11-50',
-        client_names:           clientNames,
+        client_names:           clientNameInput.trim() && !clientNames.includes(clientNameInput.trim())
+          ? [...clientNames, clientNameInput.trim()]
+          : clientNames,
         email,
       }
       onSubmit(profile, email)
     }
-  }, [geos, buyer, dealSize, email, diffScore, clientRange, companyName, companyData, onSubmit, effectiveParse])
+  }, [geos, buyer, dealSize, email, diffScore, clientRange, clientNames, clientNameInput, companyName, companyData, onSubmit, effectiveParse])
 
   const addClientName = () => {
     const name = clientNameInput.trim()
@@ -541,6 +543,13 @@ export default function ICPForm({
     }
     const { industries, personas, extra_keywords } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
+    // Commit any client name still sitting in the input box (typed but
+    // never Enter/comma/Add'd) so it isn't silently dropped on submit.
+    const pendingClient = clientNameInput.trim()
+    const finalClientNames = pendingClient && !clientNames.includes(pendingClient)
+      ? [...clientNames, pendingClient]
+      : clientNames
+    if (pendingClient) { setClientNames(finalClientNames); setClientNameInput('') }
     const profile = {
       company_name:          companyData?.company_name || companyName || 'LeadStrategus User',
       company_description:   buyer,
@@ -554,7 +563,7 @@ export default function ICPForm({
       extra_keywords:       extra_keywords || [],
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
-      client_names:         clientNames,
+      client_names:         finalClientNames,
       email,
     }
     onSubmit && onSubmit(profile, email)
