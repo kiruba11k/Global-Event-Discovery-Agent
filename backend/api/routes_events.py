@@ -40,7 +40,8 @@ from config import get_settings
 from db.crud import (
     batch_upsert_events, count_events,
     create_company_profile, create_search_submission, get_all_events,
-    get_company_profile, get_event_by_id, update_search_submission_status,
+    get_company_profile, get_event_by_id, get_event_by_dedup_hash,
+    update_event_enrichment, update_search_submission_status,
 )
 from db.database import get_db
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
@@ -1579,6 +1580,75 @@ async def upload_events_csv(file: UploadFile = File(...), db: AsyncSession = Dep
             "inserted": inserted, "duplicates": max(0, len(parsed)-inserted)+skipped,
             "invalid_rows": len(errors), "errors_preview": errors[:20],
             "total_events_in_db": total}
+
+
+@router.post("/events/update-from-csv")
+async def update_events_from_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """
+    Backfill NEW column data (e.g. designations/industry from a curated
+    re-export) onto events that already exist in the DB, matched by
+    dedup_hash — unlike /events/upload-csv, which only ever inserts new
+    rows and silently skips a row whose dedup_hash already exists.
+
+    For each CSV row:
+      - matched by dedup_hash to an existing event → UPDATE only the
+        fields this endpoint is meant for (audience_personas always
+        overwritten when the CSV has a value — legacy rows have this
+        empty; industry_tags/related_industries/short_summary filled
+        in only where the existing value is empty, so a better-curated
+        CSV value never clobbers already-good scraped data)
+      - no match → inserted as a new event, same as /events/upload-csv
+
+    Never touches est_attendees, pricing, or other SerpAPI-owned fields.
+    """
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+    raw = await file.read()
+    if not raw: raise HTTPException(status_code=400, detail="Empty file")
+    try: text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError: text = raw.decode("latin-1")
+    reader = csv.DictReader(io.StringIO(text))
+    nh = {_norm(h).lower() for h in (reader.fieldnames or []) if h}
+    if "name" not in nh: raise HTTPException(status_code=400, detail="Missing column: name")
+
+    parsed, errors = [], []
+    for idx, row in enumerate(reader, 2):
+        try: parsed.append(_parse_csv_row(row, idx))
+        except ValueError as exc: errors.append(str(exc))
+    if not parsed: raise HTTPException(status_code=400, detail={"message": "No valid rows", "errors": errors[:20]})
+
+    updated = 0
+    to_insert = []
+    for ev in parsed:
+        existing = await get_event_by_dedup_hash(db, ev.dedup_hash)
+        if existing is None:
+            to_insert.append(ev)
+            continue
+        patch: dict = {}
+        if ev.audience_personas:
+            patch["audience_personas"] = ev.audience_personas
+        if ev.industry_tags and not existing.industry_tags:
+            patch["industry_tags"] = ev.industry_tags
+        if ev.related_industries and not existing.related_industries:
+            patch["related_industries"] = ev.related_industries
+        if ev.short_summary and not existing.short_summary:
+            patch["short_summary"] = ev.short_summary
+        if patch and await update_event_enrichment(db, existing.id, patch, mark_serpapi_enriched=False):
+            updated += 1
+
+    inserted, skipped = (0, 0)
+    if to_insert:
+        inserted, skipped = await batch_upsert_events(db, to_insert, skip_past=False)
+
+    total = await count_events(db)
+    return {
+        "message": "CSV backfill processed.", "filename": file.filename,
+        "rows_read": len(parsed) + len(errors), "valid_rows": len(parsed),
+        "matched_and_updated": updated,
+        "new_rows_inserted": inserted,
+        "invalid_rows": len(errors), "errors_preview": errors[:20],
+        "total_events_in_db": total,
+    }
 
 
 @router.get("/events")

@@ -515,18 +515,35 @@ async def count_events(db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
+async def get_event_by_dedup_hash(db: AsyncSession, dedup_hash: str) -> Optional[EventORM]:
+    """Look up an existing event by its dedup_hash — the stable identity
+    key used to match a CSV row against an already-ingested event even
+    when the CSV's own id column differs from the DB's row id (e.g. a
+    curated re-export using its own id scheme)."""
+    result = await db.execute(select(EventORM).where(EventORM.dedup_hash == dedup_hash))
+    return result.scalar_one_or_none()
+
+
 async def update_event_enrichment(
     db:       AsyncSession,
     event_id: str,
     updates:  dict,
+    mark_serpapi_enriched: bool = True,
 ) -> bool:
     """
     Update enrichment fields on an existing event row.
-    Only updates non-None values.  Marks serpapi_enriched=True.
+    Only updates non-None values.
 
-    `description` and `audience_personas` feed the pgvector embedding
-    text (relevance/pgvector_store.py build_event_text). If either
-    changes here, the event's existing embedding no longer reflects its
+    `mark_serpapi_enriched` defaults to True for the SerpAPI enrichment
+    call site this was originally built for. Pass False when the update
+    comes from elsewhere (e.g. a curated CSV backfill) — the flag means
+    "was SerpAPI used to fill gaps?" and should stay accurate for other
+    code that reads it as a display badge.
+
+    `description`, `audience_personas`, `industry_tags`, `related_industries`
+    and `short_summary` all feed the pgvector embedding text
+    (relevance/pgvector_store.py build_event_text). If any of these
+    change here, the event's existing embedding no longer reflects its
     content, so it's cleared back to NULL — the next search that touches
     this event will lazily re-embed it (embed_missing() only fills rows
     WHERE embedding IS NULL). Harmless no-op when pgvector is off or the
@@ -537,15 +554,19 @@ async def update_event_enrichment(
         "est_attendees", "registration_url", "website",
         "start_date", "end_date", "price_description",
         "audience_personas", "description",
+        "industry_tags", "related_industries", "short_summary",
     }
     payload: dict = {k: v for k, v in updates.items() if k in allowed and v is not None}
     if not payload:
         return False
-    payload["serpapi_enriched"] = True
+    if mark_serpapi_enriched:
+        payload["serpapi_enriched"] = True
     payload["last_verified_at"] = datetime.utcnow()
     from config import get_settings as _get_settings
+    _EMBED_FIELDS = {"description", "audience_personas", "industry_tags",
+                      "related_industries", "short_summary"}
     embedding_stale = (
-        ("description" in payload or "audience_personas" in payload)
+        bool(_EMBED_FIELDS & payload.keys())
         and _get_settings().pgvector_enabled
     )
     try:
