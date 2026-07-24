@@ -1169,7 +1169,11 @@ async def geo_hint(
             logger.debug(f"geo-hint: semantic recall skipped ({exc})")
 
     def _geo_words(geo: str) -> list[str]:
-        return [w for w in _re.split(r"[\s,/\-]+", geo.lower()) if len(w) > 2]
+        from relevance.geo_aliases import expand_geo
+        words: list[str] = []
+        for variant in expand_geo(geo):
+            words.extend(w for w in _re.split(r"[\s,/\-]+", variant) if len(w) > 2)
+        return list(dict.fromkeys(words))
 
     def _semantic_ids_for_geo(geo: str) -> set[str]:
         words = _geo_words(geo)
@@ -1192,10 +1196,14 @@ async def geo_hint(
         raw ILIKE/semantic hits (the old approach) let this number report
         candidates that would go on to score as SKIP and never appear.
         """
+        from relevance.geo_aliases import expand_geo as _expand_geo
         geo_l = geo.strip().lower()
         geo_parts = [geo_l]
         if " - " in geo_l:
             geo_parts.extend(p.strip() for p in geo_l.split(" - "))
+        geo_parts = list(dict.fromkeys(
+            variant for part in geo_parts for variant in _expand_geo(part)
+        ))
         geo_filters = []
         for part in geo_parts:
             if len(part) > 1:
