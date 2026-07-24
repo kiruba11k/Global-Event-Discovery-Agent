@@ -89,6 +89,18 @@ if IS_POSTGRES:
     _engine_kw["pool_size"]    = 3
     _engine_kw["max_overflow"] = 2
     _engine_kw["pool_timeout"] = 30
+    # Without these, a stalled connection or a DDL statement blocked on a
+    # lock held by another session (e.g. init_db()'s ALTER TABLE ADD COLUMN
+    # IF NOT EXISTS migration) hangs indefinitely with NO error logged —
+    # observed in production as startup logging up through "Database URL"
+    # and then going silent for 5+ minutes before Render force-restarted
+    # the process, repeating on every retry. Bounded timeouts turn that
+    # into a loud, diagnosable failure instead of a silent stall.
+    _engine_kw["connect_args"] = {
+        "timeout":         15,      # seconds to establish a new connection
+        "command_timeout": 30,      # seconds per query/statement, incl. DDL
+        "server_settings": {"lock_timeout": "10000"},  # ms — fail fast if a lock can't be acquired
+    }
 
 engine            = create_async_engine(DATABASE_URL, **_engine_kw)
 AsyncSessionLocal = async_sessionmaker(
