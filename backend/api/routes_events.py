@@ -60,6 +60,56 @@ from scripts.seed_eventseye_global import run_eventseye_seed
 router   = APIRouter()
 settings = get_settings()
 
+
+async def _reembed_events(event_ids: set) -> None:
+    """
+    Immediately re-embed events whose content just changed, instead of
+    leaving them with embedding=NULL until some future search happens to
+    pull them in as a SQL candidate (pgvector.embed_missing() is otherwise
+    only ever called opportunistically on the current search's candidate
+    set, so a freshly-enriched/tagged event could sit un-embedded
+    indefinitely). Re-fetches fresh rows so the new field values (not the
+    stale in-memory objects from before the update) are what gets embedded.
+    """
+    if not event_ids:
+        return
+    try:
+        from sqlalchemy import select as _sel
+        from db.database import AsyncSessionLocal as _SessionLocal
+        from models.event import EventORM as _ORM
+        from relevance import pgvector_store
+        async with _SessionLocal() as _db:
+            rows = (await _db.execute(
+                _sel(_ORM).where(_ORM.id.in_(list(event_ids)))
+            )).scalars().all()
+            if rows:
+                await pgvector_store.embed_missing(_db, rows, limit=len(rows))
+    except Exception as exc:
+        logger.warning(f"Re-embed after enrichment (non-fatal): {exc}")
+
+
+async def _embed_by_dedup_hash(db, dedup_hashes: list) -> None:
+    """
+    Embed (or re-embed) every event matching the given dedup_hashes,
+    reusing the calling route's own DB session — for bulk CSV
+    insert/update routes, which haven't returned a response yet (unlike
+    the live-search enrichment flow, which needs its own fresh session).
+    A no-op for rows whose embedding is already up to date.
+    """
+    if not dedup_hashes:
+        return
+    try:
+        from sqlalchemy import select as _sel
+        from models.event import EventORM as _ORM
+        from relevance import pgvector_store
+        rows = (await db.execute(
+            _sel(_ORM).where(_ORM.dedup_hash.in_(dedup_hashes))
+        )).scalars().all()
+        if rows:
+            await pgvector_store.embed_missing(db, rows, limit=len(rows))
+    except Exception as exc:
+        logger.warning(f"Embed-by-dedup-hash (non-fatal): {exc}")
+
 _last_results: dict  = {}
 _LAST_RESULTS_MAX     = 500   # dead state otherwise grows unbounded — nothing currently reads
                                # this dict (the CSV-export route it was meant for was never
@@ -642,19 +692,30 @@ async def _run_search_pipeline(
                     f"att={sum(1 for d in enrichments.values() if d.get('est_attendees'))}"
                 )
                 # Persist enriched data back to DB using a fresh session
-                # (cannot reuse request db — it closes when the response is sent)
-                import asyncio as _aio
+                # (cannot reuse request db — it closes when the response is sent).
+                # AWAITED, not fire-and-forget: enrich_event's Groq-validation
+                # step is not actually gated by attendees_only — it can return
+                # registration_url/website/price_description/start_date/end_date
+                # alongside est_attendees whenever Groq found them, so all of
+                # those (not just est_attendees) must be captured or paid-for
+                # enrichment data is silently thrown away. Awaiting also means
+                # this can't be silently dropped by a process recycle between
+                # response-send and task completion, unlike the previous
+                # asyncio.ensure_future() fire-and-forget task.
                 from db.database import AsyncSessionLocal as _SessionLocal
-                _snapshot = dict(enrichments)
-                async def _persist_enrichments():
-                    async with _SessionLocal() as _db:
-                        for eid, edata in _snapshot.items():
-                            db_updates: dict = {}
-                            if edata.get("est_attendees"):
-                                db_updates["est_attendees"] = edata["est_attendees"]
-                            if db_updates:
-                                await update_event_enrichment(_db, eid, db_updates)
-                _aio.ensure_future(_persist_enrichments())
+                _touched_ids: set = set()
+                async with _SessionLocal() as _db:
+                    for eid, edata in enrichments.items():
+                        db_updates: dict = {}
+                        for key in ("est_attendees", "registration_url", "website",
+                                    "price_description", "start_date", "end_date"):
+                            if edata.get(key):
+                                db_updates[key] = edata[key]
+                        if db_updates:
+                            if await update_event_enrichment(_db, eid, db_updates):
+                                _touched_ids.add(eid)
+                if _touched_ids:
+                    await _reembed_events(_touched_ids)
         except Exception as exc:
             logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
 
@@ -676,18 +737,18 @@ async def _run_search_pipeline(
                 for e in untagged
             ])
             if tag_map:
-                import asyncio as _aio3
                 from db.database import AsyncSessionLocal as _SessionLocal3
-                _tag_snapshot = dict(tag_map)
-                async def _persist_tags():
-                    async with _SessionLocal3() as _db3:
-                        for eid, tags in _tag_snapshot.items():
-                            if tags:
-                                await update_event_enrichment(
-                                    _db3, eid, {"industry_tags": tags},
-                                    mark_serpapi_enriched=False,
-                                )
-                _aio3.ensure_future(_persist_tags())
+                _touched_ids: set = set()
+                async with _SessionLocal3() as _db3:
+                    for eid, tags in tag_map.items():
+                        if tags:
+                            if await update_event_enrichment(
+                                _db3, eid, {"industry_tags": tags},
+                                mark_serpapi_enriched=False,
+                            ):
+                                _touched_ids.add(eid)
+                if _touched_ids:
+                    await _reembed_events(_touched_ids)
                 logger.info(f"Groq industry-tag backfill: {len(tag_map)}/{len(untagged)} events tagged")
         except Exception as exc:
             logger.warning(f"Groq industry-tag backfill (non-fatal): {exc}")
@@ -1572,6 +1633,7 @@ async def upload_events_csv(file: UploadFile = File(...), db: AsyncSession = Dep
         except ValueError as exc: errors.append(str(exc))
     if not parsed: raise HTTPException(status_code=400, detail={"message": "No valid rows", "errors": errors[:20]})
     inserted, skipped = await batch_upsert_events(db, parsed, skip_past=False)
+    await _embed_by_dedup_hash(db, [p.dedup_hash for p in parsed if getattr(p, "dedup_hash", None)])
     total = await count_events(db)
     return {"message": "CSV processed.", "filename": file.filename,
             "rows_read": len(parsed)+len(errors), "valid_rows": len(parsed),
@@ -1641,6 +1703,7 @@ async def update_events_from_csv(file: UploadFile = File(...), db: AsyncSession 
     if to_insert:
         inserted, skipped = await batch_upsert_events(db, to_insert, skip_past=False)
 
+    await _embed_by_dedup_hash(db, [p.dedup_hash for p in parsed if getattr(p, "dedup_hash", None)])
     total = await count_events(db)
     return {
         "message": "CSV backfill processed.", "filename": file.filename,
