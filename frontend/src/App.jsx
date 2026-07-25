@@ -22,6 +22,9 @@ import StatsRow          from './components/StatsRow'
 import SocialProof       from './components/SocialProof'
 import FormSection       from './components/FormSection'
 import PipelineMachine   from './components/PipelineMachine'
+import PrivacyPage       from './components/PrivacyPage'
+import TermsPage         from './components/TermsPage'
+import PricingPage       from './components/PricingPage'
 import { api }           from './api/client'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
@@ -156,7 +159,14 @@ function FooterCTA({ onScrollToForm }) {
 }
 
 /* ── Landing Footer ─────────────────────────────────────────────── */
-function LandingFooter() {
+const FOOTER_LINKS = [
+  { label: 'Privacy', screen: 'privacy' },
+  { label: 'Terms',   screen: 'terms' },
+  { label: 'Pricing', screen: 'pricing' },
+  { label: 'Contact',  href: 'https://leadstrategus.com/contact/' },
+]
+
+function LandingFooter({ onNavigate }) {
   return (
     <footer className="ld-footer">
       <div className="ld-footer-inner">
@@ -164,9 +174,13 @@ function LandingFooter() {
           LeadStrategus
         </div>
         <nav className="ld-footer-links" aria-label="Footer">
-          {['Privacy', 'Terms', 'Pricing', 'Contact'].map(l => (
-            <a key={l} href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">
-              {l}
+          {FOOTER_LINKS.map(l => l.screen ? (
+            <button key={l.label} onClick={() => onNavigate(l.screen)}>
+              {l.label}
+            </button>
+          ) : (
+            <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer">
+              {l.label}
             </a>
           ))}
         </nav>
@@ -460,6 +474,20 @@ export default function App() {
     )
   }
 
+  /* ── Screens: Privacy / Terms / Pricing ──────────────────────── */
+  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing') {
+    return (
+      <div className="app">
+        <Toaster position="top-right" toastOptions={TOAST_STYLE} />
+        <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} />
+        {screen === 'privacy' && <PrivacyPage />}
+        {screen === 'terms'   && <TermsPage />}
+        {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
+        <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
+      </div>
+    )
+  }
+
   /* ── Screen: Home ──────────────────────────────────────────── */
   return (
     <div className="app">
@@ -472,7 +500,7 @@ export default function App() {
         }}
       />
 
-      <LandingNav onScrollToForm={scrollToForm} />
+      <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} />
       <HeroSection onScrollToForm={scrollToForm} stats={stats} />
       <LogoTicker stats={stats} />
       <StatsRow stats={stats} />
@@ -487,7 +515,7 @@ export default function App() {
         stats={stats}
       />
       <FooterCTA onScrollToForm={scrollToForm} />
-      <LandingFooter />
+      <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
       {loading && <LoadingOverlay profile={loadingProfile} stats={stats} />}
     </div>
   )

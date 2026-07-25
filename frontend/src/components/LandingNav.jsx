@@ -10,9 +10,10 @@ const LINKS = [
   { label: 'How it works', href: '#how' },
   { label: 'Why shows fail', href: '#problem' },
   { label: 'Find my shows', href: '#icp-form', form: true },
+  { label: 'Pricing', screen: 'pricing' },
 ]
 
-export default function LandingNav({ onScrollToForm }) {
+export default function LandingNav({ onScrollToForm, onNavigate }) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -26,6 +27,7 @@ export default function LandingNav({ onScrollToForm }) {
   const go = (link) => {
     setMobileOpen(false)
     if (link?.form) { onScrollToForm?.(); return }
+    if (link?.screen) { onNavigate?.(link.screen); return }
   }
 
   return (
@@ -50,7 +52,7 @@ export default function LandingNav({ onScrollToForm }) {
           </a>
 
           <div className="ld-nav-links">
-            {LINKS.map(l => l.form ? (
+            {LINKS.map(l => (l.form || l.screen) ? (
               <button key={l.label} className="ld-nav-link" onClick={() => go(l)}>{l.label}</button>
             ) : (
               <a key={l.label} className="ld-nav-link" href={l.href}>{l.label}</a>
@@ -91,7 +93,7 @@ export default function LandingNav({ onScrollToForm }) {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.22 }}
           >
-            {LINKS.map(l => l.form ? (
+            {LINKS.map(l => (l.form || l.screen) ? (
               <button key={l.label} className="ld-nav-mobile-link" onClick={() => go(l)}>{l.label}</button>
             ) : (
               <a key={l.label} className="ld-nav-mobile-link" href={l.href} onClick={() => setMobileOpen(false)}>{l.label}</a>
