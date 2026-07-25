@@ -658,6 +658,40 @@ async def _run_search_pipeline(
         except Exception as exc:
             logger.warning(f"SerpAPI enrichment (non-fatal): {exc}")
 
+    # ── Organic industry-tag backfill (Groq only, no SerpAPI cost) ───────
+    # industry_tags is empty on the large majority of DB rows now that no
+    # scraper populates it. Rather than a risky one-time bulk backfill over
+    # the whole table, tag only the events actually surfacing as relevant
+    # right now — reuses the anti-hallucination-safe taxonomy classifier
+    # (fixed taxonomy, evidence-required, temperature=0) already built in
+    # relevance/groq_tagger.infer_event_tags_batch, previously wired only
+    # into the disabled scraper path. Never overwrites an existing tag.
+    # Compounds for free over time as popular events keep resurfacing.
+    untagged = [e for e in final_top_events if not (e.industry_tags or "").strip()]
+    if untagged:
+        try:
+            from relevance.groq_tagger import infer_event_tags_batch
+            tag_map = await infer_event_tags_batch([
+                {"id": e.id, "title": e.name or "", "description": e.description or ""}
+                for e in untagged
+            ])
+            if tag_map:
+                import asyncio as _aio3
+                from db.database import AsyncSessionLocal as _SessionLocal3
+                _tag_snapshot = dict(tag_map)
+                async def _persist_tags():
+                    async with _SessionLocal3() as _db3:
+                        for eid, tags in _tag_snapshot.items():
+                            if tags:
+                                await update_event_enrichment(
+                                    _db3, eid, {"industry_tags": tags},
+                                    mark_serpapi_enriched=False,
+                                )
+                _aio3.ensure_future(_persist_tags())
+                logger.info(f"Groq industry-tag backfill: {len(tag_map)}/{len(untagged)} events tagged")
+        except Exception as exc:
+            logger.warning(f"Groq industry-tag backfill (non-fatal): {exc}")
+
     # Apply enrichment as a display-only patch — verdict/score/order from
     # the first (and only) LLM ranking pass are frozen here. SerpAPI's own
     # LLM validator (_groq_validate_enrichment in serp_enricher.py) already
