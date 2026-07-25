@@ -154,8 +154,12 @@ class Settings(BaseSettings):
     scrape_timeout_seconds: int = 15
 
     # ── Relevance tuning ─────────────────────────
-    cosine_weight: float = 0.65
-    rule_weight: float = 0.35
+    # cosine (embedding) is the only near-universally-populated signal in
+    # this DB — industry_tags/audience_personas are empty on ~85-95% of
+    # rows, so the rule score's industry/persona components are unreliable
+    # on most events. Weighted toward cosine accordingly.
+    cosine_weight: float = 0.75
+    rule_weight: float = 0.25
     go_threshold: float = 0.68
     consider_threshold: float = 0.42
     top_k_for_llm: int = 10   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
