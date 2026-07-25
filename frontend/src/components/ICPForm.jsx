@@ -520,7 +520,10 @@ export default function ICPForm({
   const validate = () => {
     const e = {}
     if (!buyer.trim())     e.buyer = 'Tell us who you sell to'
-    if (!geos.length)      e.geos  = 'Select at least one geography'
+    // A region typed but not yet Enter/click-committed still counts —
+    // it gets folded into geos on submit (see handleSubmit) so it must
+    // not be treated as missing here.
+    if (!geos.length && !geoSearch.trim()) e.geos = 'Select at least one geography'
     if (!dealSize)         e.deal  = 'Select your typical deal value'
     if (!clientRange)      e.client = 'Select your client count range'
     if (!email.trim())     e.email = 'Work email required'
@@ -550,12 +553,23 @@ export default function ICPForm({
       ? [...clientNames, pendingClient]
       : clientNames
     if (pendingClient) { setClientNames(finalClientNames); setClientNameInput('') }
+    // Same issue as client names, but for a REQUIRED field: a region typed
+    // into the geo search box is only added to `geos` on Enter or a click —
+    // someone who types a region and goes straight to Submit (especially
+    // once at least one other geo chip already exists, since validate()
+    // only checks geos.length, not whether the typed text was committed)
+    // would have that typed region silently dropped from the search.
+    const pendingGeo = geoSearch.trim()
+    const finalGeos = pendingGeo && !geos.some(g => g.toLowerCase() === pendingGeo.toLowerCase())
+      ? [...geos, pendingGeo]
+      : geos
+    if (pendingGeo) { setGeos(finalGeos); setGeoSearch('') }
     const profile = {
       company_name:          companyData?.company_name || companyName || 'LeadStrategus User',
       company_description:   buyer,
       target_industries:     industries.length ? industries : ['Technology'],
       target_personas:       personas.length   ? personas   : [],
-      target_geographies:    geos,
+      target_geographies:    finalGeos,
       preferred_event_types: ['conference', 'trade show', 'summit', 'expo'],
       avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
       date_from, date_to,
