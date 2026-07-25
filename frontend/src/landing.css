@@ -750,13 +750,20 @@
   color: var(--paper);
 }
 .ld-footer-links { display: flex; gap: 22px; }
-.ld-footer-links a {
+.ld-footer-links a,
+.ld-footer-links button {
   font-size: 13.5px;
   color: rgba(251,247,240,.65);
   text-decoration: none;
   transition: color .15s;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
-.ld-footer-links a:hover { color: var(--paper); }
+.ld-footer-links a:hover,
+.ld-footer-links button:hover { color: var(--paper); }
 .ld-footer-copy {
   font-family: var(--font-mono);
   font-size: 12px;
