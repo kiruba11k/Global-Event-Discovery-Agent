@@ -122,13 +122,7 @@ const SECTIONS = [
       'We may update this Privacy Policy from time to time to reflect changes in the Service or applicable law. When we do, we will revise the "Last updated" date at the top of this page. Continued use of the Service after an update means you accept the revised policy.',
     ],
   },
-    {
-    id: 'questions',
-    heading: 'Questions about this policy?',
-    paragraphs: [
-      'Reach us at kingshuk@leadstrategus.com or through our contact page.'
-    ],
-  },
+
 ]
 
 export default function PrivacyPage() {
