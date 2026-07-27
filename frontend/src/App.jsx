@@ -197,9 +197,22 @@ function LandingFooter({ onNavigate }) {
   )
 }
 
+// Static pages that must render correctly on a direct/cold navigation to
+// their URL (someone pasting the link, a search engine hit, a page
+// refresh) - not just when reached by clicking through the app, where
+// goTo() already handles it client-side. Ranking/deep-dive screens are
+// intentionally excluded: they depend on in-memory search results that
+// don't exist on a cold load, so there's nothing valid to restore there.
+const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricing': 'pricing' }
+
+function screenFromPath(pathname) {
+  const path = pathname.replace(/\/+$/, '') || '/'
+  return STATIC_SCREEN_PATHS[path] || 'home'
+}
+
 /* ═══════════════════════════════════════════════════════════════ */
 export default function App() {
-  const [screen,           setScreen]           = useState('home')
+  const [screen,           setScreen]           = useState(() => screenFromPath(window.location.pathname))
   const [loading,          setLoading]          = useState(false)
   const [results,          setResults]          = useState([])
   const [profileId,        setProfileId]        = useState('')
@@ -219,6 +232,15 @@ export default function App() {
   const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
+
+  // Browser back/forward between the static pages (privacy/terms/pricing)
+  // and home - goTo() already updates `screen` on click-through navigation,
+  // this covers the back button actually returning to the previous one.
+  useEffect(() => {
+    const onPopState = () => setScreen(screenFromPath(window.location.pathname))
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   // ── Analytics session lifecycle ────────────────────────────────
   // Registers the analytics_sessions row this browser's X-Session-Id
