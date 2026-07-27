@@ -507,12 +507,16 @@ export default function ICPForm({
     }
   }, [geos, buyer, dealSize, email, diffScore, clientRange, clientNames, clientNameInput, companyName, companyData, onSubmit, effectiveParse])
 
-  const addClientName = () => {
+  // refocus defaults to true (Enter / comma / Add button - user is adding
+  // another name right after). Blur means the user is intentionally moving
+  // to a different field, so refocus must be false there - otherwise
+  // committing on blur would just steal focus straight back.
+  const addClientName = (refocus = true) => {
     const name = clientNameInput.trim()
     if (!name) return
     if (!clientNames.includes(name)) setClientNames(prev => [...prev, name])
     setClientNameInput('')
-    clientNameInputRef.current?.focus()
+    if (refocus) clientNameInputRef.current?.focus()
   }
 
   const removeClientName = (name) => setClientNames(prev => prev.filter(n => n !== name))
@@ -928,6 +932,10 @@ export default function ICPForm({
               if (e.key === 'Enter') { e.preventDefault(); addClientName() }
               if (e.key === ',' )    { e.preventDefault(); addClientName() }
             }}
+            // Commit on blur too - someone who types a name and clicks/tabs
+            // to the next field without pressing Enter, comma, or Add
+            // should still have it captured, not lose it silently.
+            onBlur={() => addClientName(false)}
             placeholder="e.g. Acme Corp, TechCo, StartupXYZ…"
             className={`icp-input ${heroMode ? 'icp-input--hero' : ''}`}
             autoComplete="off"
