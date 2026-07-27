@@ -195,6 +195,7 @@ function LandingFooter({ onNavigate }) {
       </div>
       <div className="ld-footer-address">
         LeadStrategus Private Limited · Registered office: C/o WeWork Zenia, Hiranandani Circle, Thane West, 400607, India
+        <br/>
         · Bengaluru office: Brigade Tech Park, near ITPL Main Road, Pattandur Agrahara, Whitefield, Bengaluru, Karnataka 560066, India
       </div>
     </footer>
