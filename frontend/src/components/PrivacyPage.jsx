@@ -11,6 +11,7 @@ const SECTIONS = [
     heading: 'Overview',
     paragraphs: [
       'This Privacy Policy explains how LeadStrategus ("we", "us", "our") collects, uses, stores, and shares information when you use the Global Event Discovery Agent (the "Service"), an AI powered tool that matches your ideal customer profile against a database of trade shows, conferences, and industry events.',
+      'LeadStrategus is the data controller for the personal information described in this policy. You can reach us at the address in the “Questions about this policy?” section below:',
       'By submitting the ICP (Ideal Customer Profile) form or otherwise using the Service, you agree to the collection and use of information as described in this policy.',
     ],
   },
@@ -22,7 +23,7 @@ const SECTIONS = [
     ],
     list: [
       'Form inputs: company name, work email address, a free text description of who you sell to, target industries, target personas or job titles, target geographies, preferred event types, typical deal size range, date range for your search, a 1 to 10 self rated competitive differentiation score, your client count range, and optionally the names of clients you have served.',
-      'Uploaded files: if you choose to upload a pitch deck (PDF), we extract text from it to better understand your business. The file itself is processed to build this context and is not published or shared publicly.',
+      'Uploaded files: if you choose to upload a pitch deck (PDF), we extract text from it to better understand your business. The file itself is processed by us and our AI and embedding providers to build this context. It is not published publicly or shared with anyone outside the providers listed below.',
       'Usage and session data: a session identifier, the page you arrived from (referrer), pages visited, time spent on the Service, and your IP address, collected automatically to understand how the Service is used and to keep it reliable.',
       'Search results and outcomes: the events shown to you, which ones were ranked as strong matches, and whether you requested an emailed report, so we can measure and improve match quality over time.',
     ],
@@ -40,6 +41,15 @@ const SECTIONS = [
       'To operate, secure, and troubleshoot the Service, including detecting abuse or unusual activity.',
       'To follow up with you about our paid meeting setting packages (Starter Pack, Growth Pack, Full Takeover), only if you have expressed interest or requested contact.',
       'To build aggregated, non identifying analytics and reporting on how the Service is used, so we can plan future improvements.',
+    ],
+  },
+    {
+    id: 'outreach-on-your-behalf-and-third-party-contacts',
+    heading: 'Outreach on your behalf and third-party contacts',
+    paragraphs: [
+      'For paid packages, we conduct outreach to potential meeting contacts at target companies on your behalf. To do this we process business contact information (such as name, job title, company, and business email) for individuals at companies matching your ideal customer profile. This information is obtained from publicly available sources and licensed business-data providers',
+      'We process this data on the basis of our and your legitimate interests in business-to-business relationship-building, balanced against the rights of the individuals contacted. Where required by applicable law, outreach is conducted only through permitted channels and includes clear identification of the sender and a means to opt out. Individuals contacted may object to this processing or request deletion at any time by contacting kingshuk@leadstrategus.com.',
+      'You remain responsible for complying with your own obligations under applicable anti-spam and data-protection law when you communicate with any contact introduced to you through the Service.',
     ],
   },
   {
@@ -67,7 +77,7 @@ const SECTIONS = [
     id: 'retention',
     heading: 'Data retention',
     paragraphs: [
-      'We retain your submitted profile and search history for as long as reasonably needed to provide the Service, respond to your requests, and maintain accurate analytics. If you ask us to delete your data, we will do so within a reasonable time, except where we are required to retain certain records for legal, security, or accounting reasons.',
+      'We retain your submitted profile and search history for as long as reasonably needed to provide the Service, respond to your requests, and maintain accurate analytics, and in any case for no longer than 24 months after your last activity unless you ask us to delete it sooner. If you ask us to delete your data, we will do so within a reasonable time, except where we are required to retain certain records for legal, security, or accounting reasons.',
     ],
   },
   {
@@ -95,14 +105,14 @@ const SECTIONS = [
     id: 'international-transfers',
     heading: 'International data transfers',
     paragraphs: [
-      'Because we rely on third party providers that operate infrastructure in multiple countries, your information may be processed outside the country in which you are located. Where this happens, we take reasonable steps to ensure it is handled consistently with this policy.',
+      'Because we rely on third party providers that operate infrastructure in multiple countries, your information may be processed outside the country in which you are located. Where we transfer personal data outside the UK or EEA, we rely on an appropriate safeguard recognised under applicable law, such as an adequacy decision or the applicable Standard Contractual Clauses, and we can provide details of the safeguard used on request.',
     ],
   },
   {
     id: 'children',
     heading: "Children's privacy",
     paragraphs: [
-      'The Service is intended for business use by adults and is not directed at children. We do not knowingly collect personal information from anyone under the age of 16. If you believe a child has provided us with personal information, please contact us and we will remove it.',
+      'The Service is intended for business use by adults and is not directed at children. We do not knowingly collect personal information from anyone under the age of 18. If you believe a child has provided us with personal information, please contact us and we will remove it.',
     ],
   },
   {
@@ -112,6 +122,13 @@ const SECTIONS = [
       'We may update this Privacy Policy from time to time to reflect changes in the Service or applicable law. When we do, we will revise the "Last updated" date at the top of this page. Continued use of the Service after an update means you accept the revised policy.',
     ],
   },
+    {
+    id: 'questions',
+    heading: 'Questions about this policy?',
+    paragraphs: [
+      'Reach us at kingshuk@leadstrategus.com or through our contact page.'
+    ],
+  },
 ]
 
 export default function PrivacyPage() {
@@ -119,7 +136,7 @@ export default function PrivacyPage() {
     <LegalPage
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="July 25, 2026"
+      updated="July 27, 2026"
       sections={SECTIONS}
     />
   )
