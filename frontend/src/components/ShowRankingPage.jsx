@@ -634,6 +634,9 @@ export default function ShowRankingPage({
           <p className="rk-pricing-sub">
             Shift the frame: not "what does this cost?" but "what does one qualified meeting generate in pipeline?"
           </p>
+          <p className="rk-pricing-sub" style={{ fontSize: 12, opacity: 0.75 }}>
+            All prices are in USD, plus local taxes as applicable. Paid packages are governed by the laws of India.
+          </p>
           <div className="rk-tier-grid">
             <div className="rk-tier rk-tier--free">
               <div className="rk-tier-tag">Free forever</div>

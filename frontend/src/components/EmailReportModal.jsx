@@ -166,7 +166,7 @@ export default function EmailReportModal({
                   {[
                     `${goCount} GO events + ${conCount} CONSIDER events`,
                     'AI relevance analysis for each event',
-                    'Meeting package pricing in USD',
+                    'Meeting package pricing in USD, plus local taxes as applicable',
                     'What\'s included in each package',
                     'Pipeline value projections',
                     'Registration links & event details',

@@ -112,6 +112,17 @@ const SECTIONS = [
       'We may update this Privacy Policy from time to time to reflect changes in the Service or applicable law. When we do, we will revise the "Last updated" date at the top of this page. Continued use of the Service after an update means you accept the revised policy.',
     ],
   },
+  {
+    id: 'company-details',
+    heading: 'Company details',
+    paragraphs: [
+      'The Service is provided by LeadStrategus Private Limited, and this policy is governed by the laws of India.',
+    ],
+    list: [
+      'Registered office: C/o WeWork Zenia, Hiranandani Circle, Thane West, 400607, India',
+      'Bengaluru office: Brigade Tech Park, near ITPL Main Road, Pattandur Agrahara, Whitefield, Bengaluru, Karnataka 560066, India',
+    ],
+  },
 ]
 
 export default function PrivacyPage() {

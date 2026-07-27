@@ -41,6 +41,11 @@ export default function LegalPage({ eyebrow, title, updated, sections }) {
             Reach us at <a href="mailto:privacy@leadstrategus.com">privacy@leadstrategus.com</a> or through
             our <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">contact page</a>.
           </p>
+          <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--ink-faint, #6B7680)' }}>
+            <strong>LeadStrategus Private Limited</strong><br />
+            Registered office: C/o WeWork Zenia, Hiranandani Circle, Thane West, 400607, India<br />
+            Bengaluru office: Brigade Tech Park, near ITPL Main Road, Pattandur Agrahara, Whitefield, Bengaluru, Karnataka 560066, India
+          </p>
         </div>
       </div>
     </div>

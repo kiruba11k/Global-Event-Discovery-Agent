@@ -144,6 +144,9 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
               <div className="mp-pkg-custom">Custom - contact us</div>
             )}
           </div>
+          <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 4 }}>
+            Investment shown in USD, plus local taxes as applicable.
+          </div>
         </div>
       )}
 

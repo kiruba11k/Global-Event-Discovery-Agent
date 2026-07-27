@@ -29,6 +29,10 @@ const FAQ = [
     q: 'Do you guarantee outcomes?',
     a: 'Full Takeover packages include an outcomes guarantee, defined in your written agreement. Starter and Growth packages are delivered on a best effort basis against the stated meeting target.',
   },
+  {
+    q: 'Are these prices inclusive of tax?',
+    a: 'All prices are quoted in USD and are exclusive of local taxes as applicable, which are added at invoicing based on your billing location and applicable law.',
+  },
 ]
 
 export default function PricingPage({ onScrollToForm }) {
@@ -39,6 +43,9 @@ export default function PricingPage({ onScrollToForm }) {
         <h1 className="lg-hero-title">Simple, outcome based pricing</h1>
         <div className="lg-hero-updated" style={{ maxWidth: 560, margin: '0 auto' }}>
           Start free with our top ranked events. Move up when you want us to actually fill your calendar with meetings.
+        </div>
+        <div className="lg-hero-updated" style={{ maxWidth: 560, margin: '10px auto 0', fontSize: 12 }}>
+          All prices are in USD, plus local taxes as applicable. Paid packages are governed by the laws of India.
         </div>
       </div>
 

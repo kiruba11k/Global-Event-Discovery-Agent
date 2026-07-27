@@ -61,7 +61,7 @@ const SECTIONS = [
     id: 'paid-packages',
     heading: 'Paid packages',
     paragraphs: [
-      'Prices shown for the Starter Pack, Growth Pack, and Full Takeover packages are indicative starting prices and are not a binding offer. A binding quote, scope of work, and payment terms are provided separately once you contact us and confirm your requirements.',
+      'Prices shown for the Starter Pack, Growth Pack, and Full Takeover packages are indicative starting prices, quoted in USD, and are not a binding offer. All fees are exclusive of local taxes, which apply as required by law based on your billing location. A binding quote, scope of work, and payment terms are provided separately once you contact us and confirm your requirements.',
       'Refund, cancellation, and delivery terms for paid packages are governed by the separate written agreement you enter into with us for that package, not by these Terms.',
     ],
   },
@@ -98,7 +98,18 @@ const SECTIONS = [
     id: 'governing-law',
     heading: 'Governing law',
     paragraphs: [
-      'These Terms are governed by the laws of the jurisdiction in which LeadStrategus is registered, without regard to conflict of law principles, unless a separate written agreement between you and LeadStrategus states otherwise.',
+      'These Terms are governed by the laws of India, without regard to conflict of law principles, unless a separate written agreement between you and LeadStrategus states otherwise. Any dispute arising from these Terms or the Service is subject to the exclusive jurisdiction of the courts having competent authority over LeadStrategus\'s registered office.',
+    ],
+  },
+  {
+    id: 'company-details',
+    heading: 'Company details',
+    paragraphs: [
+      'The Service is provided by LeadStrategus Private Limited.',
+    ],
+    list: [
+      'Registered office: C/o WeWork Zenia, Hiranandani Circle, Thane West, 400607, India',
+      'Bengaluru office: Brigade Tech Park, near ITPL Main Road, Pattandur Agrahara, Whitefield, Bengaluru, Karnataka 560066, India',
     ],
   },
 ]
