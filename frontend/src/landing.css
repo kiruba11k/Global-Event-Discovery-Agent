@@ -770,6 +770,15 @@
   color: rgba(251,247,240,.45);
   text-decoration: none;
 }
+.ld-footer-address {
+  max-width: 1080px;
+  margin: 14px auto 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(251,247,240,.1);
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(251,247,240,.4);
+}
 
 /* ════════ RESPONSIVE ════════ */
 @media (max-width: 960px) {

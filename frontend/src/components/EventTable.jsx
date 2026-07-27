@@ -107,7 +107,7 @@ function PricingDisclaimer({ dealSizeCategory }) {
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--c-talk-soft)', border: '1.5px solid rgba(217,144,0,0.4)', borderRadius: 8, padding: '12px 14px', marginTop: 14 }}>
       <AlertTriangle size={15} style={{ color: 'var(--c-talk)', flexShrink: 0, marginTop: 1 }} />
       <div style={{ fontSize: 11, color: '#7A5200', lineHeight: 1.6 }}>
-        <strong>Pricing shown is an estimate.</strong> Actual engagement fee may vary by event complexity, geography, and GTM motion. Pipeline projections assume 40% qualification and 25% close rate on your stated deal size ({label}).{' '}
+        <strong>Pricing shown is an estimate, in USD, plus local taxes as applicable.</strong> Actual engagement fee may vary by event complexity, geography, and GTM motion. Pipeline projections assume 40% qualification and 25% close rate on your stated deal size ({label}).{' '}
         <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: '#7A5200', fontWeight: 700 }}>Request a formal quote</a> for binding pricing.
       </div>
     </div>
@@ -136,7 +136,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
           <span>LeadStrategus Meeting Packages - {tierInfo.tier}</span>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--ink-soft)', background: 'var(--surface)', border: '1px solid var(--line)', padding: '4px 10px', borderRadius: 100 }}>
-          Pricing in USD · {DEAL_LABELS[category]}
+          Pricing in USD + local taxes as applicable · {DEAL_LABELS[category]}
         </div>
       </div>
 
@@ -156,7 +156,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
 
       {/* Package tier cards - same catalog as the public pricing tiers */}
       <div className="pc-table-wrap">
-        <div className="pc-table-label">All packages - prices in USD</div>
+        <div className="pc-table-label">All packages - investment in USD, plus local taxes as applicable</div>
         <table className="pc-table">
           <thead>
             <tr>
@@ -467,7 +467,7 @@ export default function EventTable({ events, dealSizeCategory }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
               <TrendingUp size={11} style={{ display: 'inline', marginRight: 4 }} />
-              {counts.GO} strong matches · All package pricing in USD
+              {counts.GO} strong matches · All package pricing in USD, plus local taxes as applicable
             </div>
             <div style={{ fontSize: 10, color: '#7A5200', background: 'var(--c-talk-soft)', border: '1px solid rgba(217,144,0,0.4)', padding: '3px 10px', borderRadius: 100, display: 'flex', alignItems: 'center', gap: 4 }}>
               <AlertTriangle size={9} />
