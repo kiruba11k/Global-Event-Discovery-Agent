@@ -38,7 +38,7 @@ export default function LegalPage({ eyebrow, title, updated, sections }) {
         <div className="lg-contact-box">
           <strong>Questions about this policy?</strong>
           <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-            Reach us at <a href="mailto:privacy@leadstrategus.com">privacy@leadstrategus.com</a> or through
+            Reach us at <a href="mailto:kingshuk@leadstrategus.com">kingshuk@leadstrategus.com</a> or through
             our <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">contact page</a>.
           </p>
           <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--ink-faint, #6B7680)' }}>
