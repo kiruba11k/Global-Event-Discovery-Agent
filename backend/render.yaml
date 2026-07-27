@@ -118,6 +118,17 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
+    # SPA fallback: this is a single-page app, only index.html is a real
+    # file. Without this rewrite, a direct request for /privacy, /terms,
+    # or /pricing (a pasted link, a refresh, a search hit) 404s at
+    # Render's static file server before React ever loads - it isn't
+    # served by Apache, so public/.htaccess has no effect here. This is
+    # Render's own equivalent: route every path back to index.html and
+    # let the app's client-side router (App.jsx) take over from there.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
 # ─────────────────────────────────────────────────────────────────────
 # NOTE ON DISK — DO NOT ADD BACK FOR FREE TIER
