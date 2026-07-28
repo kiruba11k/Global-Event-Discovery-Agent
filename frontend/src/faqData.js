@@ -21,9 +21,9 @@ export const FAQ_CATEGORIES = [
         id: 'what-is-expotofunnel',
         q: 'What is ExpoToFunnel?',
         paragraphs: [
-          'ExpoToFunnel is a B2B trade show intelligence platform. It ranks 17,007 indexed trade shows across 129 countries by how densely your ideal customers attend each one, then books qualified meetings with matched attendees before the event and gives you a talking points brief for every meeting.',
+          'ExpoToFunnel is a B2B trade show pipeline-build platform. It ranks 17,007 indexed trade shows across 129 countries by how densely your ideal customers attend each one, then books qualified meetings with matched attendees before the event and gives you a talking points brief for every meeting',
           'The ranking is free and instant. The meeting booking and the briefs are delivered by our team when you engage us on a paid package.',
-          'ExpoToFunnel is built and run by LeadStrategus, a B2B demand generation and go to market consulting firm based in Bangalore, India.',
+          'ExpoToFunnel is built and run by LeadStrategus, a B2B demand generation and go-to-market consulting firm setting up B2B meetings across the world using local idioms and deep, human-led research and personalisation.',
         ],
       
         related: { label: 'See how it works', href: '/#how' },
@@ -32,10 +32,9 @@ export const FAQ_CATEGORIES = [
         id: 'how-does-expotofunnel-work',
         q: 'How does ExpoToFunnel work?',
         paragraphs: [
-          'Three steps. Find: describe your ideal customer and get your top six trade shows ranked by buyer density, free in 90 seconds. Meet: our team identifies matching attendees and books confirmed meetings before the show opens. Talk: every meeting comes with a tailored brief.',
+            'Three steps. Find: describe your ideal customer and get your top six trade shows ranked by buyer density,free in 90 seconds. Meet: our team identifies matching attendees and books confirmed meetings before the show opens. Talk: every meeting comes with a tailored brief.',
           'Step one is self serve and costs nothing. You fill in six fields about who you sell to, where your buyers are, your typical deal value, how differentiated you are, and how many clients you have served. You get a ranked shortlist with a fit grade and a written explanation for each show, plus a PDF report by email.',
-          'Steps two and three are done for you. Once you engage us we move from event level to attendee level, identify the individual people at that show who match your buyer profile, run outreach six to eight weeks ahead, and lock confirmed slots into your calendar. Each of those meetings arrives with a brief covering what that buyer cares about right now and how to open the conversation.',
-        ],
+          'Steps two and three are done for you. Once you engage us we move from event level to attendee level, identify the individual people at that show who match your buyer profile, run outreach six to eight weeksahead, and lock confirmed slots into your calendar. Each of those meetings arrives with a brief covering what that buyer cares about right now and how to open the conversation.',        ],
       
         related: { label: 'See how it works', href: '/#how' },
       },
@@ -44,32 +43,38 @@ export const FAQ_CATEGORIES = [
         q: 'Who is ExpoToFunnel for?',
         paragraphs: [
           'B2B companies with deal values from $10,000 upward that sell into industries with an active trade show calendar. That includes sales leaders and founders attending without a booth, and field marketing teams responsible for booth performance at events they already exhibit at.',
-          'The product works best for companies selling into medical technology, healthcare IT, enterprise software, manufacturing, logistics, fintech and industrial sectors, where buying committees are large and several stakeholders from the same account attend the same events.',
-          'If your average deal is under $10,000, trade shows are unlikely to return your investment regardless of which one you pick, and the form will tell you so.',
+          'The product works best for B2B companies with strong differentiation and local reference clients. If your average deal is lower, we will still work for you - but the ROI justification becomes harder.',
         ],
       },
       {
         id: 'is-expotofunnel-software-or-a-service',
         q: 'Is ExpoToFunnel software or a service?',
         paragraphs: [
-          'Both. The trade show ranking is software: you fill in a form and get an instant scored shortlist with no human involved. The meeting booking, the outreach and the per meeting briefs are delivered by our team, not automated.',
-          'We are explicit about this split because it changes what you should expect. The free ranking is immediate. Booked meetings take six to eight weeks of real outreach work by real people, which is why they are priced per confirmed meeting rather than per seat.',
+          'At the first level, we are a web service that recommends the best trade shows where your ideal customer profile is likely to attend. The trade show ranking is easy: you fill in a form and get an instant scored shortlist with no human involved. The meeting booking, the outreach and the per-meeting briefs are delivered by our employees, not automated',
+'We are explicit about this split because it changes what you should expect. The free ranking is immediate. Booked meetings take six to eight weeks of real outreach work by real people, backed by a company that has been doing this for a long time - which is why they are priced per confirmed meeting rather than per seat',
         ],
       },
       {
         id: 'what-is-the-difference-between-expotofunnel-and',
         q: 'What is the difference between ExpoToFunnel and LeadStrategus?',
         paragraphs: [
-          'LeadStrategus is the company. ExpoToFunnel is its trade show product. LeadStrategus is a B2B demand generation and go to market consulting firm based in Bangalore, India, and ExpoToFunnel productises the part of that practice concerned with choosing events and filling calendars at them.',
-          'If you work with us on a paid package, the team delivering your outreach and meeting briefs is the LeadStrategus team.',
+          'LeadStrategus is the company. ExpoToFunnel is its trade show product. LeadStrategus is a B2B demand generation and go to market consulting firm based in Bangalore, India, and ExpoToFunnel productises the part of that practice concerned with choosing events and filling calendars at them',
+          'If you work with us on a paid package, the team delivering your outreach and meeting briefs is the LeadStrategus team, whose background includes enterprise go-to-market work at organisations such as AWS, SAP, Gartner and Oracle.',
         ],
       },
       {
         id: 'do-i-need-to-exhibit-at-a-trade-show-to-use-expotofunnel',
         q: 'Do I need to exhibit at a trade show to use ExpoToFunnel?',
         paragraphs: [
-          'No. ExpoToFunnel works for companies attending without a booth as well as for exhibitors. Attending with a pre booked calendar costs a fraction of exhibiting and often returns more, because the cost is a pass and travel rather than stand space and build.',
-          'For attendees the goal is a full day one calendar before you fly. For exhibitors the goal is booth slots filled with matched buyers rather than walk up traffic. The underlying work is the same: find the people worth meeting and book them in advance.',
+          'No. ExpoToFunnel works for companies attending without a booth as well as for exhibitors. Attending with a pre-booked calendar costs a fraction of exhibiting and often returns more, because the cost is a pass and travel rather than stand space and build.',
+          'For attendees the goal is a full day-one calendar before you fly. For exhibitors the goal is booth slots filled with matched buyers rather than walk-up traffic. The underlying work is the same: find the people worth meeting and book them in advance.',
+        ],
+      },
+            {
+        id: 'book-meetings-for-few',
+        q: 'Can you book meetings for a show I have already chosen, outside your top six??',
+        paragraphs: [
+          'Yes. The free ranking is the fastest way to find out which shows are worth attending, but if you are already committed to an event - including flagship shows like Dreamforce or Gartner Symposium - we can run the same outreach and meeting-booking engine against it. Tell us the event and we will scope a package against it directly',
         ],
       },
     ],
