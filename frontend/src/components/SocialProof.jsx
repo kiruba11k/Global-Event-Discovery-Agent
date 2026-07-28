@@ -6,7 +6,7 @@ import '../landing.css'
 
 const QUOTES = [
   {
-    text: 'We spent ₹15L on a booth and walked away with 4 qualified conversations.',
+    text: 'We spent $20,000 on a booth and walked away with 4 qualified conversations.',
     role: 'VP Sales, B2B SaaS, India',
   },
   {
@@ -19,7 +19,7 @@ const QUOTES = [
   },
   {
     text: 'We picked the show because a competitor was there. That was the strategy.',
-    role: 'Founder, SaaS, ₹50L ACV deals',
+    role: 'Founder, SaaS, $500K ACV deals',
   },
 ]
 
