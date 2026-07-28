@@ -25,6 +25,7 @@ import PipelineMachine   from './components/PipelineMachine'
 import PrivacyPage       from './components/PrivacyPage'
 import TermsPage         from './components/TermsPage'
 import PricingPage       from './components/PricingPage'
+import FaqPage           from './components/FaqPage'
 import { api }           from './api/client'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
@@ -163,6 +164,7 @@ const FOOTER_LINKS = [
   { label: 'Privacy', screen: 'privacy' },
   { label: 'Terms',   screen: 'terms' },
   { label: 'Pricing', screen: 'pricing' },
+  { label: 'FAQ',     screen: 'faq' },
   { label: 'Contact',  href: 'https://leadstrategus.com/contact/' },
 ]
 
@@ -207,7 +209,7 @@ function LandingFooter({ onNavigate }) {
 // goTo() already handles it client-side. Ranking/deep-dive screens are
 // intentionally excluded: they depend on in-memory search results that
 // don't exist on a cold load, so there's nothing valid to restore there.
-const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricing': 'pricing' }
+const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricing': 'pricing', '/faq': 'faq' }
 
 function screenFromPath(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -500,8 +502,8 @@ export default function App() {
     )
   }
 
-  /* ── Screens: Privacy / Terms / Pricing ──────────────────────── */
-  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing') {
+  /* ── Screens: Privacy / Terms / Pricing / FAQ ────────────────── */
+  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing' || screen === 'faq') {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
@@ -509,6 +511,7 @@ export default function App() {
         {screen === 'privacy' && <PrivacyPage />}
         {screen === 'terms'   && <TermsPage />}
         {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
+        {screen === 'faq'     && <FaqPage />}
         <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
       </div>
     )

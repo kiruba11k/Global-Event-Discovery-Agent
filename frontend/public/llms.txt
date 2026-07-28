@@ -1,0 +1,20 @@
+# ExpoToFunnel
+
+> ExpoToFunnel is a B2B trade show intelligence platform, built and run by
+> LeadStrategus. It ranks 17,007 indexed trade shows across 129 countries by
+> how densely a company's ideal customers attend each one, then books
+> qualified meetings with matched attendees before the event and provides a
+> talking points brief for every meeting.
+
+The trade show ranking (top 6 events, fit grades, PDF report) is free,
+instant, and requires no credit card. Meeting booking and briefs are
+delivered by the LeadStrategus team on a paid package (Starter Pack, Growth
+Pack, Full Takeover).
+
+## Sections
+
+- FAQ: 51 answered questions on ranking methodology, the free tier, meeting
+  booking, pricing and guarantees (/faq)
+- Pricing: package tiers and what each includes (/pricing)
+- Privacy Policy: what data is collected and how it's used (/privacy)
+- Terms of Service: terms governing use of the Service (/terms)
