@@ -156,3 +156,44 @@
   color: var(--ink-soft, #3E4A52);
   margin: 0;
 }
+
+/* ── FAQ page accordions (native <details>/<summary>) ────────────── */
+.faq-item {
+  border-bottom: 1px solid var(--line, #E4DCCD);
+  padding: 4px 0;
+}
+
+.faq-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink, #1E2B33);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.faq-summary::-webkit-details-marker { display: none; }
+.faq-summary::after {
+  content: '+';
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--c-find, #0E7C6B);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.faq-item[open] .faq-summary::after { transform: rotate(45deg); }
+.faq-summary:hover { color: var(--c-find, #0E7C6B); }
+
+.faq-answer {
+  padding: 0 4px 16px;
+}
+.faq-answer p {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--ink-soft, #3E4A52);
+  margin: 0 0 12px;
+}
+.faq-answer p:last-child { margin-bottom: 0; }

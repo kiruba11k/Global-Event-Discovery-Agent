@@ -11,6 +11,7 @@ const LINKS = [
   { label: 'Why shows fail', href: '#problem' },
   { label: 'Find my shows', href: '#icp-form', form: true },
   { label: 'Pricing', screen: 'pricing' },
+  { label: 'FAQ', screen: 'faq' },
 ]
 
 export default function LandingNav({ onScrollToForm, onNavigate }) {
