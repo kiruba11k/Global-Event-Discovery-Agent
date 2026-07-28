@@ -177,7 +177,7 @@ export default function HowItWorks({ stats }) {
         <div className="ld-how-header">
           {/* <span className="ds-eyebrow">How it works</span> */}
           <h2 className="ds-h2" id="how-heading">
-            Right show. Right people. <em>Right words.</em>
+            Right-Fit Show. Warmed Prospect Flow. <em>Real Pipeline Growth.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
             Three steps between your ICP description and a tradeshow calendar full of

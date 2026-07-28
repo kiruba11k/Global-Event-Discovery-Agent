@@ -137,7 +137,7 @@ function FooterCTA({ onScrollToForm }) {
       >
         {/* <span className="ds-eyebrow ld-footer-cta-eyebrow">Ready to stop guessing?</span> */}
         <h2 className="ld-footer-cta-h2">
-          The right show. The right people.<br />The right words.
+          Right-Fit Show. Warmed Prospect Flow.<br />Real Pipeline Growth.
         </h2>
         <p className="ld-footer-cta-sub">
           Tell us your ICP and where you'll travel. We'll tell you which events are worth
