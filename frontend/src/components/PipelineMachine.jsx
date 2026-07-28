@@ -184,8 +184,8 @@ export default function PipelineMachine({ stats }) {
 
               {/* machines (behind the chips, over the belt) */}
               <Machine i={0} kind="scan"  title="Scan"  sub="ICP-density scored" />
-              <Machine i={1} kind="match" title="Match" sub="meetings booked by us" />
-              <Machine i={2} kind="brief" title="Brief" sub="briefed by our team" />
+              <Machine i={1} kind="match" title="Match" sub="meetings choreographed by us" />
+              <Machine i={2} kind="brief" title="Brief" sub="speaking points that convert" />
 
               {/* conveyor */}
               <div className="ef-belt">
