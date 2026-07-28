@@ -21,7 +21,7 @@ export default function StatsRow({ stats }) {
   ]
 
   return (
-    <section className="ld-stats" aria-label="Platform statistics">
+    <section className="ld-stats" id="stats" aria-label="Platform statistics">
       <div className="ld-stats-inner">
         {CELLS.map((s, i) => (
           <motion.div

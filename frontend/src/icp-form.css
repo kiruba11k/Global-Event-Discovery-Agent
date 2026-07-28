@@ -91,6 +91,20 @@
   flex-direction: column;
   gap:            10px;
 }
+/* Button-group fields render as <fieldset>/<legend> for real semantics
+   (grouped radio-style controls need a legend, not a label) - reset the
+   browser's default fieldset border/padding and legend min-width/padding
+   so it's visually identical to the plain div/label it replaced. */
+fieldset.icp-field-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+legend.icp-label {
+  padding: 0;
+  width: 100%;
+}
 .icp-label {
   font-size:   13px;
   font-weight: 600;

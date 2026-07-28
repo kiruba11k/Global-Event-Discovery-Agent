@@ -140,7 +140,7 @@ export default function PipelineMachine({ stats }) {
   }, [])
 
   return (
-    <section className="pm-sect" aria-labelledby="pm-heading">
+    <section className="pm-sect" id="process" aria-labelledby="pm-heading">
       <div className="pm-inner">
         <div className="pm-header">
           {/* <span className="ds-eyebrow">Inside the machine</span> */}

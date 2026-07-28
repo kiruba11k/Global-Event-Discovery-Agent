@@ -46,6 +46,8 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
               src="/logo.png"
               alt=""
               aria-hidden="true"
+              width="26"
+              height="26"
               className="ld-nav-logo-img"
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />

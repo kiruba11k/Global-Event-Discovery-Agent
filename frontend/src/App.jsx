@@ -55,7 +55,7 @@ function LogoTicker({ stats }) {
     ? stats.top_event_names
     : FALLBACK_LOGOS
   return (
-    <div className="ld-logos" aria-label="Events we cover">
+    <div className="ld-logos" id="shows" aria-label="Events we cover">
       <div className="ld-logos-inner" aria-hidden="true">
         {[...names, ...names].map((name, i) => (
           <span key={i} className="ld-logos-item">
@@ -78,6 +78,7 @@ function PathCards({ onScrollToForm }) {
       h3: 'Sales, BD, founders - book your ICP before you fly out.',
       desc: 'Walk in with a calendar, not a hope. We show you how many of your buyers attend each show and why it fits - then our team books the meetings and briefs you for each one.',
       cta: 'Find my shows',
+      ariaLabel: 'Find the trade shows where my buyers attend',
     },
     {
       cls: 'ld-path-exhibit',
@@ -86,10 +87,11 @@ function PathCards({ onScrollToForm }) {
       h3: 'Get 5× the qualified meetings around your booth.',
       desc: 'Stop waiting for walk-ups. We pre-book your target buyers into slots before the floor opens - so day one starts full.',
       cta: 'Boost my booth',
+      ariaLabel: 'Pre-book qualified meetings around my booth',
     },
   ]
   return (
-    <section className="ld-paths" aria-label="How we help">
+    <section className="ld-paths" id="who" aria-label="How we help">
       <div className="ld-paths-inner">
         <div className="ld-paths-header">
           {/* <span className="ds-eyebrow">Two ways to win a show</span> */}
@@ -111,7 +113,7 @@ function PathCards({ onScrollToForm }) {
               <span className={`ds-chip ${p.chip}`}>{p.tag}</span>
               <h3 className="ld-path-h3">{p.h3}</h3>
               <p className="ld-path-desc">{p.desc}</p>
-              <button className="ld-path-cta" onClick={onScrollToForm}>
+              <button className="ld-path-cta" onClick={onScrollToForm} aria-label={p.ariaLabel}>
                 {p.cta} <ArrowRight size={15} aria-hidden="true" />
               </button>
             </motion.div>
@@ -125,7 +127,7 @@ function PathCards({ onScrollToForm }) {
 /* ── Footer CTA ─────────────────────────────────────────────────── */
 function FooterCTA({ onScrollToForm }) {
   return (
-    <section className="ld-footer-cta" aria-label="Get started">
+    <section className="ld-footer-cta" id="cta" aria-label="Get started">
       <motion.div
         className="ld-footer-cta-inner"
         initial={{ opacity: 0, y: 28 }}
@@ -170,7 +172,7 @@ const FOOTER_LINKS = [
 
 function LandingFooter({ onNavigate }) {
   return (
-    <footer className="ld-footer">
+    <footer className="ld-footer" id="footer">
       <div className="ld-footer-inner">
         <div className="ld-footer-logo">
           LeadStrategus
