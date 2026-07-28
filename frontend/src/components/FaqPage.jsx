@@ -86,11 +86,10 @@ export default function FaqPage() {
           background: 'var(--surface, #FFFFFF)', border: '1px solid var(--line, #E4DCCD)',
           borderRadius: 14, padding: '18px 22px', marginBottom: 32,
         }}>
-          ExpoToFunnel ranks 17,007 B2B trade shows across 129 countries by ICP density, the
-          share of an event's attendees who match your ideal customer profile. The top six
-          shows, their fit grades and a PDF report are free, with no credit card and no sales
-          call. Paid packages start at $3,000 for 10 confirmed qualified meetings booked before
-          the show floor opens, each with a tailored talking points brief.
+          ExpoToFunnel ranks 17,007 B2B trade shows across 129 countries by ICP density, the share of an
+event's attendees who match your ideal customer profile. The top six shows, their fit grades and a PDF
+report are free, with no credit card and no sales call. Paid packages start at $4,000 for 10 confirmed
+qualified meetings booked before the show floor opens, each with a tailored talking points brief.
         </p>
 
         <div className="lg-toc">
