@@ -27,9 +27,14 @@ const PILLARS = [
 
 export default function HeroSection({ onScrollToForm, stats }) {
   const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
-  const countries = fmtCountPlus(stats?.countries_covered, '20+')
+  // Exact figure, not fmtCountPlus's round-to-nearest-hundred - country
+  // counts are small enough that rounding reads as a mismatch against
+  // the precise number shown a few sections down in StatsRow (both
+  // pull from the same stats.countries_covered value; this is a display
+  // choice, not a data source difference).
+  const countries = stats?.countries_covered > 0 ? stats.countries_covered : '20+'
   return (
-    <section className="ld-hero" aria-label="Find your shows">
+    <section className="ld-hero" id="top" aria-label="Find your shows">
       <div className="ld-hero-inner">
         <div className="ld-hero-left">
           {/* <motion.div className="ld-hero-badge" variants={rise} custom={0} initial="hidden" animate="show">
@@ -60,10 +65,10 @@ export default function HeroSection({ onScrollToForm, stats }) {
           </motion.div>
 
           <motion.div className="ld-hero-actions" variants={rise} custom={4} initial="hidden" animate="show">
-            <button className="ds-btn-primary" onClick={onScrollToForm}>
+            <button className="ds-btn-primary" onClick={onScrollToForm} aria-label="Rank my shows free - jump to the ICP form">
               Rank my shows - it's free <ArrowRight size={17} aria-hidden="true" />
             </button>
-            <a className="ds-btn-outline" href="#how">See how it works</a>
+            <a className="ds-btn-outline" href="#how" aria-label="See how ExpoToFunnel works">See how it works</a>
           </motion.div>
 
           <motion.div className="ld-hero-trust" variants={rise} custom={5} initial="hidden" animate="show">

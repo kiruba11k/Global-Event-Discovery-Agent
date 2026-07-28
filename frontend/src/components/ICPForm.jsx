@@ -603,7 +603,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-buyer">
           Who do you sell to?<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint">Role + industry. e.g. "CTOs at fintech companies"</p>
+        <p className="icp-hint" id="icp-buyer-help">Role + industry. e.g. "CTOs at fintech companies"</p>
         <div ref={buyerRef} style={{ position: 'relative' }}>
           <input
             id="icp-buyer"
@@ -613,6 +613,8 @@ export default function ICPForm({
             onFocus={() => setShowSugs(true)}
             placeholder="e.g. CFOs at mid-market SaaS companies"
             autoComplete="off"
+            required
+            aria-describedby="icp-buyer-help"
             className={`icp-input ${heroMode ? 'icp-input--hero' : ''} ${errors.buyer ? 'icp-input--error' : ''}`}
           />
           {showSugs && buyerSugs.length > 0 && (
@@ -644,10 +646,10 @@ export default function ICPForm({
 
       {/* Field 2: Geography */}
       <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-region">
           Where in the world?<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint">Regions where your buyers attend events</p>
+        <p className="icp-hint" id="icp-region-help">Regions where your buyers attend events</p>
         {geos.length > 0 && (
           <div className="icp-geo-selected" role="list">
             {geos.map(g => (
@@ -662,6 +664,7 @@ export default function ICPForm({
           {/* Combobox: type to search OR add any custom region */}
           <div style={{ position: 'relative' }}>
             <input
+              id="icp-region"
               ref={geoInputRef}
               type="text"
               value={geoSearch}
@@ -677,6 +680,7 @@ export default function ICPForm({
               aria-haspopup="listbox"
               aria-expanded={geoOpen}
               aria-autocomplete="list"
+              aria-describedby="icp-region-help"
             />
             <svg
               width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -808,12 +812,12 @@ export default function ICPForm({
       </div>
 
       {/* Field 3: Deal value */}
-      <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+      <fieldset className="icp-field-group">
+        <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           Typical deal value<span className="icp-required">*</span>
-        </label>
-        <p className="icp-hint">Per deal  -  used to calculate meeting package pricing</p>
-        <div className={heroMode ? 'icp-deal-grid icp-deal-grid--hero' : 'icp-deal-grid'} role="radiogroup">
+        </legend>
+        <p className="icp-hint" id="icp-deal-help">Per deal  -  used to calculate meeting package pricing</p>
+        <div className={heroMode ? 'icp-deal-grid icp-deal-grid--hero' : 'icp-deal-grid'} role="radiogroup" aria-describedby="icp-deal-help">
           {DEAL_BRACKETS.map(b => (
             <button
               key={b.value}
@@ -833,25 +837,26 @@ export default function ICPForm({
           ))}
         </div>
         {errors.deal && <p className="icp-error">{errors.deal}</p>}
-      </div>
+      </fieldset>
 
       {/* Field 5: Differentiator score */}
-      <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+      <fieldset className="icp-field-group">
+        <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           How strong is your differentiator vs. competitors?
           <span className="icp-required">*</span>
-        </label>
-        <p className="icp-hint">1 = "we look like everyone else" · 10 = "buyers immediately get why we're different"</p>
-        <div className="icp-diff-track">
+        </legend>
+        <p className="icp-hint" id="icp-diff-help">1 = "we look like everyone else" · 10 = "buyers immediately get why we're different"</p>
+        <div className="icp-diff-track" role="radiogroup" aria-describedby="icp-diff-help">
           {[1,2,3,4,5,6,7,8,9,10].map(n => (
             <button
               key={n}
               type="button"
+              role="radio"
+              aria-checked={diffScore === n}
               className={`icp-diff-btn ${diffScore === n ? 'selected' : ''} ${
                 n <= 4 ? 'icp-diff-low' : n <= 7 ? 'icp-diff-mid' : 'icp-diff-high'
               }`}
               onClick={() => setDiffScore(n)}
-              aria-pressed={diffScore === n}
               aria-label={`Differentiator score ${n}`}
             >{n}</button>
           ))}
@@ -864,16 +869,16 @@ export default function ICPForm({
             : <span className="icp-diff-text icp-diff-text--high">Easy to position  -  high meeting confidence</span>
           }
         </div>
-      </div>
+      </fieldset>
 
       {/* Field 6: Client count range */}
-      <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+      <fieldset className="icp-field-group">
+        <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           How many unique clients have you served?
           <span className="icp-required">*</span>
-        </label>
-        <p className="icp-hint">Helps us calibrate proof and credibility for outreach</p>
-        <div className="icp-client-grid" role="radiogroup" aria-label="Client count range">
+        </legend>
+        <p className="icp-hint" id="icp-clients-help">Helps us calibrate proof and credibility for outreach</p>
+        <div className="icp-client-grid" role="radiogroup" aria-label="Client count range" aria-describedby="icp-clients-help">
           {[
             { v:'0-10',   l:'0  -  10',     s:'Early stage  -  niche ICP focus needed' },
             { v:'11-50',  l:'11  -  50',    s:'Early traction  -  usable credibility'  },
@@ -895,14 +900,14 @@ export default function ICPForm({
           ))}
         </div>
         {errors.client && <p className="icp-error">{errors.client}</p>}
-      </div>
+      </fieldset>
 
       {/* Client names - optional tag input */}
       <div className="icp-field-group">
-        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+        <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-client-name">
           Who are some of your clients? <span style={{ color: '#8A959C', fontWeight: 400, fontSize: 12 }}>(optional)</span>
         </label>
-        <p className="icp-hint">Helps us identify events where similar companies buy. Add as many as you like.</p>
+        <p className="icp-hint" id="icp-client-names-help">Helps us identify events where similar companies buy. Add as many as you like.</p>
 
         {/* Tag chips */}
         {clientNames.length > 0 && (
@@ -924,6 +929,7 @@ export default function ICPForm({
         {/* Input row */}
         <div className="icp-client-name-row">
           <input
+            id="icp-client-name"
             ref={clientNameInputRef}
             type="text"
             value={clientNameInput}
@@ -936,6 +942,7 @@ export default function ICPForm({
             // to the next field without pressing Enter, comma, or Add
             // should still have it captured, not lose it silently.
             onBlur={() => addClientName(false)}
+            aria-describedby="icp-client-names-help"
             placeholder="e.g. Acme Corp, TechCo, StartupXYZ…"
             className={`icp-input ${heroMode ? 'icp-input--hero' : ''}`}
             autoComplete="off"
@@ -962,7 +969,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-email">
           Work email<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint">We'll email your PDF report with AI analysis and meeting pricing</p>
+        <p className="icp-hint" id="icp-email-help">We'll email your PDF report with AI analysis and meeting pricing. No spam.</p>
         <div className="icp-email-row">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="icp-email-icon">
             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
@@ -974,6 +981,9 @@ export default function ICPForm({
             onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })) }}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="your@company.com"
+            required
+            autoComplete="email"
+            aria-describedby="icp-email-help"
             className={`icp-input icp-input--email ${heroMode ? 'icp-input--hero' : ''} ${errors.email ? 'icp-input--error' : ''}`}
           />
         </div>
@@ -1002,6 +1012,7 @@ export default function ICPForm({
       disabled={loading}
       type="button"
       aria-busy={loading}
+      aria-label="See your trade show meeting forecast"
     >
       {loading
         ? <><span className="icp-spinner" aria-hidden="true" />Ranking your shows…</>
