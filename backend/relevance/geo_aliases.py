@@ -54,3 +54,35 @@ def expand_geo(geo: str) -> list[str]:
     if group:
         return list(dict.fromkeys([g, *group]))
     return [g]
+
+
+def canonical_geo(geo: str) -> str:
+    """Return the canonical (lowercase) grouping key for a geo string -
+    the alias group's first/representative entry, so "usa", "america",
+    and "united states of america" all collapse to the same key
+    ("united states") for deduplication purposes (e.g. building a
+    geography picklist from raw DB values without repeating every
+    spelling of the same country).
+
+    Handles compound DB values like "UK - United Kingdom" (checks each
+    " - " separated part against the alias table; falls back to the
+    last part - typically the fuller/official name - if none match).
+    Unrecognised geos fall back to their own lowercased, trimmed text.
+    """
+    g = (geo or "").strip().lower()
+    if not g:
+        return ""
+    if g in _ALIAS_LOOKUP:
+        return _ALIAS_LOOKUP[g][0]
+    parts = [p.strip() for p in g.split(" - ") if p.strip()]
+    for part in parts:
+        if part in _ALIAS_LOOKUP:
+            return _ALIAS_LOOKUP[part][0]
+    return parts[-1] if parts else g
+
+
+def display_geo(geo: str) -> str:
+    """Title-cased display label for a geo string's canonical form -
+    "USA"/"America"/"United States of America" all display as "United
+    States". Unrecognised geos are title-cased as-is."""
+    return canonical_geo(geo).title()

@@ -908,7 +908,8 @@ async def _run_search_pipeline(
             Works for any user input — no hardcoded list needed.
             Tries ICP industry filter first; falls back to all industries.
             """
-            exclude_lower = {g.strip().lower() for g in exclude}
+            from relevance.geo_aliases import canonical_geo, display_geo
+            exclude_keys = {canonical_geo(g) for g in exclude}
 
             async def _run(with_ind: bool):
                 stmt = (
@@ -932,14 +933,23 @@ async def _run_search_pipeline(
                         ]
                     stmt = stmt.where(_sor(*ind_f))
                 rows = (await db.execute(stmt)).fetchall()
-                out = []
+                # Grouped by canonical form so "USA" and "United States"
+                # rows for the same country merge into one suggestion
+                # instead of two - GROUP BY country above only dedupes
+                # exact string matches, not spelling variants.
+                merged: dict[str, dict] = {}
                 for row in rows:
                     country = (row[0] or "").strip()
                     cnt     = row[1] or 0
-                    if country and country.lower() not in exclude_lower and cnt > 0:
-                        out.append({"geo": country, "count": int(cnt)})
-                    if len(out) >= limit:
-                        break
+                    if not country or cnt <= 0:
+                        continue
+                    key = canonical_geo(country)
+                    if key in exclude_keys:
+                        continue
+                    if key not in merged:
+                        merged[key] = {"geo": display_geo(country), "count": 0}
+                    merged[key]["count"] += int(cnt)
+                out = sorted(merged.values(), key=lambda d: -d["count"])[:limit]
                 return out
 
             results = await _run(with_ind=True)
@@ -1370,7 +1380,8 @@ async def geo_hint(
         selecting India would then show 0 results. Consistency with what
         the user will actually see beats always having a non-empty list.
         """
-        exclude_lower = {g.strip().lower() for g in exclude_geos}
+        from relevance.geo_aliases import canonical_geo, display_geo
+        exclude_keys = {canonical_geo(g) for g in exclude_geos}
 
         async def _query_top(with_ind: bool, with_per: bool = False):
             # Fetch id+country rows (not a grouped count) so semantic
@@ -1399,17 +1410,26 @@ async def geo_hint(
                 stmt = stmt.where(_or(*_persona_filters()))
             result = await db.execute(stmt)
 
-            ids_by_country: dict[str, set] = {}
+            # Grouped by canonical form, not the raw DB string - otherwise
+            # "USA" and "United States" rows for the same country would
+            # each build their own candidate entry below and could both
+            # surface as separate (duplicate) suggestion chips.
+            ids_by_key: dict[str, set] = {}
+            display_by_key: dict[str, str] = {}
             for row in result.all():
                 country = (row[1] or "").strip()
-                if country:
-                    ids_by_country.setdefault(country, set()).add(row[0])
+                if country and _looks_like_geo(country):
+                    key = canonical_geo(country)
+                    ids_by_key.setdefault(key, set()).add(row[0])
+                    display_by_key.setdefault(key, display_geo(country))
 
             if with_ind and with_per:
                 for row in semantic_rows:
                     country = (row["country"] or "").strip()
-                    if country:
-                        ids_by_country.setdefault(country, set()).add(row["id"])
+                    if country and _looks_like_geo(country):
+                        key = canonical_geo(country)
+                        ids_by_key.setdefault(key, set()).add(row["id"])
+                        display_by_key.setdefault(key, display_geo(country))
 
             # This loose ILIKE/semantic tally is only used to narrow down
             # which countries are worth precisely re-checking — NOT as the
@@ -1422,18 +1442,18 @@ async def geo_hint(
             # switching to it will actually show.
             loose = sorted(
                 (
-                    (country, ids) for country, ids in ids_by_country.items()
-                    if country.lower() not in exclude_lower and ids
-                    and _looks_like_geo(country)
+                    (key, ids) for key, ids in ids_by_key.items()
+                    if key not in exclude_keys and ids
                 ),
                 key=lambda item: -len(item[1]),
             )[: max(limit * 3, limit + 5)]
 
             out = []
-            for country, _ids in loose:
-                precise = await _count_geo(country, with_industries=with_ind, with_personas=with_per)
+            for key, _ids in loose:
+                display_name = display_by_key[key]
+                precise = await _count_geo(display_name, with_industries=with_ind, with_personas=with_per)
                 if precise > 0:
-                    out.append({"geo": country, "count": precise})
+                    out.append({"geo": display_name, "count": precise})
             out.sort(key=lambda x: -x["count"])
             return out[:limit]
 
@@ -1501,6 +1521,7 @@ async def geo_hint(
 async def geo_list(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select as _sel, func as _func
     from models.event import EventORM as _ORM
+    from relevance.geo_aliases import canonical_geo, display_geo
 
     today = date.today().isoformat()
     result = await db.execute(
@@ -1514,11 +1535,23 @@ async def geo_list(db: AsyncSession = Depends(get_db)):
         .order_by(_func.count(_ORM.id).desc())
         .limit(500)
     )
-    countries = [
-        {"country": (row[0] or "").strip(), "count": row[1] or 0}
-        for row in result.all()
-        if _looks_like_geo(row[0] or "")
-    ]
+    # Raw DB country strings include every spelling of the same place
+    # ("USA" / "United States" / "United States of America" / "America"),
+    # which used to surface as separate, duplicate options in the ICP
+    # form's geography picklist. Group by the alias table's canonical
+    # form (same table already used for search/scoring matching) and
+    # merge counts so each real place appears exactly once.
+    merged: dict[str, dict] = {}
+    for row in result.all():
+        raw = (row[0] or "").strip()
+        if not raw or not _looks_like_geo(raw):
+            continue
+        key = canonical_geo(raw)
+        if key not in merged:
+            merged[key] = {"country": display_geo(raw), "count": 0}
+        merged[key]["count"] += row[1] or 0
+
+    countries = sorted(merged.values(), key=lambda c: -c["count"])
     return {"countries": countries}
 
 
