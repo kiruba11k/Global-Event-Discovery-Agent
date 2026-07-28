@@ -44,7 +44,7 @@ export default function HeroSection({ onScrollToForm, stats }) {
 
           <motion.h1 className="ld-hero-h1" variants={rise} custom={1} initial="hidden" animate="show">
             Your best buyers are already at a show.
-            <em> We find them, warm them up before you ever ask for the meeting, and hand you the intel to close it.</em>
+            <em> We warm them up before you ask - and hand you the intel to close it.</em>
           </motion.h1>
 
           <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">
