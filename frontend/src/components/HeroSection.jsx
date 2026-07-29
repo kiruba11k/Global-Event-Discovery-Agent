@@ -21,18 +21,18 @@ const rise = {
 
 const PILLARS = [
   { icon: MapPin,            cls: 'find', label: '01 · Find the right shows' },
-  { icon: CalendarCheck,     cls: 'meet', label: '02 · Meet the right ICPs' },
+  { icon: CalendarCheck,     cls: 'meet', label: '02 · Match on buying intent' },
   { icon: MessageSquareText, cls: 'talk', label: '03 · Tailored talking points' },
 ]
 
 export default function HeroSection({ onScrollToForm, stats }) {
-  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
+  const events = fmtCountPlus(stats?.total_events_in_db, '17,000+')
   // Exact figure, not fmtCountPlus's round-to-nearest-hundred - country
   // counts are small enough that rounding reads as a mismatch against
   // the precise number shown a few sections down in StatsRow (both
   // pull from the same stats.countries_covered value; this is a display
   // choice, not a data source difference).
-  const countries = stats?.countries_covered > 0 ? stats.countries_covered : '20+'
+  const countries = stats?.countries_covered > 0 ? stats.countries_covered : '130'
   return (
     <section className="ld-hero" id="top" aria-label="Find your shows">
       <div className="ld-hero-inner">
