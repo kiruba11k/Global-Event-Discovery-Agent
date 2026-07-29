@@ -20,13 +20,13 @@ const PACKAGES = {
   },
   starter: {
     key: 'starter', tag: 'Most popular', name: 'Starter pack',
-    priceLabel: 'From $3,000', price: 3000, outcome: '10 qualified meetings',
+    priceLabel: 'From $4,000', price: 4000, outcome: '10 qualified meetings',
     features: ['Everything in Discover', 'Shows ranked 7–23', 'Pre-show ICP outreach', '10 confirmed meetings', 'Post-event follow-up'],
     cta: 'Get started →',
   },
   growth: {
     key: 'growth', tag: 'Best value', name: 'Growth pack',
-    priceLabel: 'From $5,000', price: 5000, outcome: '20 qualified meetings',
+    priceLabel: 'From $6,000', price: 6000, outcome: '20 qualified meetings',
     features: ['Everything in Starter', 'Full event calendar plan', 'Multi-show strategy', '20 confirmed meetings', 'Named ICP account list'],
     cta: 'Get started →',
   },

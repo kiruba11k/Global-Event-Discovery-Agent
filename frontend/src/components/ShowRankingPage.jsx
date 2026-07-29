@@ -656,7 +656,7 @@ export default function ShowRankingPage({
             <div className="rk-tier rk-tier--starter">
               <div className="rk-tier-tag">Most popular</div>
               <div className="rk-tier-name">Starter pack</div>
-              <div className="rk-tier-price">From $3,000</div>
+              <div className="rk-tier-price">From $4,000</div>
               <div className="rk-tier-outcome">10 qualified meetings</div>
               <ul className="rk-tier-list">
                 <li>Everything in Discover</li>
@@ -672,7 +672,7 @@ export default function ShowRankingPage({
             <div className="rk-tier rk-tier--growth">
               <div className="rk-tier-tag">Best value</div>
               <div className="rk-tier-name">Growth pack</div>
-              <div className="rk-tier-price">From $5,000</div>
+              <div className="rk-tier-price">From $6,000</div>
               <div className="rk-tier-outcome">20 qualified meetings</div>
               <ul className="rk-tier-list">
                 <li>Everything in Starter</li>
