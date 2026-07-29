@@ -46,12 +46,16 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
           <a className="ld-nav-logo" href="/" aria-label="ExpoToFunnel home" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
             <img
               src="/logo.png"
-              alt="ExpoToFunnel"
+              alt=""
+              aria-hidden="true"
               width="26"
               height="26"
               className="ld-nav-logo-img"
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
+            <span className="ld-nav-logo-text">
+              Expo<span className="ld-nav-logo-to"> to </span>Funnel
+            </span>
           </a>
 
           <div className="ld-nav-links">
