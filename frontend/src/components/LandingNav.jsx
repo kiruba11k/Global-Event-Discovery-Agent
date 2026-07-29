@@ -15,7 +15,7 @@ const LINKS = [
   { label: 'Contact us', screen: 'contact' },
 ]
 
-export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAnchor }) {
+export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAnchor, onGoHome }) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -43,7 +43,7 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       >
         <div className="ld-nav-inner">
-          <a className="ld-nav-logo" href="/" aria-label="ExpoToFunnel home" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
+          <a className="ld-nav-logo" href="/" aria-label="ExpoToFunnel home" onClick={e => { e.preventDefault(); onGoHome?.() }}>
             <img
               src="/logo.png"
               alt=""
@@ -54,7 +54,7 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
             <span className="ld-nav-logo-text">
-              Expo<span className="ld-nav-logo-to"> to </span>Funnel
+              <strong>Expo</strong><span className="ld-nav-logo-to"> to </span><strong>Funnel</strong>
             </span>
           </a>
 

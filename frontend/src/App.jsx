@@ -523,7 +523,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
-        <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} />
+        <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} onGoHome={() => goTo('home')} />
         {screen === 'privacy' && <PrivacyPage />}
         {screen === 'terms'   && <TermsPage />}
         {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
@@ -546,7 +546,7 @@ export default function App() {
         }}
       />
 
-      <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} />
+      <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} onGoHome={() => goTo('home')} />
       <HeroSection onScrollToForm={scrollToForm} stats={stats} />
       <LogoTicker stats={stats} />
       <StatsRow stats={stats} />
