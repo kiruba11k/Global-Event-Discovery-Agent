@@ -19,7 +19,7 @@ import { FAQ_CATEGORIES, FAQ_FLAT } from '../faqData'
 
 const PAGE_TITLE = 'ExpoToFunnel FAQ: Trade Show Ranking, Meetings, Pricing'
 
-// Every "17,007 events / 129 countries"-style figure in the FAQ copy is
+// Every "17,000+ events / 129 countries"-style figure in the FAQ copy is
 // static placeholder text baked into faqData.js. Rather than forking that
 // content, we substitute the live /api/stats numbers in at render time -
 // so the whole page (including the JSON-LD schema) stays in sync with the
@@ -27,7 +27,7 @@ const PAGE_TITLE = 'ExpoToFunnel FAQ: Trade Show Ranking, Meetings, Pricing'
 function withLiveCounts(text, eventsCount, countriesCount) {
   if (typeof text !== 'string') return text
   return text
-    .replaceAll('17,007', eventsCount)
+    .replaceAll('17,000+', eventsCount)
     .replaceAll('129 countries', `${countriesCount} countries`)
 }
 
@@ -49,14 +49,14 @@ function buildFaqSchema(eventsCount, countriesCount) {
 export default function FaqPage({ stats }) {
   const eventsCount = stats?.total_events_in_db > 0
     ? stats.total_events_in_db.toLocaleString()
-    : '17,007'
+    : '17,000+'
   const countriesCount = stats?.countries_covered > 0
     ? String(stats.countries_covered)
     : '129'
   const live = (text) => withLiveCounts(text, eventsCount, countriesCount)
 
   const PAGE_DESCRIPTION = live(
-    'How ExpoToFunnel ranks 17,007 B2B trade shows, what the free tier includes, how meetings get booked before a show, and what each package costs.'
+    'How ExpoToFunnel ranks 17,000+ B2B trade shows, what the free tier includes, how meetings get booked before a show, and what each package costs.'
   )
 
   // Page-specific title/meta description, restored on unmount so
@@ -93,7 +93,7 @@ export default function FaqPage({ stats }) {
         <div className="lg-hero-eyebrow">FAQ</div>
         <h1 className="lg-hero-title">Frequently asked questions</h1>
         <div className="lg-hero-updated" style={{ maxWidth: 640, margin: '0 auto' }}>
-          {live(`Answers to what people ask us most: how we rank 17,007 B2B trade shows, what the free
+          {live(`Answers to what people ask us most: how we rank 17,000+ B2B trade shows, what the free
           tier actually includes, how meetings get booked before a show opens, what a qualified
           meeting is, and what each package costs. If your question is not here,`)}{' '}
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">ask us</a> and we will add it.
@@ -108,7 +108,7 @@ export default function FaqPage({ stats }) {
           background: 'var(--surface, #FFFFFF)', border: '1px solid var(--line, #E4DCCD)',
           borderRadius: 14, padding: '18px 22px', marginBottom: 32,
         }}>
-          {live(`ExpoToFunnel ranks 17,007 B2B trade shows across 129 countries by ICP density, the share of an
+          {live(`ExpoToFunnel ranks 17,000+ B2B trade shows across 129 countries by ICP density, the share of an
 event's attendees who match your ideal customer profile. The top six shows, their fit grades and a PDF
 report are free, with no credit card and no sales call. Paid packages start at $4,000 for 10 confirmed
 qualified meetings booked before the show floor opens, each with a tailored talking points brief.`)}
