@@ -98,7 +98,7 @@ export const FAQ_CATEGORIES = [
         q: 'What do I get with the free ranking?',
         paragraphs: [
           'Your top six B2B trade shows ranked by ICP density, each with a letter fit grade, an estimated count of matching buyers attending, the location and dates, a cost signal, and a plain English explanation of why that show made your list. Plus a branded PDF report by email.',
-          'The written rationale matters more than the ranking itself. Any tool can produce an ordered list. The rationale tells you what the model saw in your buyer profile and in that event's attendee composition, so you can judge whether the logic holds for your business.',
+          'The written rationale matters more than the ranking itself. Any tool can produce an ordered list. The rationale tells you what the model saw in your buyer profile and in that event\'s attendee composition, so you can judge whether the logic holds for your business.',
         ],
       },
       {
@@ -107,7 +107,7 @@ export const FAQ_CATEGORIES = [
         paragraphs: [
           'Six inputs. Who you sell to as a role plus industry, the regions where your buyers attend events, your typical deal value, how strong your differentiator is on a scale of one to ten, how many unique clients you have served, and a work email to send the report to.',
           'You can optionally add the names of some existing clients. That helps identify events where companies similar to your customers already buy, which usually sharpens the ranking.',
-          'The more specific the buyer description, the better the output. “CTOs at mid market fintech companies” produces a materially better shortlist than “fintech”.',
+          'The more specific the buyer description, the better the output. "CTOs at mid market fintech companies" produces a materially better shortlist than "fintech".',
         ],
       },
       {
@@ -148,7 +148,7 @@ export const FAQ_CATEGORIES = [
         id: 'how-does-expotofunnel-rank-trade-shows',
         q: 'How does ExpoToFunnel rank trade shows?',
         paragraphs: [
-          'By ICP density first, which is the share of an event’s attendees who match your ideal customer profile, then by absolute reachable buyer count, seniority mix, total landed cost and timing against your pipeline. Those five factors are weighted into a single letter fit grade per event.',
+          'By ICP density first, which is the share of an event\'s attendees who match your ideal customer profile, then by absolute reachable buyer count, seniority mix, total landed cost and timing against your pipeline. Those five factors are weighted into a single letter fit grade per event.',
           'Two model passes are used. The first produces the ranking and the rationale. The second validates that rationale against the underlying event data before it is shown to you, which catches cases where the reasoning does not actually support the score.',
         ],
       },
@@ -156,7 +156,7 @@ export const FAQ_CATEGORIES = [
         id: 'what-is-icp-density',
         q: 'What is ICP density?',
         paragraphs: [
-          'ICP density is the percentage of a trade show’s attendees who match your ideal customer profile by role, industry, company size and geography. In our ranking model it’s the strongest single predictor we weight for trade show return, and it doesn’t depend on how large or well known the event is.',
+          'ICP density is the percentage of a trade show\'s attendees who match your ideal customer profile by role, industry, company size and geography. In our ranking model it\'s the strongest single predictor we weight for trade show return, and it doesn\'t depend on how large or well known the event is.',
           'A show with 40,000 attendees and 2 percent density puts 800 potential buyers in the building. A show with 4,000 attendees and 30 percent density puts 1,200 there, with far less noise and usually at a lower cost.',
           'Density also affects how your outreach lands. At a high density event your meeting request reads as relevant, because the recipient is attending for reasons adjacent to what you sell.',
         ],
@@ -196,7 +196,7 @@ export const FAQ_CATEGORIES = [
         q: 'How current is the event data?',
         paragraphs: [
           'The index is refreshed on a continuous rolling basis. Results default to a twelve month window starting from next month, and you can filter by timeframe once you have your list.',
-          'Event dates and venues do change after publication. Always confirm dates against the organiser’s own site before booking travel.',
+          'Event dates and venues do change after publication. Always confirm dates against the organiser\'s own site before booking travel.',
         ],
       },
       {
@@ -271,9 +271,9 @@ export const FAQ_CATEGORIES = [
       {
         id: 'do-you-contact-prospects-using-my-name-or-yours',
         q: 'Do you contact prospects using my name or yours?',
-        needsInput: 'Your exact sending setup - e.g. whether you send from the client’s domain or a variant, and whether the client reviews copy before it goes out.',
+        needsInput: 'Your exact sending setup - e.g. whether you send from the client\'s domain or a variant, and whether the client reviews copy before it goes out.',
         paragraphs: [
-          'Outreach goes out on your behalf, representing your company. The buyer’s first interaction is with your brand, not with an agency they have never heard of.',
+          'Outreach goes out on your behalf, representing your company. The buyer\'s first interaction is with your brand, not with an agency they have never heard of.',
         ],
       },
       {
@@ -288,8 +288,8 @@ export const FAQ_CATEGORIES = [
         id: 'do-you-support-us-during-the-event-itself-or-just-before-it',
         q: 'Do you support us during the event itself, or just before it?',
         paragraphs: [
-          'Both. Every confirmed meeting comes with a brief, and on packages that include on-ground support, we provide real-time updates if a prospect’s situation changes, help you pivot messaging on the spot, and coordinate logistics on-site so slots don’t collide.',
-          'The work doesn’t stop when the outreach is booked. It continues through the show floor, with live account intelligence for every confirmed meeting and support to keep your team’s day running on schedule.',
+          'Both. Every confirmed meeting comes with a brief, and on packages that include on-ground support, we provide real-time updates if a prospect\'s situation changes, help you pivot messaging on the spot, and coordinate logistics on-site so slots don\'t collide.',
+          'The work doesn\'t stop when the outreach is booked. It continues through the show floor, with live account intelligence for every confirmed meeting and support to keep your team\'s day running on schedule.',
         ],
       },
       {
@@ -354,7 +354,7 @@ export const FAQ_CATEGORIES = [
         q: 'How does the cost per meeting compare to a booth?',
         paragraphs: [
           'Starter Pack works out at roughly $400 per confirmed qualified meeting and Growth Pack at roughly $300. A mid size booth costing $40,000 that produces eight qualified conversations works out at $5,000 per meeting.',
-          'That comparison is the core argument for pre booking, and it is worth running with your own numbers rather than ours. Take your last event’s total cost, including stand, build, travel, hotels and staff days, and divide it by the number of conversations that turned into a real opportunity.',
+          'That comparison is the core argument for pre booking, and it is worth running with your own numbers rather than ours. Take your last event\'s total cost, including stand, build, travel, hotels and staff days, and divide it by the number of conversations that turned into a real opportunity.',
         ],
       },
       {
@@ -465,7 +465,7 @@ export const FAQ_CATEGORIES = [
         id: 'is-it-legal-to-contact-trade-show-attendees-before-the-event',
         q: 'Is it legal to contact trade show attendees before the event?',
         paragraphs: [
-          'B2B outreach to business contacts is lawful in most jurisdictions where ExpoToFunnel operates, subject to the rules that apply in the recipient’s country, including GDPR in the UK and EU, CAN SPAM in the United States, and the DPDP Act in India. The applicable rules differ by market and by channel.',
+          'B2B outreach to business contacts is lawful in most jurisdictions where ExpoToFunnel operates, subject to the rules that apply in the recipient\'s country, including GDPR in the UK and EU, CAN SPAM in the United States, and the DPDP Act in India. The applicable rules differ by market and by channel.',
           'We run outreach in line with the requirements of the market being contacted. If you have specific compliance requirements from your own legal team, tell us at scoping and we will work to them.',
           'This is general information about how we operate and not legal advice. For a binding answer on your own obligations, ask your legal counsel.',
         ],
@@ -498,7 +498,7 @@ export const FAQ_CATEGORIES = [
         q: 'What do you need from me to run a package?',
         paragraphs: [
           'Your ideal customer profile, the events you are attending or considering, your typical deal value, and enough about your offer for us to write outreach and briefs that sound like you. Then a calendar to book into and the names of who is travelling.',
-          'The single input that most affects results is the specificity of your buyer profile. “Heads of Supply Chain at pharmaceutical manufacturers in the DACH region” gives us something to work with. “Enterprise companies” does not.',
+          'The single input that most affects results is the specificity of your buyer profile. "Heads of Supply Chain at pharmaceutical manufacturers in the DACH region" gives us something to work with. "Enterprise companies" does not.',
         ],
       },
     ],
