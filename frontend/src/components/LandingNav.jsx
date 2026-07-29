@@ -12,6 +12,7 @@ const LINKS = [
   { label: 'Find my shows', href: '#icp-form', form: true },
   { label: 'Pricing', screen: 'pricing' },
   { label: 'FAQ', screen: 'faq' },
+  { label: 'Contact us', screen: 'contact' },
 ]
 
 export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAnchor }) {
@@ -59,14 +60,6 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
             ) : (
               <a key={l.label} className="ld-nav-link" href={l.href}>{l.label}</a>
             ))}
-            <a
-              className="ld-nav-link"
-              href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Contact us
-            </a>
           </div>
 
           <div className="ld-nav-right">
@@ -100,15 +93,6 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
             ) : (
               <a key={l.label} className="ld-nav-mobile-link" href={l.href} onClick={() => setMobileOpen(false)}>{l.label}</a>
             ))}
-            <a
-              className="ld-nav-mobile-link"
-              href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setMobileOpen(false)}
-            >
-              Contact us
-            </a>
             <button className="ld-nav-mobile-cta" onClick={() => go({ form: true })}>
               Rank my shows - free
             </button>
