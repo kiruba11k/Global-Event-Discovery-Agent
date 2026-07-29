@@ -121,7 +121,7 @@ export const FAQ_CATEGORIES = [
         id: 'why-only-six-shows',
         q: 'Why only six shows?',
         paragraphs: [
-          'Six is roughly the number of events a B2B team can realistically execute well in a year. A list of forty shows is a research document, not a plan. If you want the full ranked list including shows seven through twenty three, that is included in the paid packages.',
+          'For technical categories where you are a founder-driven sales organisation, or you need deep subject matter experts to speak with prospects, six is a good number to execute. Nothing prevents you from doing more, but that needs to be part of your planned GTM with assigned specialists dedicated to trade shows as part of their day jobs. A list of forty shows is a research document, not a plan. If you want the full ranked list including shows seven through twenty-three, that is included in the paid packages.',
         ],
       },
       {
@@ -263,8 +263,9 @@ export const FAQ_CATEGORIES = [
         id: 'what-do-you-say-in-the-outreach',
         q: 'What do you say in the outreach?',
         paragraphs: [
-          'Outreach references why that specific event and why that specific person, based on what their company is dealing with right now, and proposes concrete time slots. It is not a generic meeting request with the event name pasted in.',
-          'In our experience, acceptance rates on event outreach run well above cold outbound, because the event supplies a legitimate, time bound reason to meet. That advantage disappears the moment the message reads as a template.',
+          'For VIP and high-priority accounts, we warm the relationship where possible - engaging with their content before ever reaching out - so the meeting request lands as familiar rather than cold. This is not run on every account; it is reserved for the accounts that matter most.',
+          'For the broader list, outreach references why that specific event and why that specific person, based on what their company is dealing with right now, and proposes concrete time slots. It is not a generic meeting request with the event name pasted in.',
+          'In our experience, acceptance rates on event outreach run well above cold outbound, because the event supplies a legitimate, time-bound reason to meet. That advantage disappears the moment the message reads as a template.',
         ],
       },
       {
@@ -284,11 +285,19 @@ export const FAQ_CATEGORIES = [
         ],
       },
       {
+        id: 'do-you-support-us-during-the-event-itself-or-just-before-it',
+        q: 'Do you support us during the event itself, or just before it?',
+        paragraphs: [
+          'Both. Every confirmed meeting comes with a brief, and on packages that include on-ground support, we provide real-time updates if a prospect’s situation changes, help you pivot messaging on the spot, and coordinate logistics on-site so slots don’t collide.',
+          'The work doesn’t stop when the outreach is booked. It continues through the show floor, with live account intelligence for every confirmed meeting and support to keep your team’s day running on schedule.',
+        ],
+      },
+      {
         id: 'how-many-meetings-can-i-realistically-run-in-one-show-day',
         q: 'How many meetings can I realistically run in one show day?',
         paragraphs: [
-          'Between five and eight per person per day. Beyond that you are rushing conversations and losing the buffer you need for overruns, travel between halls and the unplanned conversations that trade shows are actually good for.',
-          'This is why package sizes are what they are. Ten meetings is roughly a focused two day show for one person. Twenty is a two day show for a small team, or a multi show programme.',
+          'The ideal number is between five and eight per person per day. We have had some clients push beyond ten, but they have been doing this for a long time - or they would have launched something for which there is a strong pull in the market. Beyond that you are rushing conversations and losing the buffer you need for overruns, travel between halls, and the unplanned conversations that trade shows are actually good for.',
+          'This is why package sizes are what they are. Ten meetings is roughly a focused two-day show for one person. Twenty is a two-day show for a small team, or a multi-show programme.',
         ],
       },
       {
@@ -316,8 +325,8 @@ export const FAQ_CATEGORIES = [
         id: 'how-much-does-expotofunnel-cost',
         q: 'How much does ExpoToFunnel cost?',
         paragraphs: [
-          'The trade show ranking is free forever. Starter Pack starts at $3,000 for 10 confirmed qualified meetings. Growth Pack starts at $5,000 for 20 confirmed qualified meetings plus a named ICP account list. Full Takeover is scoped per flagship event for 50 or more meetings.',
-          'Pricing is per confirmed qualified meeting rather than per lead, per hour or per seat, so what you buy is the outcome rather than the activity. All prices are in USD, plus local taxes as applicable.',
+          'The trade show ranking is free forever. Starter Pack starts at $4,000 for 10 confirmed qualified meetings for SMB decision makers. Growth Pack starts at $6,000 for 20 confirmed qualified meetings plus a named ICP account list. Full Takeover is scoped per flagship event for 50 or more meetings.',
+          'Pricing is per confirmed qualified meeting. All prices are in USD, plus local taxes as applicable.',
         ],
       
         related: { label: 'See full pricing', href: '/pricing' },
@@ -344,7 +353,7 @@ export const FAQ_CATEGORIES = [
         id: 'how-does-the-cost-per-meeting-compare-to-a-booth',
         q: 'How does the cost per meeting compare to a booth?',
         paragraphs: [
-          'Starter Pack works out at roughly $300 per confirmed qualified meeting and Growth Pack at roughly $250. A mid size booth costing $40,000 that produces eight qualified conversations works out at $5,000 per meeting.',
+          'Starter Pack works out at roughly $400 per confirmed qualified meeting and Growth Pack at roughly $300. A mid size booth costing $40,000 that produces eight qualified conversations works out at $5,000 per meeting.',
           'That comparison is the core argument for pre booking, and it is worth running with your own numbers rather than ours. Take your last event’s total cost, including stand, build, travel, hotels and staff days, and divide it by the number of conversations that turned into a real opportunity.',
         ],
       },
@@ -382,6 +391,14 @@ export const FAQ_CATEGORIES = [
         paragraphs: [
           'Full Takeover packages include an outcomes guarantee, defined in your written agreement. Starter and Growth packages are delivered on a best effort basis against the stated meeting target. We state that plainly rather than implying a guarantee we have not given.',
           'What we can commit to on every package is the process: the research, the outreach volume, the reconfirmation and the briefs. What no honest provider can commit to on a smaller package is the behaviour of the buyers on the other end.',
+        ],
+      },
+      {
+        id: 'have-you-actually-delivered-this-before',
+        q: 'Have you actually delivered this before?',
+        paragraphs: [
+          'Yes. At BSMA Summit 2024 (Brussels, 3,500 attendees), we reached 280 companies, connected with 75, generated 18 meeting requests, and surfaced 12 Fortune 50 opportunities for one client - 5x the qualified meeting rate of standard event attendance.',
+          'The estimate formula below tells you what to expect for your event; this is what it looked like for one real one.',
         ],
       },
       {
