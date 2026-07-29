@@ -470,7 +470,8 @@
 }
 .rk-dl-grid {
   display:               grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 420px);
+  justify-content:       center;
   gap:                   16px;
 }
 .rk-dl-card {

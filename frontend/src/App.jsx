@@ -526,7 +526,7 @@ export default function App() {
         {screen === 'privacy' && <PrivacyPage />}
         {screen === 'terms'   && <TermsPage />}
         {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
-        {screen === 'faq'     && <FaqPage />}
+        {screen === 'faq'     && <FaqPage stats={stats} />}
         <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
       </div>
     )

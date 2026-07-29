@@ -18,10 +18,20 @@ import '../ranking.css'
 import { FAQ_CATEGORIES, FAQ_FLAT } from '../faqData'
 
 const PAGE_TITLE = 'ExpoToFunnel FAQ: Trade Show Ranking, Meetings, Pricing'
-const PAGE_DESCRIPTION =
-  'How ExpoToFunnel ranks 17,007 B2B trade shows, what the free tier includes, how meetings get booked before a show, and what each package costs.'
 
-function buildFaqSchema() {
+// Every "17,007 events / 129 countries"-style figure in the FAQ copy is
+// static placeholder text baked into faqData.js. Rather than forking that
+// content, we substitute the live /api/stats numbers in at render time -
+// so the whole page (including the JSON-LD schema) stays in sync with the
+// actual DB count without editing faqData.js every time it changes.
+function withLiveCounts(text, eventsCount, countriesCount) {
+  if (typeof text !== 'string') return text
+  return text
+    .replaceAll('17,007', eventsCount)
+    .replaceAll('129 countries', `${countriesCount} countries`)
+}
+
+function buildFaqSchema(eventsCount, countriesCount) {
   return {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -30,13 +40,25 @@ function buildFaqSchema() {
       name: q.q,
       acceptedAnswer: {
         '@type': 'Answer',
-        text: q.paragraphs.join(' '),
+        text: withLiveCounts(q.paragraphs.join(' '), eventsCount, countriesCount),
       },
     })),
   }
 }
 
-export default function FaqPage() {
+export default function FaqPage({ stats }) {
+  const eventsCount = stats?.total_events_in_db > 0
+    ? stats.total_events_in_db.toLocaleString()
+    : '17,007'
+  const countriesCount = stats?.countries_covered > 0
+    ? String(stats.countries_covered)
+    : '129'
+  const live = (text) => withLiveCounts(text, eventsCount, countriesCount)
+
+  const PAGE_DESCRIPTION = live(
+    'How ExpoToFunnel ranks 17,007 B2B trade shows, what the free tier includes, how meetings get booked before a show, and what each package costs.'
+  )
+
   // Page-specific title/meta description, restored on unmount so
   // navigating elsewhere doesn't leave the FAQ title behind.
   useEffect(() => {
@@ -55,7 +77,7 @@ export default function FaqPage() {
 
     const script = document.createElement('script')
     script.type = 'application/ld+json'
-    script.text = JSON.stringify(buildFaqSchema())
+    script.text = JSON.stringify(buildFaqSchema(eventsCount, countriesCount))
     document.head.appendChild(script)
 
     return () => {
@@ -63,7 +85,7 @@ export default function FaqPage() {
       if (hadMeta) metaDesc.setAttribute('content', prevDesc)
       document.head.removeChild(script)
     }
-  }, [])
+  }, [eventsCount, countriesCount])
 
   return (
     <div className="lg-page">
@@ -71,9 +93,9 @@ export default function FaqPage() {
         <div className="lg-hero-eyebrow">FAQ</div>
         <h1 className="lg-hero-title">Frequently asked questions</h1>
         <div className="lg-hero-updated" style={{ maxWidth: 640, margin: '0 auto' }}>
-          Answers to what people ask us most: how we rank 17,007 B2B trade shows, what the free
+          {live(`Answers to what people ask us most: how we rank 17,007 B2B trade shows, what the free
           tier actually includes, how meetings get booked before a show opens, what a qualified
-          meeting is, and what each package costs. If your question is not here,{' '}
+          meeting is, and what each package costs. If your question is not here,`)}{' '}
           <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">ask us</a> and we will add it.
         </div>
       </div>
@@ -86,10 +108,10 @@ export default function FaqPage() {
           background: 'var(--surface, #FFFFFF)', border: '1px solid var(--line, #E4DCCD)',
           borderRadius: 14, padding: '18px 22px', marginBottom: 32,
         }}>
-          ExpoToFunnel ranks 17,007 B2B trade shows across 129 countries by ICP density, the share of an
+          {live(`ExpoToFunnel ranks 17,007 B2B trade shows across 129 countries by ICP density, the share of an
 event's attendees who match your ideal customer profile. The top six shows, their fit grades and a PDF
 report are free, with no credit card and no sales call. Paid packages start at $4,000 for 10 confirmed
-qualified meetings booked before the show floor opens, each with a tailored talking points brief.
+qualified meetings booked before the show floor opens, each with a tailored talking points brief.`)}
         </p>
 
         <div className="lg-toc">
@@ -117,7 +139,7 @@ qualified meetings booked before the show floor opens, each with a tailored talk
                   <h3 style={{ display: 'inline', font: 'inherit', margin: 0 }}>{q.q}</h3>
                 </summary>
                 <div className="faq-answer">
-                  {q.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
+                  {q.paragraphs.map((p, i) => <p key={i}>{live(p)}</p>)}
                   {q.related && (
                     <p style={{ marginTop: -4 }}>
                       <a href={q.related.href} style={{ fontSize: 13.5, fontWeight: 600 }}>{q.related.label} →</a>

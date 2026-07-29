@@ -591,22 +591,6 @@ export default function ShowRankingPage({
           </div>
           <div className="rk-dl-grid">
             <div className="rk-dl-card">
-              <div className="rk-dl-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              </div>
-              <div className="rk-dl-body">
-                <div className="rk-dl-tag">ICP-specific · 22 pages</div>
-                <div className="rk-dl-name">
-                  The {profile?.target_industries?.[0] || 'B2B'} {profile?.target_personas?.[0] || 'decision-maker'} trade show playbook
-                </div>
-                <p className="rk-dl-desc">Your top shows by name, 90-day prep timeline, and conversation starters - built from your ICP.</p>
-              </div>
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download PDF
-              </a>
-            </div>
-            <div className="rk-dl-card">
               <div className="rk-dl-icon rk-dl-icon--green" aria-hidden="true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
