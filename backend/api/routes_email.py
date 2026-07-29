@@ -187,6 +187,7 @@ def _build_html(request: EmailReportRequest) -> str:
     .header-logo {{ font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; margin-bottom: 20px; }}
     .header-title {{ font-size: 28px; font-weight: 800; line-height: 1.2; margin-bottom: 8px; }}
     .header-subtitle {{ font-size: 13px; opacity: 0.8; }}
+    .header-tagline {{ font-size: 11px; opacity: 0.7; margin-top: 14px; font-weight: 600; letter-spacing: 0.02em; }}
     .header-meta {{ display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }}
     .header-meta-item {{ font-size: 11px; opacity: 0.75; }}
     .header-meta-item strong {{ display: block; font-size: 13px; opacity: 1; font-weight: 700; margin-top: 2px; }}
@@ -270,6 +271,7 @@ def _build_html(request: EmailReportRequest) -> str:
       <strong>{deal_label}</strong>
     </div>
   </div>
+  <div class="header-tagline">Right Show. Booked Meetings that Flow. Real Pipeline Growth.</div>
 </div>
 
 <!-- ══════════ BODY ══════════ -->
@@ -429,6 +431,7 @@ and pipeline projections based on your ICP.</p>
   </a>
 </p>
 <p style="font-size:12px;color:#6b7280;">
+  <strong>Right Show. Booked Meetings that Flow. Real Pipeline Growth.</strong><br/>
   LeadStrategus Private Limited · Event Intelligence<br/>
   <a href="https://leadstrategus.com">leadstrategus.com</a><br/>
   Registered office: C/o WeWork Zenia, Hiranandani Circle, Thane West, 400607, India<br/>

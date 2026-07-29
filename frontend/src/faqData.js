@@ -470,6 +470,16 @@ export const FAQ_CATEGORIES = [
           'This is general information about how we operate and not legal advice. For a binding answer on your own obligations, ask your legal counsel.',
         ],
       },
+      {
+        id: 'what-law-governs-and-which-courts-have-jurisdiction',
+        q: 'What law governs my use of ExpoToFunnel, and which courts have jurisdiction?',
+        paragraphs: [
+          'These Terms are governed by the laws of India, without regard to conflict of law principles, unless a separate written agreement between you and LeadStrategus states otherwise. The courts of Thane, Maharashtra, India have exclusive jurisdiction over any dispute arising from these Terms, except that we may seek injunctive relief in any competent court.',
+          'This applies regardless of where you or your company are based. If you are entering a paid package, your written agreement with us takes precedence over this general position where the two differ.',
+        ],
+
+        related: { label: 'Read our Terms', href: '/terms' },
+      },
     ],
   },
   {
