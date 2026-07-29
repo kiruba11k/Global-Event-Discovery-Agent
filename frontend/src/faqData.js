@@ -98,7 +98,7 @@ export const FAQ_CATEGORIES = [
         q: 'What do I get with the free ranking?',
         paragraphs: [
           'Your top six B2B trade shows ranked by ICP density, each with a letter fit grade, an estimated count of matching buyers attending, the location and dates, a cost signal, and a plain English explanation of why that show made your list. Plus a branded PDF report by email.',
-          'The written rationale matters more than the ranking itself. Any tool can produce an ordered list. The rationale tells you what the model saw in your buyer profile and in that event’s attendee composition, so you can judge whether the logic holds for your business.',
+          'The written rationale matters more than the ranking itself. Any tool can produce an ordered list. The rationale tells you what the model saw in your buyer profile and in that event's attendee composition, so you can judge whether the logic holds for your business.',
         ],
       },
       {
@@ -114,7 +114,7 @@ export const FAQ_CATEGORIES = [
         id: 'how-long-does-the-ranking-take',
         q: 'How long does the ranking take?',
         paragraphs: [
-          'Ninety seconds from submitting the form. The ranked shortlist appears on screen immediately and the branded PDF report follows by email shortly afterwards.',
+          'Ninety seconds from submitting the form. The ranked shortlist appears on screen immediately and the branded PDF report follows by email shortly afterwards',
         ],
       },
       {
