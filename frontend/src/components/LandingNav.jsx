@@ -42,17 +42,15 @@ export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAncho
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       >
         <div className="ld-nav-inner">
-          <a className="ld-nav-logo" href="/" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
+          <a className="ld-nav-logo" href="/" aria-label="ExpoToFunnel home" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
             <img
               src="/logo.png"
-              alt=""
-              aria-hidden="true"
+              alt="ExpoToFunnel"
               width="26"
               height="26"
               className="ld-nav-logo-img"
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
-            <span className="ld-nav-logo-text">LeadStrategus</span>
           </a>
 
           <div className="ld-nav-links">
