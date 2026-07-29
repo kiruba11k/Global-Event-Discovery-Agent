@@ -177,6 +177,9 @@ function LandingFooter({ onNavigate }) {
         <div className="ld-footer-logo">
           LeadStrategus
         </div>
+        <div className="ld-footer-tagline">
+          Right Show. Booked Meetings that Flow. Real Pipeline Growth.
+        </div>
         <nav className="ld-footer-links" aria-label="Footer">
           {FOOTER_LINKS.map(l => l.screen ? (
             <button key={l.label} onClick={() => onNavigate(l.screen)}>
