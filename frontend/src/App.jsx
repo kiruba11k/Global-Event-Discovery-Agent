@@ -137,7 +137,7 @@ function FooterCTA({ onScrollToForm }) {
       >
         {/* <span className="ds-eyebrow ld-footer-cta-eyebrow">Ready to stop guessing?</span> */}
         <h2 className="ld-footer-cta-h2">
-          Right-Fit Show. Warmed Prospect Flow.<br />Real Pipeline Growth.
+          Right Show. Booked Meetings that Flow.<br />Real Pipeline Growth.
         </h2>
         <p className="ld-footer-cta-sub">
           Tell us your ICP and where you'll travel. We'll tell you which events are worth
@@ -302,6 +302,15 @@ export default function App() {
       return
     }
     document.getElementById('icp-form')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const scrollToAnchor = (id) => {
+    if (screen !== 'home') {
+      goTo('home')
+      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 100)
+      return
+    }
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const onSearch = async (profile, email) => {
@@ -510,7 +519,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
-        <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} />
+        <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} />
         {screen === 'privacy' && <PrivacyPage />}
         {screen === 'terms'   && <TermsPage />}
         {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
@@ -532,7 +541,7 @@ export default function App() {
         }}
       />
 
-      <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} />
+      <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} />
       <HeroSection onScrollToForm={scrollToForm} stats={stats} />
       <LogoTicker stats={stats} />
       <StatsRow stats={stats} />

@@ -129,6 +129,13 @@ qualified meetings booked before the show floor opens, each with a tailored talk
           </section>
         ))}
 
+        <p style={{
+          textAlign: 'center', fontFamily: 'var(--font-display, inherit)', fontWeight: 700,
+          fontSize: 22, color: 'var(--ink, #1E2B33)', margin: '0 0 32px',
+        }}>
+          Right Show. Booked Meetings that Flow. Real Pipeline Growth.
+        </p>
+
         <div className="lg-contact-box" style={{ textAlign: 'center' }}>
           <strong>Still deciding whether an event is worth the flight?</strong>
           <p style={{ margin: '8px 0 16px', fontSize: 14 }}>
