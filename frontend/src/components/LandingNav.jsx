@@ -7,14 +7,14 @@ import { Menu, X, ArrowRight } from 'lucide-react'
 import '../landing.css'
 
 const LINKS = [
-  { label: 'How it works', href: '#how' },
-  { label: 'Why shows fail', href: '#problem' },
+  { label: 'How it works', anchor: 'how' },
+  { label: 'Why shows fail', anchor: 'problem' },
   { label: 'Find my shows', href: '#icp-form', form: true },
   { label: 'Pricing', screen: 'pricing' },
   { label: 'FAQ', screen: 'faq' },
 ]
 
-export default function LandingNav({ onScrollToForm, onNavigate }) {
+export default function LandingNav({ onScrollToForm, onNavigate, onScrollToAnchor }) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -28,6 +28,7 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
   const go = (link) => {
     setMobileOpen(false)
     if (link?.form) { onScrollToForm?.(); return }
+    if (link?.anchor) { onScrollToAnchor?.(link.anchor); return }
     if (link?.screen) { onNavigate?.(link.screen); return }
   }
 
@@ -55,7 +56,7 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
           </a>
 
           <div className="ld-nav-links">
-            {LINKS.map(l => (l.form || l.screen) ? (
+            {LINKS.map(l => (l.form || l.screen || l.anchor) ? (
               <button key={l.label} className="ld-nav-link" onClick={() => go(l)}>{l.label}</button>
             ) : (
               <a key={l.label} className="ld-nav-link" href={l.href}>{l.label}</a>
@@ -66,7 +67,7 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Services
+              Contact us
             </a>
           </div>
 
@@ -96,7 +97,7 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.22 }}
           >
-            {LINKS.map(l => (l.form || l.screen) ? (
+            {LINKS.map(l => (l.form || l.screen || l.anchor) ? (
               <button key={l.label} className="ld-nav-mobile-link" onClick={() => go(l)}>{l.label}</button>
             ) : (
               <a key={l.label} className="ld-nav-mobile-link" href={l.href} onClick={() => setMobileOpen(false)}>{l.label}</a>
@@ -108,7 +109,7 @@ export default function LandingNav({ onScrollToForm, onNavigate }) {
               rel="noopener noreferrer"
               onClick={() => setMobileOpen(false)}
             >
-              Services
+              Contact us
             </a>
             <button className="ld-nav-mobile-cta" onClick={() => go({ form: true })}>
               Rank my shows - free
