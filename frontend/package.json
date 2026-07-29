@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/prerender.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
