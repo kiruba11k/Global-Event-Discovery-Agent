@@ -648,7 +648,14 @@ async def _run_search_pipeline(
     # (google_ai_mode) is reserved purely for filling in est_attendees on
     # the handful of final shown events, to keep quota use predictable.
     enrichments: dict = {}
-    if settings.serpapi_key and final_top_events:
+    active_serpapi_key = ""
+    if final_top_events:
+        from enrichment.serpapi_key_rotator import pick_active_key
+        active_serpapi_key = pick_active_key(
+            [settings.serpapi_key, settings.serpapi_key2, settings.serpapi_key3],
+            needed=len(final_top_events),
+        )
+    if active_serpapi_key and final_top_events:
         try:
             import asyncio as _aio_timeout
             from enrichment.serp_enricher import enrich_events_batch
@@ -661,7 +668,7 @@ async def _run_search_pipeline(
                 enrichments = await _aio_timeout.wait_for(
                     enrich_events_batch(
                         events         = final_top_events,
-                        serpapi_key    = settings.serpapi_key,
+                        serpapi_key    = active_serpapi_key,
                         # `groq_client` is a legacy name — it's just a truthy
                         # gate for the LLM-based extraction path, which now
                         # routes through the shared OpenAI gateway
@@ -1627,11 +1634,11 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "events_by_source":   by_source,
         "faiss_vectors":      index_size,
         "openai_enabled":     bool(settings.openai_api_key),
-        "serpapi_enabled":    bool(settings.serpapi_key),
+        "serpapi_enabled":    bool(settings.serpapi_key or settings.serpapi_key2 or settings.serpapi_key3),
         "resend_enabled":     bool(settings.resend_api_key),
         # Real-time API key status (shown in frontend status bar)
         "realtime_apis": {
-            "serpapi_google_events": bool(settings.serpapi_key),
+            "serpapi_google_events": bool(settings.serpapi_key or settings.serpapi_key2 or settings.serpapi_key3),
             "ticketmaster":          bool(settings.ticketmaster_key),
             "eventbrite":            bool(settings.eventbrite_token),
             "predicthq":             bool(phq_key),

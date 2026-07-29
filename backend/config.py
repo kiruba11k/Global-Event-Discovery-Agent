@@ -123,7 +123,13 @@ class Settings(BaseSettings):
     # SerpAPI — PRIMARY real-time source
     # engine=google_events gives live Google Events data
     # Free: 100 searches/month  |  https://serpapi.com
+    # Multiple free-tier accounts can be chained: serpapi_key is tried
+    # first, and enrichment/serpapi_key_rotator.py switches to
+    # serpapi_key2 / serpapi_key3 once the active key's monthly credits
+    # run low. All three are optional beyond the first.
     serpapi_key: str = ""
+    serpapi_key2: str = ""
+    serpapi_key3: str = ""
 
     # Ticketmaster Discovery API
     # Free: 5,000 calls/day     |  https://developer.ticketmaster.com
