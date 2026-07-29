@@ -1,0 +1,26 @@
+# SPA fallback for Apache hosting (e.g. GoDaddy shared hosting).
+#
+# This is a single-page React app: only index.html is a real file on
+# disk, everything else (/privacy, /terms, /pricing, and any other
+# in-app "screen") is rendered client-side by JavaScript after
+# index.html loads. Without this rule, a direct request for one of
+# those paths (a pasted link, a bookmark, a page refresh) never
+# reaches the app at all - Apache looks for a matching file, finds
+# none, and returns 404 before React ever runs.
+#
+# This rewrites any request that isn't an existing file or directory
+# back to index.html, so the app loads and its own router (App.jsx)
+# takes over from there.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Let real files (JS, CSS, images, etc.) and existing directories
+  # through unchanged.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Everything else falls back to index.html.
+  RewriteRule ^ index.html [L]
+</IfModule>

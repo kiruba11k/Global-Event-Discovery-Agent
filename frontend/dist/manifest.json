@@ -1,0 +1,14 @@
+{
+  "name": "ExpoToFunnel by LeadStrategus",
+  "short_name": "ExpoToFunnel",
+  "description": "Rank 17,000+ B2B trade shows by where your buyers actually are, then get the meetings booked before you fly.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF6EF",
+  "theme_color": "#1D2B2E",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

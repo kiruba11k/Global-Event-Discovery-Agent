@@ -1,0 +1,43 @@
+# ExpoToFunnel
+
+> ExpoToFunnel is a B2B trade show intelligence and meeting-booking platform
+> operated by LeadStrategus, a demand generation and go-to-market consulting firm
+> based in Bangalore, India. It indexes 17,007 B2B trade shows across 129
+> countries and ranks them by ICP density - the share of attendees matching a
+> company's ideal customer profile - then books qualified meetings with matched
+> attendees before the event and provides a talking-points brief for each meeting.
+
+## Key facts
+
+- Index size: 17,007 B2B trade shows across 129 countries
+- Core metric: ICP Density Score
+- Grading: letter fit grade across five weighted factors
+- Free tier (Discover): top 6 ranked shows, ICP counts, fit grades, dates,
+  written rationale and a PDF report. No credit card, no time limit, no sales call.
+- Time to result: 90 seconds from a six-field form
+- Starter Pack: from $3,000 for 10 confirmed qualified meetings
+- Growth Pack: from $5,000 for 20 confirmed qualified meetings plus a named
+  ICP account list
+- Full Takeover: custom pricing, 50+ meetings per flagship event, dedicated
+  researcher, on-site coordination, written outcomes guarantee
+- Qualified meeting: a confirmed meeting slot with a decision maker or
+  influencer at a company matching the client's target industry, persona and
+  geography, secured through pre-event outreach
+- Serves both attendees (sales, BD, founders travelling without a booth) and
+  exhibitors (seeking qualified booth traffic)
+
+## Sections
+
+- [How it works](https://www.expotofunnel.com/#how): the Find, Meet, Talk process
+- [Find my shows](https://www.expotofunnel.com/#icp-form): the free ranking form
+- [Pricing](https://www.expotofunnel.com/pricing): all four tiers
+- [FAQ](https://www.expotofunnel.com/faq): 51 answered questions on ranking
+  methodology, the free tier, meeting booking, pricing and guarantees
+- [Privacy Policy](https://www.expotofunnel.com/privacy)
+- [Terms of Service](https://www.expotofunnel.com/terms)
+
+## Contact
+
+- Parent company: LeadStrategus - https://leadstrategus.com/
+- Contact: https://leadstrategus.com/contact/
+- Location: Bengaluru, Karnataka, India (registered office: Thane, Maharashtra, India)
