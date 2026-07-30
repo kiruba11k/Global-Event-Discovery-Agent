@@ -56,8 +56,8 @@ PRICING (USD) — matches the public cost sheet
   Driven by estimated meetings, not fixed tiers.
 
   < 1    meetings →  Discover - free forever (top 6 ranked shows)
-  1-10   meetings →  Starter Pack - from $3,000 (10 qualified meetings)
-  11-49  meetings →  Growth Pack - from $5,000 (20 qualified meetings)
+  1-10   meetings →  Starter Pack - from $4,000 (10 qualified meetings)
+  11-49  meetings →  Growth Pack - from $6,000 (20 qualified meetings)
   50+    meetings →  Full Takeover - custom (50+ meetings per event)
 
 ══════════════════════════════════════════════════════════════════════
@@ -89,14 +89,14 @@ DEAL_USD_MIDPOINTS: dict[str, int] = {
 # ── Pricing packages (USD) ──────────────────────────────────────────
 # Matches the public package cost sheet (leadstrategus.com/pricing):
 #   Discover        - Free forever      - Top 6 ranked shows (this app)
-#   Starter pack     - From $3,000       - 10 qualified meetings
-#   Growth pack      - From $5,000       - 20 qualified meetings
+#   Starter pack     - From $4,000       - 10 qualified meetings
+#   Growth pack      - From $6,000       - 20 qualified meetings
 #   Full takeover    - Custom            - 50+ meetings per event
 PRICING_PACKAGES = [
     # (min_meetings, max_meetings, package_name, price_usd, label)
     (50, 999, "Full Takeover", None,   "Custom - 50+ meetings per event"),
-    (11, 49,  "Growth Pack",   5_000,  "From $5,000 for 20 qualified meetings"),
-    (1,  10,  "Starter Pack",  3_000,  "From $3,000 for 10 qualified meetings"),
+    (11, 49,  "Growth Pack",   6_000,  "From $6,000 for 20 qualified meetings"),
+    (1,  10,  "Starter Pack",  4_000,  "From $4,000 for 10 qualified meetings"),
     (0,  0,   "Discover",      0,      "Free forever - top 6 ranked shows"),
 ]
 
