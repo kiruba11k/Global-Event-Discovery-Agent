@@ -628,10 +628,9 @@ export default function ShowRankingPage({
               <div className="rk-tier-price">$0</div>
               <ul className="rk-tier-list">
                 <li>Top 6 ranked shows</li>
-                <li>ICP count + fit grade</li>
-                <li>Location + dates</li>
-                <li>AI rationale</li>
-                <li>PDF report</li>
+                <li>ICP count and fitment</li>
+                <li>Rationale</li>
+                <li>PDF report with our best practices</li>
               </ul>
               <button className="rk-tier-btn rk-tier-btn--ghost" onClick={onBackHome}>
                 You're here
@@ -661,7 +660,7 @@ export default function ShowRankingPage({
               <ul className="rk-tier-list">
                 <li>Everything in Starter</li>
                 <li>Full event calendar plan</li>
-                <li>Event logistics support</li>
+                <li>Event logistics</li>
                 <li>20 confirmed meetings</li>
                 <li>Named ICP account list</li>
               </ul>

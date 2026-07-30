@@ -15,7 +15,7 @@ const PACKAGES = {
   discover: {
     key: 'discover', tag: 'Free forever', name: 'Discover',
     priceLabel: '$0', price: 0, outcome: 'Top 6 ranked shows',
-    features: ['Top 6 ranked shows', 'ICP count + fit grade', 'Location + dates', 'AI rationale', 'PDF report'],
+    features: ['Top 6 ranked shows', 'ICP count and fitment', 'Rationale', 'PDF report with our best practices'],
     cta: null,
   },
   starter: {
@@ -27,7 +27,7 @@ const PACKAGES = {
   growth: {
     key: 'growth', tag: 'Best value', name: 'Growth pack',
     priceLabel: 'From $6,000', price: 6000, outcome: '20 qualified meetings',
-    features: ['Everything in Starter', 'Full event calendar plan', 'Event logistics support', '20 confirmed meetings', 'Named ICP account list'],
+    features: ['Everything in Starter', 'Full event calendar plan', 'Event logistics', '20 confirmed meetings', 'Named ICP account list'],
     cta: 'Get started →',
   },
   takeover: {
