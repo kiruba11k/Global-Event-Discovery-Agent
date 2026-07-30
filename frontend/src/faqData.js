@@ -87,7 +87,7 @@ export const FAQ_CATEGORIES = [
         id: 'is-the-free-tier-really-free',
         q: 'Is the free tier really free?',
         paragraphs: [
-          'Yes. Discover shows your top six ranked events, ICP counts, fit grades, dates and locations, and a downloadable PDF report at no cost, with no time limit and no credit card required. There is no trial period that expires and no card to cancel.',
+          'Yes. Discover shows your top six ranked events, ICP count and fitment, and a downloadable PDF report with our best practices at no cost, with no time limit and no credit card required. There is no trial period that expires and no card to cancel.',
           'The free tier exists because the ranking is the part we can automate. We would rather you see the quality of the analysis before deciding whether to pay us to act on it.',
         ],
       
@@ -335,7 +335,7 @@ export const FAQ_CATEGORIES = [
         id: 'what-is-the-difference-between-starter-pack-and-growth-pack',
         q: 'What is the difference between Starter Pack and Growth Pack?',
         paragraphs: [
-          'Starter Pack delivers 10 confirmed meetings and includes shows ranked seven through twenty three, pre show ICP outreach and post event follow up. Growth Pack delivers 20 confirmed meetings and adds a full event calendar plan, event logistics support and a named ICP account list.',
+          'Starter Pack delivers 10 confirmed meetings and includes shows ranked seven through twenty three, pre show ICP outreach and post event follow up. Growth Pack delivers 20 confirmed meetings and adds a full event calendar plan, event logistics and a named ICP account list.',
           'Starter suits one event. Growth suits a planned run of events across a quarter or a year, where the value is in the calendar strategy as much as the individual meetings.',
         ],
       

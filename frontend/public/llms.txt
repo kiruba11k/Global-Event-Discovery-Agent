@@ -12,8 +12,9 @@
 - Index size: 17,007 B2B trade shows across 129 countries
 - Core metric: ICP Density Score
 - Grading: letter fit grade across five weighted factors
-- Free tier (Discover): top 6 ranked shows, ICP counts, fit grades, dates,
-  written rationale and a PDF report. No credit card, no time limit, no sales call.
+- Free tier (Discover): top 6 ranked shows, ICP count and fitment, written
+  rationale and a PDF report with our best practices. No credit card, no
+  time limit, no sales call.
 - Time to result: 90 seconds from a six-field form
 - Starter Pack: from $4,000 for 10 confirmed qualified meetings
 - Growth Pack: from $6,000 for 20 confirmed qualified meetings plus a named
