@@ -142,6 +142,9 @@ export default function PrivacyPage() {
       title="Privacy Policy"
       updated="July 27, 2026"
       sections={SECTIONS}
+      pageTitle="Privacy Policy | ExpoToFunnel"
+      pageDescription="How LeadStrategus collects, uses, stores, and shares information when you use ExpoToFunnel, the AI powered B2B trade show ranking and meeting booking tool."
+      path="/privacy"
     />
   )
 }

@@ -3,8 +3,11 @@
   Content lives in PrivacyPage.jsx / TermsPage.jsx; this just renders it.
 */
 import '../legal.css'
+import { usePageSeo } from '../lib/usePageSeo'
 
-export default function LegalPage({ eyebrow, title, updated, sections }) {
+export default function LegalPage({ eyebrow, title, updated, sections, pageTitle, pageDescription, path }) {
+  usePageSeo(pageTitle, pageDescription, path)
+
   return (
     <div className="lg-page">
       <div className="lg-hero">

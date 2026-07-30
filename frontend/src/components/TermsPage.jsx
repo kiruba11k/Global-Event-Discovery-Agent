@@ -121,6 +121,9 @@ export default function TermsPage() {
       title="Terms of Service"
       updated="July 27, 2026"
       sections={SECTIONS}
+      pageTitle="Terms of Service | ExpoToFunnel"
+      pageDescription="The terms governing your access to and use of ExpoToFunnel, LeadStrategus' AI powered B2B trade show ranking and meeting booking service."
+      path="/terms"
     />
   )
 }
