@@ -64,13 +64,13 @@ class EmailReportRequest(BaseModel):
     deal_size_category: str = "medium"
 
 
-# ── Pricing matrix (same as frontend) ─────────────────────
+# ── Pricing matrix (USD, same as frontend) ────────────────
 
 PRICING_MATRIX = {
-    "low":        {5: 2.25, 10: 3.75, 15: 5.00, 20: 6.50},
-    "medium":     {5: 2.75, 10: 4.50, 15: 6.00, 20: 7.75},
-    "high":       {5: 3.25, 10: 5.25, 15: 7.00, 20: 9.00},
-    "enterprise": {5: 3.75, 10: 6.00, 15: 8.00, 20: 10.50},
+    "low":        {5: 2_250, 10: 3_750, 15: 5_000, 20: 6_500},
+    "medium":     {5: 2_750, 10: 4_500, 15: 6_000, 20: 7_750},
+    "high":       {5: 3_250, 10: 5_250, 15: 7_000, 20: 9_000},
+    "enterprise": {5: 3_750, 10: 6_000, 15: 8_000, 20: 10_500},
 }
 
 DEAL_LABELS = {
@@ -119,10 +119,12 @@ def _build_html(request: EmailReportRequest) -> str:
             pkgs    = _get_packages(ev.est_attendees)
             pkg_rows = ""
             for m in pkgs:
+                price = prices.get(m)
+                price_label = f"${price:,}" if price is not None else "-"
                 pkg_rows += f"""
                 <tr>
                   <td style="padding:5px 10px;font-size:12px;color:#374151;">{m} meetings</td>
-                  <td style="padding:5px 10px;font-size:12px;font-weight:700;color:#3b82f6;">₹{prices.get(m, "-")}L</td>
+                  <td style="padding:5px 10px;font-size:12px;font-weight:700;color:#3b82f6;">{price_label}</td>
                 </tr>"""
 
             pricing_section = ""
