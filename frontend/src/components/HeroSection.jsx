@@ -43,8 +43,12 @@ export default function HeroSection({ onScrollToForm, stats }) {
           </motion.div> */}
 
           <motion.h1 className="ld-hero-h1" variants={rise} custom={1} initial="hidden" animate="show">
-            You don't just get booked meetings.
-            <em> You get the best buyers in the market.</em>
+            <span className="ld-hero-h1-setup">You don't just get booked meetings.</span>
+            <em>
+              <span className="ld-hero-h1-payoff">You get the </span>
+              <span className="ld-hero-h1-accent">best buyers</span>
+              <span className="ld-hero-h1-payoff"> in the market.</span>
+            </em>
           </motion.h1>
 
           <motion.p className="ld-hero-sub" variants={rise} custom={2} initial="hidden" animate="show">

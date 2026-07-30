@@ -191,7 +191,6 @@
   font-size: clamp(38px, 5.2vw, 62px);
   line-height: 1.05;
   letter-spacing: -0.02em;
-  color: var(--ink);
   margin: 0 0 22px;
 }
 .ld-hero-h1 em {
@@ -202,8 +201,13 @@
   line-height: 1.3;
   letter-spacing: -0.01em;
   margin-top: 10px;
-  color: var(--c-find);
 }
+/* Setup line downplays, payoff line delivers, "best buyers" is the one
+   claim that earns the accent color - see HeroSection.jsx for why this
+   is split into spans instead of styling the whole <em> one color. */
+.ld-hero-h1-setup  { color: #8A8880; }
+.ld-hero-h1-payoff { color: #16232B; }
+.ld-hero-h1-accent { color: #D6432E; }
 
 .ld-hero-sub {
   font-size: 18px;
