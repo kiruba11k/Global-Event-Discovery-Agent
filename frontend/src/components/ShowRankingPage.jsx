@@ -661,7 +661,7 @@ export default function ShowRankingPage({
               <ul className="rk-tier-list">
                 <li>Everything in Starter</li>
                 <li>Full event calendar plan</li>
-                <li>Multi-show strategy</li>
+                <li>Event logistics support</li>
                 <li>20 confirmed meetings</li>
                 <li>Named ICP account list</li>
               </ul>
@@ -678,8 +678,7 @@ export default function ShowRankingPage({
                 <li>Full-event meeting programme</li>
                 <li>Dedicated researcher</li>
                 <li>Outreach copy + sequences</li>
-                <li>On-site coordination</li>
-                <li>Outcomes guarantee</li>
+                <li>Full remote support</li>
               </ul>
               <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--outline" aria-label="Contact us about a Full Takeover programme">
                 Contact us →

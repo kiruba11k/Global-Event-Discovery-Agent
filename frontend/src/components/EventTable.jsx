@@ -27,13 +27,13 @@ const PACKAGES = {
   growth: {
     key: 'growth', tag: 'Best value', name: 'Growth pack',
     priceLabel: 'From $6,000', price: 6000, outcome: '20 qualified meetings',
-    features: ['Everything in Starter', 'Full event calendar plan', 'Multi-show strategy', '20 confirmed meetings', 'Named ICP account list'],
+    features: ['Everything in Starter', 'Full event calendar plan', 'Event logistics support', '20 confirmed meetings', 'Named ICP account list'],
     cta: 'Get started →',
   },
   takeover: {
     key: 'takeover', tag: 'For flagship events', name: 'Full takeover',
     priceLabel: 'Custom', price: null, outcome: '50+ meetings per event',
-    features: ['Full-event meeting programme', 'Dedicated researcher', 'Outreach copy + sequences', 'On-site coordination', 'Outcomes guarantee'],
+    features: ['Full-event meeting programme', 'Dedicated researcher', 'Outreach copy + sequences', 'Full remote support'],
     cta: 'Contact us →',
   },
 }
@@ -74,7 +74,7 @@ const INCLUSIONS = [
   { icon: Users,         title: 'Pre-show ICP outreach',          desc: 'We research and contact your exact target accounts 3–4 weeks before the event, generating confirmed interest before you step on site.' },
   { icon: CalendarCheck, title: 'Confirmed meeting scheduling',    desc: 'Every meeting is booked, confirmed, and placed on your calendar. No cold walks - only qualified decision-makers.' },
   { icon: ClipboardList, title: 'Pre-meeting briefs',              desc: 'You receive a detailed profile of each attendee - company, role, pain points, conversation starters - before you walk in.' },
-  { icon: Headphones,    title: 'On-site coordination',            desc: 'A dedicated LeadStrategus rep manages logistics on the day: keeps meetings on track, handles no-shows, reschedules when needed.' },
+  { icon: Headphones,    title: 'Meeting-day coordination',        desc: 'A dedicated LeadStrategus rep manages logistics remotely on the day: keeps meetings on track, handles no-shows, reschedules when needed.' },
   { icon: Mail,          title: 'Post-event follow-up',            desc: 'Meeting summaries, warm email introductions, and deal-momentum support delivered within 48 hours of the event closing.' },
 ]
 

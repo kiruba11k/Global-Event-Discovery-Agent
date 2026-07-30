@@ -31,7 +31,7 @@ const FAQ = [
   },
   {
     q: 'Do you guarantee outcomes?',
-    a: 'Full Takeover packages include an outcomes guarantee, defined in your written agreement. Starter and Growth packages are delivered on a best effort basis against the stated meeting target.',
+    a: 'All packages, including Full Takeover, are delivered on a best effort basis against the stated meeting target.',
   },
   {
     q: 'Are these prices inclusive of tax?',
@@ -99,7 +99,7 @@ export default function PricingPage({ onScrollToForm }) {
               <ul className="rk-tier-list">
                 <li>Everything in Starter</li>
                 <li>Full event calendar plan</li>
-                <li>Multi show strategy</li>
+                <li>Event logistics support</li>
                 <li>20 confirmed meetings</li>
                 <li>Named ICP account list</li>
               </ul>
@@ -117,8 +117,7 @@ export default function PricingPage({ onScrollToForm }) {
                 <li>Full event meeting programme</li>
                 <li>Dedicated researcher</li>
                 <li>Outreach copy and sequences</li>
-                <li>On site coordination</li>
-                <li>Outcomes guarantee</li>
+                <li>Full remote support</li>
               </ul>
               <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--outline" aria-label="Contact us about a Full Takeover programme">
                 Contact us <ArrowRight size={15} aria-hidden="true" />
