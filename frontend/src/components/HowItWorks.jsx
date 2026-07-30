@@ -169,7 +169,7 @@ const buildPillars = (events) => [
 ]
 
 export default function HowItWorks({ stats }) {
-  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
+  const events = fmtCountPlus(stats?.total_events_in_db, '17,000+')
   const PILLARS = buildPillars(events)
   return (
     <section className="ld-how" id="how" aria-labelledby="how-heading">
@@ -177,7 +177,7 @@ export default function HowItWorks({ stats }) {
         <div className="ld-how-header">
           {/* <span className="ds-eyebrow">How it works</span> */}
           <h2 className="ds-h2" id="how-heading">
-            Right Show. Booked Meetings that Flow. <em>Real Pipeline Growth.</em>
+            Right Show. Booked Meetings that Flow.<br /><em>Real Pipeline Growth.</em>
           </h2>
           <p className="ds-sub" style={{ margin: '0 auto' }}>
             Three steps between your ICP description and a tradeshow calendar full of
