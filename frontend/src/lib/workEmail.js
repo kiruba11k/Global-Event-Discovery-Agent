@@ -23,3 +23,27 @@ export function emailDomain(email) {
 export function isFreeEmailDomain(email) {
   return FREE_EMAIL_DOMAINS.has(emailDomain(email))
 }
+
+// Best-effort company name guess from a work email's domain, used only as
+// a last-resort fallback when the user hasn't typed a company name - e.g.
+// "jane@acme-corp.io" -> "Acme Corp". Returns '' when nothing usable is
+// left (so callers can fall back to an empty string rather than inventing
+// a placeholder - the backend already renders "Your Company" for blank).
+const TLD_TOKENS = new Set([
+  'com', 'net', 'org', 'io', 'co', 'in', 'uk', 'us', 'ca', 'au',
+  'biz', 'info', 'me', 'app', 'dev', 'ai', 'tech',
+])
+
+export function deriveCompanyNameFromEmail(email) {
+  const domain = emailDomain(email)
+  if (!domain) return ''
+  const labels = domain.split('.').filter(Boolean)
+  while (labels.length > 1 && TLD_TOKENS.has(labels[labels.length - 1])) labels.pop()
+  const slug = labels[labels.length - 1] || ''
+  if (!slug) return ''
+  return slug
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}

@@ -18,7 +18,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
-import { isFreeEmailDomain } from '../lib/workEmail'
+import { isFreeEmailDomain, deriveCompanyNameFromEmail } from '../lib/workEmail'
 import '../icp-form.css'
 
 // ── Smart suggestion bank ─────────────────────────────────────────
@@ -487,7 +487,7 @@ export default function ICPForm({
     const { date_from, date_to }   = getDefaultDateWindow()
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
-        company_name:           companyData?.company_name || companyName || 'LeadStrategus User',
+        company_name:           companyData?.company_name || companyName || deriveCompanyNameFromEmail(email),
         company_description:    buyer,
         target_industries:      industries.length ? industries : ['Technology'],
         target_personas:        personas,
@@ -571,7 +571,7 @@ export default function ICPForm({
       : geos
     if (pendingGeo) { setGeos(finalGeos); setGeoSearch('') }
     const profile = {
-      company_name:          companyData?.company_name || companyName || 'LeadStrategus User',
+      company_name:          companyData?.company_name || companyName || deriveCompanyNameFromEmail(email),
       company_description:   buyer,
       target_industries:     industries.length ? industries : ['Technology'],
       target_personas:       personas.length   ? personas   : [],
