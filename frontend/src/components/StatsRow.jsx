@@ -15,7 +15,7 @@ export default function StatsRow({ stats }) {
   // server-side (stats.live_sources) in case it's needed again, just not
   // shown here since a low connector count reads as an unimpressive number.
   const CELLS = [
-    { end: totalEvents ?? 17000, suffix: totalEvents ? '' : '+', label: 'B2B tradeshows indexed', live: !!totalEvents },
+    { end: totalEvents ?? 10000, suffix: totalEvents ? '' : '+', label: 'B2B tradeshows indexed', live: !!totalEvents },
     { end: countries ?? 20,      suffix: countries ? '' : '+',   label: 'countries covered',      live: !!countries },
     { end: 90,                   suffix: 's',                    label: 'to your ranked shortlist', live: true },
   ]
