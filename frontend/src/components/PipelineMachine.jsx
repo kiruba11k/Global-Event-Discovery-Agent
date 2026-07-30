@@ -119,7 +119,7 @@ function Machine({ i, kind, title, sub }) {
 }
 
 export default function PipelineMachine({ stats }) {
-  const events = fmtCountPlus(stats?.total_events_in_db, '17,000+')
+  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
 
   const frameRef = useRef(null)
   const [scale, setScale] = useState(1)
