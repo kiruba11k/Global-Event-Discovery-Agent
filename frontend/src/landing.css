@@ -50,7 +50,7 @@
   color: inherit;
 }
 .ld-nav-logo-to {
-  color: var(--bad, #C93A2B);
+  color: rgba(37, 150, 190, 1);
   font-weight: 500;
 }
 
@@ -186,22 +186,30 @@
 }
 
 .ld-hero-h1 {
-  font-family: var(--font-body);
-  font-weight: 800;
-  font-style: normal;
-  font-size: clamp(32px, 4.6vw, 48px);
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(38px, 5.2vw, 62px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   margin: 0 0 22px;
 }
 /* Setup line downplays, payoff line delivers, "best buyers" is the one
    claim that earns the accent color - see HeroSection.jsx for why this
    is split into spans instead of styling the whole line one color. Each
-   phrase sits on its own line, matching the approved hero-text mockup. */
+   phrase sits on its own line, matching the approved hero-text mockup.
+   Payoff block keeps the original italic serif sub-headline treatment. */
 .ld-hero-h1-setup  { display: block; color: #8A8880; }
-.ld-hero-h1-payoff-block { display: block; margin-top: 18px; }
+.ld-hero-h1-payoff-block {
+  display: block;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(18px, 2.6vw, 26px);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-top: 10px;
+}
 .ld-hero-h1-payoff { display: block; color: #16232B; }
-.ld-hero-h1-accent { display: block; color: #D6432E; }
+.ld-hero-h1-accent { display: block; color: rgba(37, 150, 190, 1); }
 
 .ld-hero-sub {
   font-size: 18px;
