@@ -47,7 +47,7 @@ export default function HeroSection({ onScrollToForm, stats }) {
             <em>
               <span className="ld-hero-h1-payoff">You get the </span>
               <span className="ld-hero-h1-accent">best buyers</span>
-              <span className="ld-hero-h1-payoff"> in the market.</span>
+              <span className="ld-hero-h1-payoff"> in the market today.</span>
             </em>
           </motion.h1>
 
