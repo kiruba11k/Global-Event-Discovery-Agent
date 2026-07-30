@@ -169,7 +169,7 @@ const buildPillars = (events) => [
 ]
 
 export default function HowItWorks({ stats }) {
-  const events = fmtCountPlus(stats?.total_events_in_db, '17,000+')
+  const events = fmtCountPlus(stats?.total_events_in_db, '10,000+')
   const PILLARS = buildPillars(events)
   return (
     <section className="ld-how" id="how" aria-labelledby="how-heading">
