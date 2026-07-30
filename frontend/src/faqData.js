@@ -335,7 +335,7 @@ export const FAQ_CATEGORIES = [
         id: 'what-is-the-difference-between-starter-pack-and-growth-pack',
         q: 'What is the difference between Starter Pack and Growth Pack?',
         paragraphs: [
-          'Starter Pack delivers 10 confirmed meetings and includes shows ranked seven through twenty three, pre show ICP outreach and post event follow up. Growth Pack delivers 20 confirmed meetings and adds a full event calendar plan, multi show strategy and a named ICP account list.',
+          'Starter Pack delivers 10 confirmed meetings and includes shows ranked seven through twenty three, pre show ICP outreach and post event follow up. Growth Pack delivers 20 confirmed meetings and adds a full event calendar plan, event logistics support and a named ICP account list.',
           'Starter suits one event. Growth suits a planned run of events across a quarter or a year, where the value is in the calendar strategy as much as the individual meetings.',
         ],
       
@@ -345,7 +345,7 @@ export const FAQ_CATEGORIES = [
         id: 'what-is-full-takeover',
         q: 'What is Full Takeover?',
         paragraphs: [
-          'Full Takeover is a custom scoped programme for a flagship event, targeting 50 or more meetings. It includes a dedicated researcher, full outreach copy and sequence development, on site coordination during the event, and an outcomes guarantee defined in your written agreement.',
+          'Full Takeover is a custom scoped programme for a flagship event, targeting 50 or more meetings. It includes a dedicated researcher, full outreach copy and sequence development, and full remote support throughout the event.',
           'It is designed for the one or two events a year that genuinely matter to a business, where the budget is already large and the cost of the event underperforming is high.',
         ],
       },
@@ -389,7 +389,7 @@ export const FAQ_CATEGORIES = [
         id: 'do-you-guarantee-outcomes',
         q: 'Do you guarantee outcomes?',
         paragraphs: [
-          'Full Takeover packages include an outcomes guarantee, defined in your written agreement. Starter and Growth packages are delivered on a best effort basis against the stated meeting target. We state that plainly rather than implying a guarantee we have not given.',
+          'All packages, including Full Takeover, are delivered on a best effort basis against the stated meeting target. We state that plainly rather than implying a guarantee we have not given.',
           'What we can commit to on every package is the process: the research, the outreach volume, the reconfirmation and the briefs. What no honest provider can commit to on a smaller package is the behaviour of the buyers on the other end.',
         ],
       },
