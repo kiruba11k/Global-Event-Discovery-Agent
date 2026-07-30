@@ -18,6 +18,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
+import { isFreeEmailDomain } from '../lib/workEmail'
 import '../icp-form.css'
 
 // ── Smart suggestion bank ─────────────────────────────────────────
@@ -532,6 +533,7 @@ export default function ICPForm({
     if (!clientRange)      e.client = 'Select your client count range'
     if (!email.trim())     e.email = 'Work email required'
     else if (!email.includes('@')) e.email = 'Enter a valid email address'
+    else if (isFreeEmailDomain(email)) e.email = 'Please use your company work email, not a personal address (e.g. Gmail, Yahoo)'
     setErrors(e)
     return Object.keys(e).length === 0
   }
