@@ -114,13 +114,15 @@ services:
     runtime: static
     rootDir: frontend
     # `npm run build` runs `vite build` then scripts/prerender.mjs, which
-    # launches the Chromium installed by the playwright install step below
+    # launches a Chromium install (frontend/package.json's postinstall
+    # script runs `playwright install chromium` - no --with-deps, since
+    # Render's static-site build has no root/sudo to apt-get system libs)
     # to render "/", "/privacy", "/terms", "/pricing" and "/faq" into real
     # static HTML under dist/. Without this, the app is a client-only SPA
     # (dist/index.html ships as an empty <div id="root">) - a fetch that
     # doesn't run JS, which is how most LLM crawlers (GPTBot, ClaudeBot,
     # PerplexityBot, ...) read pages, only ever sees that empty shell.
-    buildCommand: npm install && npx playwright install --with-deps chromium && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
