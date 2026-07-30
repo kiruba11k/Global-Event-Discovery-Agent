@@ -179,7 +179,7 @@ function LandingFooter({ onNavigate }) {
           LeadStrategus
         </div>
         <div className="ld-footer-tagline">
-          Right Show. Booked Meetings that Flow. Real Pipeline Growth.
+          Right Show. Booked Meetings that Flow.<br />Real Pipeline Growth.
         </div>
         <nav className="ld-footer-links" aria-label="Footer">
           {FOOTER_LINKS.map(l => l.screen ? (

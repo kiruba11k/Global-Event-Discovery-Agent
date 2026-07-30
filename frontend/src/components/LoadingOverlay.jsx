@@ -125,7 +125,7 @@ function ProbCounter({ target }) {
 
 // ── Main component ──────────────────────────────────────────────────
 export default function LoadingOverlay({ profile, stats }) {
-  const eventsLabel = fmtCountPlus(stats?.total_events_in_db, '50,000+')
+  const eventsLabel = fmtCountPlus(stats?.total_events_in_db, '17,000+')
   const prob = calcProbability(profile)
   const tips = buildTips(profile, eventsLabel)
 
