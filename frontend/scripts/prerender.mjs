@@ -87,6 +87,11 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Prerender failed:', err)
-  process.exit(1)
+  // Non-fatal: if the sandboxed/host environment can't launch Chromium (a
+  // missing system lib Render's build image doesn't have, no root to
+  // install one, etc.), ship the plain vite build rather than failing the
+  // whole deploy. dist/index.html still works for real browsers either
+  // way - it just means non-JS crawlers see the empty-shell version until
+  // the environment issue is fixed.
+  console.warn('Prerender skipped (build continues without it):', err.message || err)
 })
