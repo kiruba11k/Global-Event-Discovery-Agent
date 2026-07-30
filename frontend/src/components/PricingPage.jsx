@@ -7,6 +7,10 @@
 import '../ranking.css'
 import '../legal.css'
 import { ArrowRight } from 'lucide-react'
+import { usePageSeo } from '../lib/usePageSeo'
+
+const PAGE_TITLE = 'ExpoToFunnel Pricing: Starter, Growth and Full Takeover Packages'
+const PAGE_DESCRIPTION = 'Free ranking of 17,000+ B2B trade shows by ICP density, then paid packages from $4,000 for confirmed qualified meetings, a named ICP account list, and a full event takeover for flagship shows.'
 
 const FAQ = [
   {
@@ -36,6 +40,8 @@ const FAQ = [
 ]
 
 export default function PricingPage({ onScrollToForm }) {
+  usePageSeo(PAGE_TITLE, PAGE_DESCRIPTION, '/pricing')
+
   return (
     <div className="lg-page">
       <div className="lg-hero">

@@ -16,6 +16,7 @@ import { useEffect } from 'react'
 import '../legal.css'
 import '../ranking.css'
 import { FAQ_CATEGORIES, FAQ_FLAT } from '../faqData'
+import { usePageSeo } from '../lib/usePageSeo'
 
 const PAGE_TITLE = 'ExpoToFunnel FAQ: Trade Show Ranking, Meetings, Pricing'
 
@@ -59,30 +60,17 @@ export default function FaqPage({ stats }) {
     'How ExpoToFunnel ranks 17,000+ B2B trade shows, what the free tier includes, how meetings get booked before a show, and what each package costs.'
   )
 
-  // Page-specific title/meta description, restored on unmount so
-  // navigating elsewhere doesn't leave the FAQ title behind.
+  usePageSeo(PAGE_TITLE, PAGE_DESCRIPTION, '/faq')
+
+  // FAQPage JSON-LD, restored on unmount so navigating elsewhere doesn't
+  // leave the FAQ schema behind.
   useEffect(() => {
-    const prevTitle = document.title
-    document.title = PAGE_TITLE
-
-    let metaDesc = document.querySelector('meta[name="description"]')
-    const hadMeta = !!metaDesc
-    const prevDesc = metaDesc?.getAttribute('content') || ''
-    if (!metaDesc) {
-      metaDesc = document.createElement('meta')
-      metaDesc.setAttribute('name', 'description')
-      document.head.appendChild(metaDesc)
-    }
-    metaDesc.setAttribute('content', PAGE_DESCRIPTION)
-
     const script = document.createElement('script')
     script.type = 'application/ld+json'
     script.text = JSON.stringify(buildFaqSchema(eventsCount, countriesCount))
     document.head.appendChild(script)
 
     return () => {
-      document.title = prevTitle
-      if (hadMeta) metaDesc.setAttribute('content', prevDesc)
       document.head.removeChild(script)
     }
   }, [eventsCount, countriesCount])
