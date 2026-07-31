@@ -565,7 +565,7 @@ export default function ShowRankingPage({
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </div>
               <h3 className="rk-gate-title">Shows #4–#6 are one click away</h3>
-              <p className="rk-gate-sub">Enter your work email to unlock the full ranking and a personalised 90-day prep checklist.</p>
+              <p className="rk-gate-sub">Enter your work email to unlock the full ranking and the 90-day executive playbook.</p>
               <div className="rk-gate-form">
                 <input type="email" value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateError('') }}
                   onKeyDown={e => e.key === 'Enter' && handleUnlock()}
@@ -595,11 +595,11 @@ export default function ShowRankingPage({
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
               <div className="rk-dl-body">
-                <div className="rk-dl-tag rk-dl-tag--green">Pre · during · post · 1 page</div>
-                <div className="rk-dl-name">90-day trade show prep checklist</div>
-                <p className="rk-dl-desc">ICP outreach, on-site meeting cadence, and 48-hour post-event follow-up - mapped to your nearest show.</p>
+                <div className="rk-dl-tag rk-dl-tag--green">17-page executive playbook</div>
+                <div className="rk-dl-name">The Expo to Funnel 90-day playbook</div>
+                <p className="rk-dl-desc">How to choose the right show out of 17,000, build a shortlist of buyers worth meeting, fill the calendar before the floor opens, brief every meeting, and stay accountable for pipeline at 30, 60 and 90 days.</p>
               </div>
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-dl-btn rk-dl-btn--green">
+              <a href="/downloads/LeadStrategus-ExpoToFunnel-90-Day-Playbook.pdf" download target="_blank" rel="noopener noreferrer" className="rk-dl-btn rk-dl-btn--green">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download PDF
               </a>
