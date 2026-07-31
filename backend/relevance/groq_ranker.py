@@ -885,16 +885,28 @@ async def rank_with_groq(
             rationale = build_fallback_rationale(event, profile, detail, score, tier)
 
         # Hard persona override — don't trust the LLM's verdict when the
-        # rule-based scorer already found ZERO persona relevance. Matching
-        # specific phrases in the LLM's rationale (_consistent_verdict) is
-        # too fragile — it phrases a mismatch differently every time
-        # ("targets CIOs and not CEOs directly" doesn't match any fixed
-        # phrase list). The scorer's persona_missed flag is the ground
-        # truth: computed once, deterministically, from the same
-        # profile.target_personas the LLM was given. If the profile named
-        # a persona and this event matched none of it, it's a hard SKIP
-        # no matter how favourably the LLM wrote it up.
-        if profile.target_personas and detail.get("persona_missed") and verdict != "SKIP":
+        # rule-based scorer already found ZERO persona relevance AND the
+        # event actually has real audience_personas data confirming that
+        # mismatch. Matching specific phrases in the LLM's rationale
+        # (_consistent_verdict) is too fragile — it phrases a mismatch
+        # differently every time ("targets CIOs and not CEOs directly"
+        # doesn't match any fixed phrase list). The scorer's persona_missed
+        # flag is the ground truth for THAT — computed once, deterministically,
+        # from the same profile.target_personas the LLM was given.
+        #
+        # persona_missed alone is NOT enough to trigger this, though: it's
+        # also true when audience_personas is simply empty (not yet
+        # backfilled for this event), which is not evidence of a bad fit —
+        # same "unknown vs. confirmed wrong" distinction scorer.py's own
+        # PERSONA_UNKNOWN_PENALTY vs PERSONA_MISMATCH_PENALTY already makes
+        # internally. Requiring persona_data_present here mirrors that:
+        # only a CONFIRMED wrong designation forces SKIP, never a blank field.
+        if (
+            profile.target_personas
+            and detail.get("persona_missed")
+            and detail.get("persona_data_present")
+            and verdict != "SKIP"
+        ):
             logger.info(
                 f"Persona hard-override {verdict}→SKIP (rule-based persona miss): "
                 f"'{event.name[:50]}'"

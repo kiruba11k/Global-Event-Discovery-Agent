@@ -804,6 +804,7 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         "persona_matched":   per_matched[:4],
         "persona_score":     per_score,
         "persona_missed":    per_score == 0.0,
+        "persona_data_present": bool((event.audience_personas or "").strip()),
         "geo_matched":       geo_matched,
         "geo_score":         geo_score,
         "geo_missed":        geo_score == 0.0,
