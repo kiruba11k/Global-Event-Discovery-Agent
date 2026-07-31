@@ -246,12 +246,10 @@ async def init_db():
     Idempotent — safe to call on every startup.
     """
     from models.event import Base as EventBase
-    # NOTE: company_profiles and search_submissions are retired — no
-    # longer imported here, so create_all() won't recreate them after
-    # they're dropped. See models/company_profile.py and
-    # models/search_submission.py for why (superseded by
-    # models/analytics.py's analytics_icp_submissions, which captures
-    # the same submission data with normalized, actually-populated columns).
+    # NOTE: company_profiles and search_submissions were retired and their
+    # code deleted entirely — superseded by models/analytics.py's
+    # analytics_icp_submissions, which captures the same submission data
+    # with normalized, actually-populated columns.
     from models.analytics import (  # noqa: registers tables
         AnalyticsEventORM, AnalyticsICPSubmissionORM,
         AnalyticsSearchResultORM, AnalyticsSessionORM,

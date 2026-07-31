@@ -12,7 +12,6 @@
     loading
     onDeeperAnalysis(data)
     showUpgrade
-    companyData
 */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -320,7 +319,6 @@ export default function ICPForm({
   loading       = false,
   onDeeperAnalysis,
   showUpgrade   = false,
-  companyData   = null,
   heroMode      = false,   // ← new: removes card wrapper, flush hero layout
 }) {
   const [buyer,    setBuyer]    = useState('')
@@ -343,7 +341,7 @@ export default function ICPForm({
   const [llmParse, setLlmParse] = useState(null)
   const llmParseTimer = useRef(null)
 
-  const [companyName,    setCompanyName]    = useState(companyData?.company_name || '')
+  const [companyName,    setCompanyName]    = useState('')
   const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
   const [clientRange,    setClientRange]    = useState('')     // client count range
   const [clientNames,   setClientNames]   = useState([])   // array of company name strings
@@ -439,11 +437,6 @@ export default function ICPForm({
     return () => clearTimeout(geoHintTimer.current)
   }, [geos, buyer, effectiveParse])
 
-  useEffect(() => {
-    if (companyData?.email && !email)        setEmail(companyData.email)
-    if (companyData?.company_name && !companyName) setCompanyName(companyData.company_name)
-  }, [companyData])
-
   // Buyer suggestions
   useEffect(() => {
     if (!buyer.trim()) { setBuyerSugs([]); return }
@@ -487,7 +480,7 @@ export default function ICPForm({
     const { date_from, date_to }   = getDefaultDateWindow()
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
-        company_name:           companyData?.company_name || companyName || deriveCompanyNameFromEmail(email),
+        company_name:           companyName || deriveCompanyNameFromEmail(email),
         company_description:    buyer,
         target_industries:      industries.length ? industries : ['Technology'],
         target_personas:        personas,
@@ -506,7 +499,7 @@ export default function ICPForm({
       }
       onSubmit(profile, email)
     }
-  }, [geos, buyer, dealSize, email, diffScore, clientRange, clientNames, clientNameInput, companyName, companyData, onSubmit, effectiveParse])
+  }, [geos, buyer, dealSize, email, diffScore, clientRange, clientNames, clientNameInput, companyName, onSubmit, effectiveParse])
 
   // refocus defaults to true (Enter / comma / Add button - user is adding
   // another name right after). Blur means the user is intentionally moving
@@ -571,7 +564,7 @@ export default function ICPForm({
       : geos
     if (pendingGeo) { setGeos(finalGeos); setGeoSearch('') }
     const profile = {
-      company_name:          companyData?.company_name || companyName || deriveCompanyNameFromEmail(email),
+      company_name:          companyName || deriveCompanyNameFromEmail(email),
       company_description:   buyer,
       target_industries:     industries.length ? industries : ['Technology'],
       target_personas:       personas.length   ? personas   : [],

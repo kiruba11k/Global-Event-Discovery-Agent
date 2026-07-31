@@ -54,8 +54,7 @@ class CompanyContext(BaseModel):
 
 class SearchRequest(BaseModel):
     profile:            ICPProfile
-    company_profile_id: Optional[str]          = None
-    company_context:    Optional[CompanyContext]= None
+    company_context:    Optional[CompanyContext] = None
 
 
 class SearchResponse(BaseModel):

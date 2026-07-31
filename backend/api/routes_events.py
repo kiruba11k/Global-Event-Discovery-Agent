@@ -416,13 +416,6 @@ def _extract_pdf_text(fb):
         return ""
 
 
-# NOTE: POST /company-profile and GET /company-profile/{id} were removed —
-# the company_profiles table stored mostly-empty rows (frontend never
-# actually collects founded_year/location/what_we_do/what_we_need, and
-# no frontend code ever called GET to reload a saved profile). Retired
-# in favor of the analytics_icp_submissions table (models/analytics.py),
-# which captures the real per-submission data that mattered.
-
 # ══════════════════════════════════════════════════════════════════════
 # POST /api/search  —  REAL-TIME PIPELINE
 # ══════════════════════════════════════════════════════════════════════
@@ -430,7 +423,6 @@ def _extract_pdf_text(fb):
 async def _run_search_pipeline(
     profile: ICPProfile,
     company_context: CompanyContext | None,
-    company_profile_id: str | None,
     db: AsyncSession,
 ) -> dict:
     """
@@ -452,9 +444,6 @@ async def _run_search_pipeline(
     )
 
     # ── Company context ─────────────────────────────────────────────
-    # company_profile_id is accepted for backward API compatibility but
-    # no longer resolved — the company_profiles table it pointed at was
-    # retired (see note above the old /company-profile endpoints).
     company_ctx: CompanyContext | None = company_context
 
     # ── Step 1-4: Real-time pipeline ────────────────────────────────
@@ -1066,12 +1055,11 @@ async def _process_search_job(payload: dict) -> dict:
     company_context = (
         CompanyContext(**payload["company_context"]) if payload.get("company_context") else None
     )
-    company_profile_id = payload.get("company_profile_id") or None
-    submission_id       = payload.get("submission_id")
+    submission_id = payload.get("submission_id")
 
     async with AsyncSessionLocal() as db:
         try:
-            result = await _run_search_pipeline(profile, company_context, company_profile_id, db)
+            result = await _run_search_pipeline(profile, company_context, db)
         except Exception:
             if submission_id:
                 async with AsyncSessionLocal() as db_err:
@@ -1141,7 +1129,6 @@ async def search_events(
     payload = {
         "profile":             profile_dict,
         "company_context":     request.company_context.model_dump() if request.company_context else None,
-        "company_profile_id":  request.company_profile_id,
         "submission_id":       submission_id,
     }
 
@@ -1153,7 +1140,7 @@ async def search_events(
         logger.warning("search_queue unavailable (no REDIS_URL) — running search inline")
         try:
             result = await _run_search_pipeline(
-                profile, request.company_context, request.company_profile_id, db,
+                profile, request.company_context, db,
             )
         except Exception as exc:
             await _analytics_track_complete(db, submission_id, "error", {}, error=str(exc))
