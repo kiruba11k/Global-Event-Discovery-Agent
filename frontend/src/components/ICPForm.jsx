@@ -10,8 +10,6 @@
   Other props (unchanged):
     onSubmit(profile, email)
     loading
-    onDeeperAnalysis(data)
-    showUpgrade
 */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -317,8 +315,6 @@ function getDefaultDateWindow() {
 export default function ICPForm({
   onSubmit,
   loading       = false,
-  onDeeperAnalysis,
-  showUpgrade   = false,
   heroMode      = false,   // ← new: removes card wrapper, flush hero layout
 }) {
   const [buyer,    setBuyer]    = useState('')
@@ -346,9 +342,6 @@ export default function ICPForm({
   const [clientRange,    setClientRange]    = useState('')     // client count range
   const [clientNames,   setClientNames]   = useState([])   // array of company name strings
   const [clientNameInput, setClientNameInput] = useState('')
-  const [eventNeeds,  setEventNeeds]  = useState('')
-  const [salesMotion, setSalesMotion] = useState('')
-  const [deckFile,    setDeckFile]    = useState(null)
 
   // ── Geo hint state ─────────────────────────────────────────────
   const [geoHints,     setGeoHints]     = useState({})   // { "Indonesia": {count,status,suggestions} }
@@ -373,12 +366,8 @@ export default function ICPForm({
   const geoOptionList = dbGeoOptions && dbGeoOptions.length
     ? [...dbGeoOptions, 'Global']
     : GEO_OPTIONS
-  const [upgradeOpen, setUpgradeOpen] = useState(false)
-  const [upgradeSubmitted, setUpgradeSubmitted] = useState(false)
-
   const buyerRef         = useRef(null)
   const geoRef           = useRef(null)
-  const fileRef          = useRef(null)
   const clientNameInputRef = useRef(null)
 
   useEffect(() => { setMounted(true) }, [])
@@ -580,13 +569,6 @@ export default function ICPForm({
       email,
     }
     onSubmit && onSubmit(profile, email)
-  }
-
-  const handleUpgradeSubmit = () => {
-    if (!companyName.trim()) return
-    onDeeperAnalysis && onDeeperAnalysis({ company_name: companyName, event_needs: eventNeeds, sales_motion: salesMotion, deck_file: deckFile })
-    setUpgradeSubmitted(true)
-    setUpgradeOpen(false)
   }
 
   // ── In heroMode we render bare fields without the card shell ─────
@@ -1018,75 +1000,6 @@ export default function ICPForm({
     </button>
   )
 
-  // ── Upgrade card (shown after results, regardless of heroMode) ──
-  const upgradeCard = showUpgrade && !upgradeSubmitted && (
-    <div className="icp-upgrade-card" style={{ marginTop: 16 }}>
-      <div className="icp-upgrade-header">
-        <div className="icp-upgrade-icon" aria-hidden="true">✦</div>
-        <div>
-          <div className="icp-upgrade-title">Want a deeper analysis?</div>
-          <div className="icp-upgrade-sub">Upload your company deck and tell us about your specific event needs  -  we'll personalise this further.</div>
-        </div>
-        <button className="icp-upgrade-toggle" onClick={() => setUpgradeOpen(o => !o)} type="button">
-          {upgradeOpen ? 'Close' : 'Get started →'}
-        </button>
-      </div>
-      {upgradeOpen && (
-        <div className="icp-upgrade-body">
-          <div className="icp-field-group" style={{ marginTop: 0 }}>
-            <label className="icp-label" htmlFor="ugrade-name">Company name</label>
-            <input id="ugrade-name" type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Acme Corp" className="icp-input" />
-          </div>
-          <div className="icp-field-group">
-            <label className="icp-label" htmlFor="upgrade-needs">What are you trying to achieve at these events?</label>
-            <textarea id="upgrade-needs" value={eventNeeds} onChange={e => setEventNeeds(e.target.value)} placeholder="e.g. 10 qualified pipeline deals per quarter, brand in Southeast Asia…" className="icp-input icp-textarea" rows={3} />
-          </div>
-          <div className="icp-field-group">
-            <label className="icp-label">Sales motion</label>
-            <div className="icp-motion-grid" role="radiogroup">
-              {[
-                { v: 'outbound',   l: 'Outbound',          s: 'You approach buyers'   },
-                { v: 'inbound',    l: 'Inbound / PLG',      s: 'Buyers come to you'    },
-                { v: 'channel',    l: 'Channel / Partner',  s: 'Via resellers'          },
-                { v: 'enterprise', l: 'Enterprise',         s: 'Long-cycle, multi-stakeholder' },
-              ].map(m => (
-                <button key={m.v} role="radio" aria-checked={salesMotion === m.v} type="button"
-                  className={`icp-motion-option ${salesMotion === m.v ? 'selected' : ''}`}
-                  onClick={() => setSalesMotion(m.v)}>
-                  <span className="icp-motion-label">{m.l}</span>
-                  <span className="icp-motion-sub">{m.s}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="icp-field-group">
-            <label className="icp-label">Company deck (optional)</label>
-            <button type="button" className="icp-upload-btn" onClick={() => fileRef.current?.click()}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              {deckFile ? deckFile.name : 'Upload PDF deck'}
-            </button>
-            <input ref={fileRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setDeckFile(e.target.files?.[0] || null)} />
-          </div>
-          <button type="button" className="icp-upgrade-submit" onClick={handleUpgradeSubmit} disabled={!companyName.trim()}>
-            Personalise my analysis →
-          </button>
-        </div>
-      )}
-    </div>
-  )
-
-  const upgradeSuccess = upgradeSubmitted && (
-    <div className="icp-upgrade-card icp-upgrade-success" style={{ marginTop: 16 }}>
-      <div className="icp-upgrade-icon" aria-hidden="true">✓</div>
-      <div>
-        <div className="icp-upgrade-title">Analysis personalised</div>
-        <div className="icp-upgrade-sub">Your event recommendations have been updated with your company context.</div>
-      </div>
-    </div>
-  )
-
   // ── heroMode: no card wrapper, fields flush in hero ─────────────
   if (heroMode) {
     return (
@@ -1097,8 +1010,6 @@ export default function ICPForm({
         {fields}
         {dateNotice}
         {submitBtn}
-        {upgradeCard}
-        {upgradeSuccess}
       </div>
     )
   }
@@ -1125,8 +1036,6 @@ export default function ICPForm({
         {dateNotice}
         {submitBtn}
       </div>
-      {upgradeCard}
-      {upgradeSuccess}
     </div>
   )
 }

@@ -381,15 +381,6 @@ export default function App() {
     onSearch(updated, userEmail)
   }
 
-  const onDeeperAnalysis = (data) => {
-    if (!lastProfile) return
-    onSearch(
-      { ...lastProfile, company_name: data.company_name || lastProfile.company_name, company_description: data.event_needs || lastProfile.company_description },
-      userEmail
-    )
-    toast.success('Reranking with your company context…')
-  }
-
   const _autoSendReport = async (events, profile, email) => {
     if (!email || !events?.length) return
     if (stats?.resend_enabled === false) {
@@ -557,7 +548,6 @@ export default function App() {
       <FormSection
         onSubmit={onSearch}
         loading={loading}
-        onDeeperAnalysis={onDeeperAnalysis}
         stats={stats}
       />
       <FooterCTA onScrollToForm={scrollToForm} />

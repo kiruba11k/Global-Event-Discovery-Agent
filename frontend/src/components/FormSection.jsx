@@ -3,7 +3,7 @@ import { CheckCircle, AlertCircle } from 'lucide-react'
 import ICPForm from './ICPForm'
 import '../landing.css'
 
-export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats }) {
+export default function FormSection({ onSubmit, loading, stats }) {
   return (
     <section className="ld-form-sect" id="icp-form" aria-labelledby="form-heading">
       <div className="ld-form-wrap">
@@ -41,7 +41,6 @@ export default function FormSection({ onSubmit, loading, onDeeperAnalysis, stats
           <ICPForm
             onSubmit={onSubmit}
             loading={loading}
-            onDeeperAnalysis={onDeeperAnalysis}
             heroMode={true}
           />
         </motion.div>
