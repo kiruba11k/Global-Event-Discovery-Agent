@@ -470,7 +470,6 @@ export default function ICPForm({
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
         company_name:           companyName || deriveCompanyNameFromEmail(email),
-        company_description:    buyer,
         target_industries:      industries.length ? industries : ['Technology'],
         target_personas:        personas,
         target_geographies:     updated,
@@ -554,7 +553,6 @@ export default function ICPForm({
     if (pendingGeo) { setGeos(finalGeos); setGeoSearch('') }
     const profile = {
       company_name:          companyName || deriveCompanyNameFromEmail(email),
-      company_description:   buyer,
       target_industries:     industries.length ? industries : ['Technology'],
       target_personas:       personas.length   ? personas   : [],
       target_geographies:    finalGeos,

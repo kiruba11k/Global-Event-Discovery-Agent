@@ -72,8 +72,7 @@ def _profile(industries, personas=None, desc=""):
         target_personas = personas or []
         target_geographies = ["India"]
         preferred_event_types = ["conference", "trade show", "summit", "expo"]
-        company_description = desc or " ".join(industries)
-        buyer_description = desc or ""
+        buyer_description = desc or " ".join(industries)
         min_attendees = 0
     return P()
 

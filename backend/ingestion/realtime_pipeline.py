@@ -83,7 +83,7 @@ async def fetch_realtime_candidates(
         geographies  = profile.target_geographies   or [],
         personas     = profile.target_personas      or [],
         event_types  = profile.preferred_event_types or [],
-        company_desc = profile.company_description   or "",
+        company_desc = getattr(profile, "buyer_description", "") or "",
         date_from    = date_from,
         date_to      = date_to,
     )

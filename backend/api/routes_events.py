@@ -1353,7 +1353,7 @@ async def geo_hint(
             return 0
 
         mini_profile = _ICP(
-            company_name="", company_description="",
+            company_name="",
             target_industries=ind_list if with_industries else [],
             target_personas=per_list if with_personas else [],
             target_geographies=[geo],

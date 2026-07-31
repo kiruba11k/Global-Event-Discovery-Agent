@@ -398,7 +398,7 @@ export default function App() {
           verdict_notes: e.verdict_notes, est_attendees: e.est_attendees, relevance_score: e.relevance_score,
         })),
         profile: {
-          company_name: profile?.company_name || '', company_description: profile?.company_description || '',
+          company_name: profile?.company_name || '',
           target_industries: profile?.target_industries || [], target_personas: profile?.target_personas || [],
           target_geographies: profile?.target_geographies || [], date_from: profile?.date_from || null, date_to: profile?.date_to || null,
         },
@@ -477,7 +477,6 @@ export default function App() {
           events={allDisplay}
           profile={{
             company_name: lastProfile?.company_name || '',
-            company_description: lastProfile?.company_description || '',
             target_industries: lastProfile?.target_industries || [],
             target_personas: lastProfile?.target_personas || [],
             target_geographies: lastProfile?.target_geographies || [],

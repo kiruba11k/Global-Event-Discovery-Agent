@@ -196,7 +196,6 @@ def build_event_text(event) -> str:
 def build_profile_text(profile) -> str:
     parts = [
         getattr(profile, "buyer_description", "") or "",
-        getattr(profile, "company_description", "") or "",
         " ".join(getattr(profile, "target_industries", []) or []),
         " ".join(getattr(profile, "target_personas", []) or []),
         " ".join(getattr(profile, "extra_keywords", []) or []),

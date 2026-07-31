@@ -63,7 +63,6 @@ _EVENTS = [
 
 class _Prof:
     buyer_description = "CISO at healthcare organisations hospital clinical security"
-    company_description = "we sell security software to healthcare organisations"
     target_industries = ["Healthcare / Medtech"]
     target_personas = ["CISO"]
     extra_keywords = ["hospital", "clinical"]

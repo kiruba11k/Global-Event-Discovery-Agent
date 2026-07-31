@@ -4,7 +4,6 @@ from typing import List, Optional
 
 class ICPProfile(BaseModel):
     company_name:           str
-    company_description:    str
     target_industries:      List[str]       # ["fintech", "healthcare", "logistics"]
     target_personas:        List[str]       # ["CIO", "CTO", "Head of Data"]
     target_geographies:     List[str]       # ["Singapore", "India", "US", "Global"]

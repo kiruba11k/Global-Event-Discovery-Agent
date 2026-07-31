@@ -48,7 +48,6 @@ class EventForReport(BaseModel):
 
 class ProfileSummary(BaseModel):
     company_name:        str = ""
-    company_description: str = ""
     target_industries:   List[str] = []
     target_personas:     List[str] = []
     target_geographies:  List[str] = []

@@ -452,10 +452,7 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
     matched: list[str] = []
 
     # Build a combined ICP text for pass-3 context matching
-    icp_context = " ".join(filter(None, [
-        (profile.company_description or ""),
-        (getattr(profile, "buyer_description", "") or ""),
-    ])).lower()
+    icp_context = (getattr(profile, "buyer_description", "") or "").lower()
 
     for prof_ind in profile.target_industries:
         pi_lower = prof_ind.lower().strip()
