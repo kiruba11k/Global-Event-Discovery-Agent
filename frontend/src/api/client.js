@@ -111,20 +111,6 @@ export const api = {
     throw apiError('Search is taking longer than expected - please try again', 200)
   },
 
-  // ── Company profile ───────────────────────────────────
-  saveCompanyProfile: (formData) =>
-    fetch(`${BASE}/api/company-profile`, { method: 'POST', body: formData })
-      .catch((networkErr) => { throw apiError(networkErr.message || 'Network request failed', undefined) })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }))
-          throw apiError(err.detail || `API error ${res.status}`, res.status)
-        }
-        return res.json()
-      }),
-
-  getCompanyProfile: (id) => request(`/company-profile/${id}`),
-
   // ── Events ────────────────────────────────────────────
   listEvents: (page = 1, limit = 50) =>
     request(`/events?page=${page}&limit=${limit}`),
