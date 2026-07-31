@@ -160,3 +160,28 @@ def test_confirmed_industry_mismatch_is_hard_filtered():
     assert MFG.id not in result_ids, "confirmed industry mismatch must be hard-filtered out"
     assert HEALTH.id in result_ids
     assert unknown_industry_event.id in result_ids, "unknown industry data must NOT be hard-filtered"
+
+
+def test_persona_data_present_flag_distinguishes_unknown_from_confirmed():
+    """detail['persona_data_present'] is what groq_ranker.py's hard SKIP
+    override gates on, in addition to persona_missed - guards against a
+    real regression where a catalog with 0% audience_personas coverage
+    (persona_missed=True for every event, since there's nothing to match)
+    got ALL of its events force-SKIPped, because the override used to key
+    off persona_missed alone with no way to tell 'no data' from 'wrong
+    data'."""
+    prof = _profile(["Manufacturing"], ["CTO"], "CTO at manufacturing companies")
+
+    no_persona_data = Ev("Blank Persona Event", "manufacturing, automation",
+                          "A manufacturing event with no persona data recorded.")
+    no_persona_data.audience_personas = ""
+    _, detail_blank = scorer._rule_score(no_persona_data, prof)
+    assert detail_blank["persona_missed"] is True
+    assert detail_blank["persona_data_present"] is False
+
+    wrong_persona_data = Ev("Wrong Persona Event", "manufacturing, automation",
+                             "A manufacturing event for line supervisors.")
+    wrong_persona_data.audience_personas = "Line Supervisors, Shift Managers"
+    _, detail_wrong = scorer._rule_score(wrong_persona_data, prof)
+    assert detail_wrong["persona_missed"] is True
+    assert detail_wrong["persona_data_present"] is True
