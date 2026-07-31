@@ -100,7 +100,6 @@ async def create_icp_submission(
         id=submission_id, session_id=_norm_sid(session_id), ip_address=ip_address,
         company_name=profile.get("company_name") or "",
         email=profile.get("email") or "",
-        company_description=profile.get("company_description") or "",
         buyer_description=profile.get("buyer_description") or "",
         target_industries=", ".join(profile.get("target_industries") or []),
         target_personas=", ".join(profile.get("target_personas") or []),

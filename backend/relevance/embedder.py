@@ -81,7 +81,7 @@ def build_profile_text(profile) -> str:
     """Combine ICP profile fields into text for embedding."""
     parts = [
         profile.company_name,
-        profile.company_description,
+        getattr(profile, "buyer_description", "") or "",
         " ".join(profile.target_industries),
         " ".join(profile.target_personas),
         " ".join(profile.target_geographies),

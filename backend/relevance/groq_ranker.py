@@ -453,7 +453,7 @@ CLIENT ICP:
   Target buyer roles: {', '.join(profile.target_personas)}
   Focus geographies: {', '.join(profile.target_geographies)}
   Preferred formats: {', '.join(profile.preferred_event_types)}
-  Company description: {profile.company_description[:300]}
+  Company description: {getattr(profile, 'buyer_description', '')[:300]}
 {company_block}
 
 VERDICT DEFINITIONS — buyer role match is the PRIMARY gate, not a tiebreaker:
@@ -533,7 +533,7 @@ def _event_dict(
 def _profile_dict(profile: ICPProfile) -> dict:
     return {
         "company_name":       profile.company_name,
-        "what_we_do":         profile.company_description[:400],
+        "what_we_do":         getattr(profile, "buyer_description", "")[:400],
         "target_industries":  profile.target_industries,
         "target_buyer_roles": profile.target_personas,
         "target_locations":   profile.target_geographies,
