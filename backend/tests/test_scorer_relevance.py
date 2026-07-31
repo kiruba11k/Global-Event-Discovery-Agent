@@ -143,3 +143,20 @@ def test_primary_industry_match_outscores_secondary_only():
     assert "Healthcare / Medtech" in p_matched
     assert s_matched == ["Technology"]
     assert p_score > s_score
+
+
+def test_confirmed_industry_mismatch_is_hard_filtered():
+    """score_candidates() must drop events with real, populated industry
+    data that confirms no match — not just demote them — mirroring the
+    existing strict_geo hard filter. An event with NO industry data at
+    all should still pass through (soft-penalized inside _rule_score,
+    not hard-filtered), since missing data isn't evidence of a bad fit."""
+    prof = _profile(["Healthcare / Medtech"], ["CISO"], "CISO at healthcare organisations")
+    unknown_industry_event = Ev(
+        "Mystery Event 2026", "", "No industry tags recorded for this one.", "Pune",
+    )
+    results = scorer.score_candidates([MFG, HEALTH, unknown_industry_event], prof, {})
+    result_ids = [ev.id for ev, _, _, _ in results]
+    assert MFG.id not in result_ids, "confirmed industry mismatch must be hard-filtered out"
+    assert HEALTH.id in result_ids
+    assert unknown_industry_event.id in result_ids, "unknown industry data must NOT be hard-filtered"

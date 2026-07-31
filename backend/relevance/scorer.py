@@ -941,10 +941,34 @@ def score_candidates(
         for g in profile.target_geographies
     )
 
+    # Industry is now ALSO a hard filter, mirroring strict_geo above — but
+    # only for a CONFIRMED mismatch (the event has real industry data and
+    # none of it matches), never for "unknown" (no industry data at all).
+    # related_industries/industry_tags are ~100% populated in the current
+    # catalog, so a confirmed mismatch here is a strong, trustworthy signal
+    # — unlike persona/attendees/category, which are sparse enough that a
+    # miss there could just mean "not backfilled yet," not "wrong event."
+    strict_industry = bool(profile.target_industries)
+
     for event in events:
         if strict_geo:
             geo_score, geo_matched = _score_geo(event, profile)
             if geo_score == 0.0 and geo_matched not in ("Global", "Virtual/Hybrid"):
+                continue
+
+        if strict_industry:
+            ind_score, _ = _score_industry(event, profile)
+            # Only trust related_industries/industry_tags as "confirmed
+            # data" for this hard filter — NOT the category fallback
+            # _get_industry() also checks, since category answers "what
+            # kind of event" (conference/trade show/...), not "what
+            # industry," and shouldn't be strong enough evidence to
+            # hard-exclude an event on its own.
+            has_industry_data = bool(
+                (getattr(event, "related_industries", None) or "").strip()
+                or (event.industry_tags or "").strip()
+            )
+            if ind_score == 0.0 and has_industry_data:
                 continue
 
         cosine = cosine_scores.get(event.id, 0.0)
