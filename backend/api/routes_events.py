@@ -1360,7 +1360,22 @@ async def geo_hint(
             preferred_event_types=[],
         )
         scored = _score_cands(rows, mini_profile, {})
-        relevant = sum(1 for _, _, tier, _ in scored if tier in (_GO, _CONSIDER))
+        # Mirror groq_ranker.py's hard persona override exactly: a CONFIRMED
+        # persona mismatch (real audience_personas data that names a
+        # different role) force-SKIPs an event in the real pipeline, after
+        # this hint's rule/cosine tiering has already run. Without applying
+        # the same check here, this hint counts events as "relevant" that
+        # the actual search will drop at that later stage — the gap that
+        # caused "Singapore - 3 events match" to become 0 real results.
+        def _survives_persona_override(detail: dict) -> bool:
+            if not (with_personas and per_list):
+                return True
+            return not (detail.get("persona_missed") and detail.get("persona_data_present"))
+
+        relevant = sum(
+            1 for _, _, tier, detail in scored
+            if tier in (_GO, _CONSIDER) and _survives_persona_override(detail)
+        )
         return min(relevant, RESULT_LIMIT)
 
     async def _top_available_regions(exclude_geos: list[str], limit: int = 5) -> list[dict]:
