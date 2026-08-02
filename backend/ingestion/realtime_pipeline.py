@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from db.crud import batch_upsert_events, _expand_industry_terms   # ← fixed
 from ingestion.icp_query_builder import build_queries
+from relevance.geo_aliases import expand_geo
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
 from ingestion.ita_trade_events import run_ita_queries
@@ -260,13 +261,23 @@ async def fetch_realtime_candidates(
     )
     geo_filters = []
     if not is_global and profile.target_geographies:
+        # Expand each typed geo through the same alias table geo-hint and
+        # the scorer use (relevance/geo_aliases.py) — without this, an
+        # event stored under an alias spelling ("United States of America")
+        # never enters this candidate query for a form input of "USA",
+        # even though geo-hint counted it as a GO/CONSIDER match and
+        # promised it in the results.
+        geo_parts = []
         for geo in profile.target_geographies:
-            for part in [geo] + (geo.split(" - ") if " - " in geo else []):
-                part = part.strip()
-                if len(part) > 1:
-                    geo_filters.append(EventORM.country.ilike(f"%{part}%"))
-                    geo_filters.append(EventORM.city.ilike(f"%{part}%"))
-                    geo_filters.append(EventORM.event_cities.ilike(f"%{part}%"))
+            raw_parts = [geo] + (geo.split(" - ") if " - " in geo else [])
+            for part in raw_parts:
+                geo_parts.extend(expand_geo(part.strip()))
+        geo_parts = list(dict.fromkeys(geo_parts))
+        for part in geo_parts:
+            if len(part) > 1:
+                geo_filters.append(EventORM.country.ilike(f"%{part}%"))
+                geo_filters.append(EventORM.city.ilike(f"%{part}%"))
+                geo_filters.append(EventORM.event_cities.ilike(f"%{part}%"))
         if geo_filters:
             stmt = stmt.where(or_(*geo_filters))
 
