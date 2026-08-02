@@ -726,11 +726,17 @@ PERSONA_MISMATCH_PENALTY = 0.15
 # "No persona data at all" is NOT the same as "persona data exists and
 # it's the wrong one" — many events (especially not yet backfilled from
 # a curated CSV, see the "Designations attending" column) simply have an
-# empty audience_personas field, not a confirmed-wrong one. Crushing
-# those as hard as a real mismatch throws away events that may well be
-# relevant — the semantic/cosine score (built from whatever text does
-# exist) is a better signal here than a rule that has nothing to check
-# against. Genuinely wrong persona data still gets the harsh penalty above.
+# empty audience_personas field, not a confirmed-wrong one. Genuinely
+# wrong persona data still gets the harsh penalty above.
+#
+# SUPERSEDED: this used to be a flat multiplier applied to the "no data"
+# case, same as the real-mismatch case just softer. Now that case doesn't
+# get penalized at all — _rule_score redistributes persona's 0.25 weight
+# into industry/geography instead, since a flat penalty applied to EVERY
+# event in a catalog with near-zero persona coverage was uniform (not
+# biased) but pure wasted weight, needlessly deflating every score by the
+# same amount rather than actually differentiating anything. Kept here,
+# unused, as a record of the prior approach.
 PERSONA_UNKNOWN_PENALTY = 0.55
 
 # Geography is SECONDARY, a backfill preference once designation is
@@ -776,21 +782,36 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
     type_score              = _score_type(event, profile)
     att_score, att_tier     = _score_attendees(event, profile)
 
+    persona_data_present = bool((event.audience_personas or "").strip())
+
+    # When the event has no persona data at all, there's nothing to score
+    # on that dimension - redistribute persona's 0.25 weight into industry
+    # and geography (the two consistently-populated real signals in the
+    # current catalog) instead of scoring persona as 0 and applying a flat
+    # PERSONA_UNKNOWN_PENALTY multiplier to the whole total. The old
+    # approach meant every event in a catalog with 0% persona coverage got
+    # the exact same -45% haircut regardless of how well it actually
+    # matched - uniform, so not biased, but pure wasted weight and a
+    # needlessly deflated score. Redistributed proportionally to each
+    # dimension's own weight share (0.35 / 0.22) so the industry-vs-geo
+    # balance is preserved, just scaled up to fill the freed 0.25.
+    if not persona_data_present:
+        REDISTRIBUTE_FACTOR = 1 + (0.25 / (0.35 + 0.22))  # ≈ 1.4386
+        ind_score = round(ind_score * REDISTRIBUTE_FACTOR, 4)
+        geo_score = round(geo_score * REDISTRIBUTE_FACTOR, 4)
+        per_score = 0.0
+        per_matched = []
+
     total = round(
         ind_score + per_score + geo_score + type_score + att_score,
         4
     )
-    # Persona is the dominant gate — apply first, and only when the
-    # profile actually named a persona (an empty target_personas list
-    # means "any buyer," per_score is 0.0 with nothing to mismatch).
-    # Distinguish "no persona data to check" (event.audience_personas
-    # empty — lighter penalty, let semantic score carry more weight)
-    # from "persona data exists and it's a different role" (harsh
-    # penalty — this event told us who attends, and it isn't who the
-    # profile wants).
-    if profile.target_personas and per_score == 0.0:
-        penalty = PERSONA_MISMATCH_PENALTY if (event.audience_personas or "").strip() else PERSONA_UNKNOWN_PENALTY
-        total = round(total * penalty, 4)
+    # Persona mismatch penalty only applies to a CONFIRMED wrong
+    # designation now (event.audience_personas is populated and named a
+    # different role) - the "no data at all" case is already handled above
+    # via redistribution, not a penalty multiplier.
+    if profile.target_personas and per_score == 0.0 and persona_data_present:
+        total = round(total * PERSONA_MISMATCH_PENALTY, 4)
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
         total = round(total * GEO_MISMATCH_PENALTY, 4)
     if profile.target_industries and ind_score == 0.0:
@@ -804,7 +825,7 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         "persona_matched":   per_matched[:4],
         "persona_score":     per_score,
         "persona_missed":    per_score == 0.0,
-        "persona_data_present": bool((event.audience_personas or "").strip()),
+        "persona_data_present": persona_data_present,
         "geo_matched":       geo_matched,
         "geo_score":         geo_score,
         "geo_missed":        geo_score == 0.0,
