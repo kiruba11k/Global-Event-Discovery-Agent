@@ -24,6 +24,17 @@ One-time cleanup for a merged events CSV before it's loaded into the
      empty, using an existing column the scorer/embedder already read
      rather than inventing a new schema field for a sparsely-populated
      column.
+  6. `city` repaired from `event_cities` (format "City, ST (Country)"
+     or "City (Country)") for rows (~14.6% of the catalog) where the
+     raw `city` column was already corrupted upstream — truncated at a
+     multi-byte UTF-8 boundary ("Angoulme (France)" -> city "me"), a
+     bare US state abbreviation ("Chicago, IL (USA)" -> city "IL"), or
+     a stray description fragment. This corruption predates this
+     script; `event_cities` still carries the intact value in almost
+     every case, so it's used to rebuild `city` rather than trying to
+     repair the truncated string itself. Left untouched when
+     `event_cities` is blank (nothing to rebuild from) or its parsed
+     city is empty.
 
 No existing EventORM columns are renamed or removed — every field in
 the model (venue_name, ticket_price_usd, sponsors, etc.) is still
@@ -97,6 +108,15 @@ def strip_replacement_chars(value: str) -> str:
     return value.replace("�", "").strip()
 
 
+def derive_city(event_cities: str) -> str:
+    """Pull the city out of an "City, ST (Country)" / "City (Country)"
+    value. Used to rebuild `city` where it was corrupted upstream."""
+    if not event_cities or not isinstance(event_cities, str):
+        return ""
+    city = event_cities.split("(")[0].split(",")[0].strip()
+    return strip_replacement_chars(city)
+
+
 def clean(input_path: str, output_path: str) -> None:
     df = pd.read_csv(input_path, dtype=str, keep_default_na=False)
 
@@ -107,6 +127,11 @@ def clean(input_path: str, output_path: str) -> None:
     # Dedupe: same name + start_date is the same event listed twice.
     df = df.drop_duplicates(subset=["name", "start_date"], keep="first")
     deduped = before - len(df)
+
+    fixed_city = df["event_cities"].map(derive_city)
+    repaired = (fixed_city != "") & (fixed_city != df["city"])
+    df.loc[repaired, "city"] = fixed_city[repaired]
+    city_repairs = int(repaired.sum())
 
     df["est_attendees"] = df["est_attendees"].map(extract_number)
     df["exhibitor_count"] = df["exhibitor_count"].map(extract_number)
@@ -132,6 +157,7 @@ def clean(input_path: str, output_path: str) -> None:
     print(f"rows in:            {before}")
     print(f"duplicates dropped: {deduped}")
     print(f"rows out:           {len(df)}")
+    print(f"city values repaired from event_cities: {city_repairs} ({city_repairs/len(df)*100:.1f}%)")
     print(f"real numeric est_attendees: {numeric_attendees} ({numeric_attendees/len(df)*100:.1f}%)")
     print(f"category derived for:      {categorized} ({categorized/len(df)*100:.1f}%)")
     print(f"written to: {output_path}")
