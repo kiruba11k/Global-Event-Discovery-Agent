@@ -972,13 +972,27 @@ def score_candidates(
     # miss there could just mean "not backfilled yet," not "wrong event."
     strict_industry = bool(profile.target_industries)
 
+    # A pgvector semantic-recall candidate was pulled in specifically
+    # because its embedding is topically close to the ICP profile despite
+    # not sharing literal industry-tag keywords (see routes_events.py's
+    # recall cutoff of cos >= 0.60) — the whole point of semantic recall
+    # is to catch fits that keyword/taxonomy matching misses. Applying the
+    # keyword-only industry hard filter to those candidates unconditionally
+    # threw them straight back out, silently discarding every semantic
+    # recall the moment it reached scoring. A strong cosine score is
+    # treated as its own confirmation of industry fit here, on par with a
+    # literal keyword match.
+    SEMANTIC_INDUSTRY_OVERRIDE = 0.60
+
     for event in events:
+        cosine = cosine_scores.get(event.id, 0.0)
+
         if strict_geo:
             geo_score, geo_matched = _score_geo(event, profile)
             if geo_score == 0.0 and geo_matched not in ("Global", "Virtual/Hybrid"):
                 continue
 
-        if strict_industry:
+        if strict_industry and cosine < SEMANTIC_INDUSTRY_OVERRIDE:
             ind_score, _ = _score_industry(event, profile)
             # Only trust related_industries/industry_tags as "confirmed
             # data" for this hard filter — NOT the category fallback
@@ -993,7 +1007,6 @@ def score_candidates(
             if ind_score == 0.0 and has_industry_data:
                 continue
 
-        cosine = cosine_scores.get(event.id, 0.0)
         rule, detail = _rule_score(event, profile)
 
         hybrid = (

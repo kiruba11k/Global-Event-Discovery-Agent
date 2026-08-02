@@ -162,6 +162,24 @@ def test_confirmed_industry_mismatch_is_hard_filtered():
     assert unknown_industry_event.id in result_ids, "unknown industry data must NOT be hard-filtered"
 
 
+def test_strong_semantic_recall_survives_industry_hard_filter():
+    """A pgvector semantic-recall candidate (high cosine, no literal
+    industry-tag overlap) must NOT be hard-filtered out - that would
+    silently discard every semantic recall the instant it reaches
+    scoring, defeating the reason it was recalled in the first place."""
+    prof = _profile(["Fintech"])
+    semantic_only_event = MFG  # tagged "manufacturing" - zero keyword overlap with Fintech
+    results_no_cosine = scorer.score_candidates([semantic_only_event], prof, {})
+    assert semantic_only_event.id not in [ev.id for ev, _, _, _ in results_no_cosine], \
+        "sanity check: without a strong cosine score this must still be hard-filtered"
+
+    results_with_cosine = scorer.score_candidates(
+        [semantic_only_event], prof, {semantic_only_event.id: 0.75}
+    )
+    assert semantic_only_event.id in [ev.id for ev, _, _, _ in results_with_cosine], \
+        "a strong cosine score must override the keyword-only industry hard filter"
+
+
 def test_persona_data_present_flag_distinguishes_unknown_from_confirmed():
     """detail['persona_data_present'] is what groq_ranker.py's hard SKIP
     override gates on, in addition to persona_missed - guards against a
