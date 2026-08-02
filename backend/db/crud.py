@@ -12,6 +12,7 @@ Key fixes:
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import json as _json
+import re
 import uuid
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
@@ -248,6 +249,23 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
     Given a list of profile industry names, return a deduplicated list of
     search terms (each used in ILIKE) that covers the EventsEye taxonomy.
     Uses prefix-stem matching so "financial" activates "finance" synonyms.
+
+    Two known bug patterns fixed here (2026-08):
+      1. Naive substring matching let a short group key match INSIDE an
+         unrelated word - e.g. key "tech" is a literal substring of
+         "fintech", so a "Fintech" profile wrongly activated the generic
+         "tech"/"technology" group (pulling in noise like "iot", "smart")
+         while never activating "finance"/"banking"/"insurance". Fixed with
+         a word-boundary regex so a key only matches a whole word/phrase.
+      2. The synonym table is one-directional: "finance"/"banking"/
+         "insurance" all list "fintech" as one of THEIR synonyms, but the
+         "fintech" group's own synonym list never points back at them - so
+         a DB event tagged "Finance - Banking - Insurance" (a real, already-
+         ingested row) was silently excluded from a "Fintech" search's
+         SQL candidate query, never even reaching the scorer. Fixed by
+         also activating any group whose synonym list contains one of the
+         input's own tokens verbatim (a reverse lookup), not just groups
+         whose key text matches the input.
     """
     terms: list[str] = []
     seen:  set[str]  = set()
@@ -258,6 +276,9 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
             seen.add(t)
             terms.append(t)
 
+    def _word_match(needle: str, haystack: str) -> bool:
+        return re.search(rf"\b{re.escape(needle)}\b", haystack) is not None
+
     for ind in industries:
         _add(ind)  # always include the raw profile value
         ind_lower = ind.lower().strip()
@@ -265,15 +286,27 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
         ind_tokens = [w for w in ind_lower.replace("/", " ").replace("-", " ").split() if len(w) > 2]
         for token in ind_tokens:
             _add(token)
-        # Match taxonomy synonyms by exact key or prefix-stem overlap
+
+        activated_keys: set[str] = set()
         for key, synonyms in _INDUSTRY_SYNONYMS:
-            # Check if profile industry activates this synonym group
-            key_match = (
-                key in ind_lower or
-                ind_lower in key or
+            # Forward match: profile industry names this taxonomy group,
+            # as a whole word/phrase (not a random substring), or via
+            # prefix-stem overlap ("financial" -> "finance").
+            forward_match = (
+                _word_match(key, ind_lower) or
+                _word_match(ind_lower, key) or
                 any(t in key or key.startswith(t[:min(len(t), 6)]) for t in ind_tokens if len(t) >= 4)
             )
-            if key_match:
+            # Reverse match: this group's own synonym list already claims
+            # the profile's exact token as a match (e.g. "finance" lists
+            # "fintech") - so a "Fintech" input should activate "finance"
+            # too, not just the other way around.
+            reverse_match = any(tok in synonyms for tok in ind_tokens)
+            if forward_match or reverse_match:
+                activated_keys.add(key)
+
+        for key, synonyms in _INDUSTRY_SYNONYMS:
+            if key in activated_keys:
                 for syn in synonyms:
                     _add(syn)
 
