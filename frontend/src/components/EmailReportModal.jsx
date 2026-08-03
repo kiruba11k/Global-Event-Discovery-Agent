@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Mail, Send, CheckCircle, AlertCircle, Loader } from 'lucide-react'
+import { pushEvent } from '../lib/gtm'
 
 export default function EmailReportModal({
   isOpen, onClose, events, profile, dealSizeCategory,
@@ -37,6 +38,7 @@ export default function EmailReportModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Failed to send report')
       setStatus('success')
+      pushEvent('report_download', { deal_size_category: dealSizeCategory || 'medium', source: 'modal' })
     } catch (err) {
       setStatus('error')
       setErrMsg(err.message || 'Something went wrong. Please try again.')

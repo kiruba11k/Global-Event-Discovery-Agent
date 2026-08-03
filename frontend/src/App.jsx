@@ -31,6 +31,7 @@ import ThankYouPage      from './components/ThankYouPage'
 import SampleReport      from './components/SampleReport'
 import CookieBanner      from './components/CookieBanner'
 import { api }           from './api/client'
+import { initGTM, pushEvent } from './lib/gtm'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
 import './App.css'
@@ -156,6 +157,7 @@ function FooterCTA({ onScrollToForm }) {
             href="https://leadstrategus.com/contact/"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => pushEvent('demo_click', { location: 'footer_cta' })}
           >
             Book a demo
           </a>
@@ -254,6 +256,14 @@ export default function App() {
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
+  // Google Tag Manager - no-op if VITE_GTM_ID isn't set (see lib/gtm.js).
+  // Actual GA4/tag configuration lives entirely in the GTM dashboard once
+  // a container is created; this just loads the container + fires a
+  // virtual pageview on every client-side route change (goTo() below),
+  // since GTM's own history-change trigger doesn't see this app's
+  // pushState-based router by default.
+  useEffect(() => { initGTM() }, [])
+
   // Browser back/forward between the static pages (privacy/terms/pricing)
   // and home - goTo() already updates `screen` on click-through navigation,
   // this covers the back button actually returning to the previous one.
@@ -305,6 +315,11 @@ export default function App() {
     setScreen(s)
     window.scrollTo({ top: 0, behavior: 'instant' })
     try { window.history.pushState({}, '', url) } catch (_) {}
+    // Virtual pageview - GTM's built-in History Change trigger doesn't
+    // see pushState calls from outside its own listener setup, so this
+    // app has to announce route changes itself for a GA4 page_view tag
+    // (or any other page-scoped tag) to fire on client-side navigation.
+    pushEvent('virtual_page_view', { page_path: url })
   }
 
   const scrollToForm = () => {
@@ -422,6 +437,7 @@ export default function App() {
         deal_size_category: dealSizeCategory || 'medium',
       })
       setReportSent(true)
+      pushEvent('report_download', { deal_size_category: dealSizeCategory || 'medium' })
       toast.success(`📧 Report emailed to ${email}`, { duration: 6000 })
     } catch (err) {
       const msg = err.message || ''

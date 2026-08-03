@@ -4,6 +4,7 @@ import {
   TrendingUp, Phone, Users, CalendarCheck, ClipboardList,
   Headphones, Mail, AlertTriangle, Info,
 } from 'lucide-react'
+import { pushEvent } from '../lib/gtm'
 
 /* ═══════════════════════════════════════════════════════════
    PACKAGE CATALOG - USD
@@ -181,10 +182,10 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
       <PricingDisclaimer dealSizeCategory={category} />
 
       <div className="pc-cta-row" style={{ marginTop: 14 }}>
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta">
+        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'get_a_free_quote' })}>
           <Phone size={11} /> Get a Free Quote
         </a>
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'book_a_demo' })}>
           Book a Demo
         </a>
       </div>
@@ -475,10 +476,10 @@ export default function EventTable({ events, dealSizeCategory }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" style={{ fontSize: 11 }}>
+            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" style={{ fontSize: 11 }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'get_a_free_quote' })}>
               <Phone size={10} /> Get a Free Quote
             </a>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'book_a_demo' })}>
               Book a Demo
             </a>
           </div>
