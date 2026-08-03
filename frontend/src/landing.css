@@ -770,6 +770,14 @@
   font-size: 18px;
   color: var(--paper);
 }
+.ld-footer-powered-by {
+  text-decoration: none;
+  transition: color .15s;
+}
+.ld-footer-powered-by:hover {
+  color: var(--c-find, #0E7C6B);
+  text-decoration: underline;
+}
 .ld-footer-tagline {
   font-size: 12.5px;
   color: rgba(251,247,240,.5);

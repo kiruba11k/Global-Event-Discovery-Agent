@@ -178,9 +178,14 @@ function LandingFooter({ onNavigate }) {
   return (
     <footer className="ld-footer" id="footer">
       <div className="ld-footer-inner">
-        <div className="ld-footer-logo">
-          LeadStrategus
-        </div>
+        <a
+          className="ld-footer-logo ld-footer-powered-by"
+          href="https://leadstrategus.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Powered by LeadStrategus
+        </a>
         <div className="ld-footer-tagline">
           Right Show. Booked Meetings that Flow.<br />Real Pipeline Growth.
         </div>
