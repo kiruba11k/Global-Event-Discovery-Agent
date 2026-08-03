@@ -343,6 +343,51 @@ export default function ICPForm({
   const [clientNames,   setClientNames]   = useState([])   // array of company name strings
   const [clientNameInput, setClientNameInput] = useState('')
 
+  // ── Bot protection + consent ─────────────────────────────────────
+  // honeypot: hidden field real users never see/fill; any bot's
+  // autofill script typically fills every input, tripping it.
+  const [honeypot,      setHoneypot]      = useState('')
+  const [captchaToken,  setCaptchaToken]  = useState('')
+  const [consentChecked, setConsentChecked] = useState(false)
+  const turnstileRef = useRef(null)
+  const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
+
+  // Loads the Cloudflare Turnstile widget script once and renders it
+  // into turnstileRef when a site key is configured. No site key → the
+  // widget is skipped entirely and the backend fails open (see
+  // backend/api/bot_protection.py), so the form still works before
+  // Turnstile is provisioned.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return
+    window.__onTurnstileVerified = (token) => setCaptchaToken(token)
+    window.__onTurnstileExpired = () => setCaptchaToken('')
+
+    const renderWidget = () => {
+      if (window.turnstile && turnstileRef.current && !turnstileRef.current.dataset.rendered) {
+        window.turnstile.render(turnstileRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: '__onTurnstileVerified',
+          'expired-callback': '__onTurnstileExpired',
+        })
+        turnstileRef.current.dataset.rendered = 'true'
+      }
+    }
+
+    if (window.turnstile) {
+      renderWidget()
+    } else if (!document.getElementById('turnstile-script')) {
+      const s = document.createElement('script')
+      s.id = 'turnstile-script'
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+      s.async = true
+      s.defer = true
+      s.onload = renderWidget
+      document.body.appendChild(s)
+    } else {
+      document.getElementById('turnstile-script').addEventListener('load', renderWidget)
+    }
+  }, [TURNSTILE_SITE_KEY])
+
   // ── Geo hint state ─────────────────────────────────────────────
   const [geoHints,     setGeoHints]     = useState({})   // { "Indonesia": {count,status,suggestions} }
   const [geoHintLoad,  setGeoHintLoad]  = useState(false)
@@ -484,6 +529,9 @@ export default function ICPForm({
           ? [...clientNames, clientNameInput.trim()]
           : clientNames,
         email,
+        captcha_token:          captchaToken,
+        honeypot,
+        consent:                consentChecked,
       }
       onSubmit(profile, email)
     }
@@ -515,6 +563,8 @@ export default function ICPForm({
     if (!email.trim())     e.email = 'Work email required'
     else if (!email.includes('@')) e.email = 'Enter a valid email address'
     else if (isFreeEmailDomain(email)) e.email = 'Please use your company work email, not a personal address (e.g. Gmail, Yahoo)'
+    if (!consentChecked) e.consent = 'Please agree to the terms to continue'
+    if (TURNSTILE_SITE_KEY && !captchaToken) e.captcha = 'Please complete the verification check'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -565,7 +615,13 @@ export default function ICPForm({
       client_count_range:   clientRange || "11-50",
       client_names:         finalClientNames,
       email,
+      // Bot protection + consent — read by App.jsx::onSearch and sent as
+      // top-level fields on the /api/search request (see api/client.js).
+      captcha_token:        captchaToken,
+      honeypot,
+      consent:              consentChecked,
     }
+    api.submitConsent('icp_form', true)
     onSubmit && onSubmit(profile, email)
   }
 
@@ -964,6 +1020,45 @@ export default function ICPForm({
         </div>
         {errors.email && <p className="icp-error">{errors.email}</p>}
         <p className="icp-privacy">🔒 No spam. Your email is only used to send the event report.</p>
+      </div>
+
+      {/* Honeypot - hidden from real users, only a bot's autofill fills this */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', height: 0, width: 0, overflow: 'hidden' }} aria-hidden="true">
+        <label htmlFor="icp-website">Website</label>
+        <input
+          id="icp-website"
+          name="website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          value={honeypot}
+          onChange={e => setHoneypot(e.target.value)}
+        />
+      </div>
+
+      {/* CAPTCHA - Cloudflare Turnstile (skipped when VITE_TURNSTILE_SITE_KEY isn't set) */}
+      {TURNSTILE_SITE_KEY && (
+        <div className="icp-field-group">
+          <div ref={turnstileRef} className="icp-turnstile" />
+          {errors.captcha && <p className="icp-error">{errors.captcha}</p>}
+        </div>
+      )}
+
+      {/* Form consent - required checkbox */}
+      <div className="icp-field-group">
+        <label className="icp-consent-label" htmlFor="icp-consent">
+          <input
+            id="icp-consent"
+            type="checkbox"
+            checked={consentChecked}
+            onChange={e => { setConsentChecked(e.target.checked); if (errors.consent) setErrors(p => ({ ...p, consent: '' })) }}
+          />
+          <span>
+            I agree to be contacted about my results and accept the{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.<span className="icp-required">*</span>
+          </span>
+        </label>
+        {errors.consent && <p className="icp-error">{errors.consent}</p>}
       </div>
 
     </div>

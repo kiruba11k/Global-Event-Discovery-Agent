@@ -108,6 +108,14 @@ try:
 except ImportError as e:
     logger.warning(f"Analytics routes not loaded: {e}")
 
+# Consent: cookie banner + form-consent recording
+try:
+    from api.routes_consent import router as consent_router
+    app.include_router(consent_router, prefix="/api", tags=["consent"])
+    logger.info("Consent routes mounted at /api/consent")
+except ImportError as e:
+    logger.warning(f"Consent routes not loaded: {e}")
+
 
 @app.get("/health", tags=["health"])
 async def health():

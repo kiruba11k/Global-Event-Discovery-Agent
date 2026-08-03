@@ -157,6 +157,15 @@ _NEW_COLUMNS = [
     ("last_verified_at",   "TIMESTAMP", "NOW()"),
 ]
 
+# New columns for analytics_icp_submissions — same idempotent
+# ADD COLUMN IF NOT EXISTS pattern as _NEW_COLUMNS above, needed because
+# that table already exists in production (create_all only creates
+# brand-new tables, it never alters an existing one).
+_ANALYTICS_SUBMISSION_NEW_COLUMNS = [
+    ("captcha_verified", "BOOLEAN", "FALSE"),
+    ("consent_given",    "BOOLEAN", "FALSE"),
+]
+
 # (table, column_name) pairs that must be TEXT/VARCHAR, not TIMESTAMP —
 # a Neon CSV-console import can auto-infer "2026-05-01"-style strings as
 # a `timestamp` column, which then breaks every `start_date >= :string`
@@ -198,6 +207,9 @@ async def _add_missing_columns(conn):
     # (table, column_name, sql_type, default_value)
     _TABLE_COLUMNS = [
         ("events", col, typ, dflt) for col, typ, dflt in _NEW_COLUMNS
+    ] + [
+        ("analytics_icp_submissions", col, typ, dflt)
+        for col, typ, dflt in _ANALYTICS_SUBMISSION_NEW_COLUMNS
     ]
 
     if IS_POSTGRES:
@@ -253,6 +265,9 @@ async def init_db():
     from models.analytics import (  # noqa: registers tables
         AnalyticsEventORM, AnalyticsICPSubmissionORM,
         AnalyticsSearchResultORM, AnalyticsSessionORM,
+    )
+    from models.consent import (  # noqa: registers tables
+        BotProtectionEventORM, ConsentRecordORM,
     )
 
     async with engine.begin() as conn:

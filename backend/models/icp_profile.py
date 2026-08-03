@@ -55,6 +55,11 @@ class SearchRequest(BaseModel):
     profile:            ICPProfile
     company_context:    Optional[CompanyContext] = None
 
+    # ── Bot protection / consent (api/bot_protection.py) ──────
+    captcha_token:      str  = ""    # Cloudflare Turnstile response token
+    honeypot:           str  = ""    # hidden field — non-empty means a bot filled it
+    consent:            bool = False # form-consent checkbox (required)
+
 
 class SearchResponse(BaseModel):
     profile_id:  str

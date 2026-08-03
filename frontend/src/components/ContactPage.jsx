@@ -11,6 +11,7 @@
 */
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { api } from '../api/client'
 import '../legal.css'
 import '../icp-form.css'
 import '../ranking.css'
@@ -43,12 +44,13 @@ const SERVICE_OPTIONS = [
   { value: 'sales-enquiry', label: 'Sales enquiry' },
 ]
 
-export default function ContactPage() {
+export default function ContactPage({ onSubmitted }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [service, setService] = useState('')
   const [message, setMessage] = useState('')
   const [linkedin, setLinkedin] = useState('')
+  const [consentChecked, setConsentChecked] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -64,6 +66,7 @@ export default function ContactPage() {
       next.email = 'Please use your corporate email address - personal addresses (Gmail, Yahoo, etc.) are not accepted.'
     }
     if (!message.trim()) next.message = 'Let us know what you are looking for.'
+    if (!consentChecked) next.consent = 'Please agree to the Privacy Policy to continue.'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -96,6 +99,8 @@ export default function ContactPage() {
       if (data.success) {
         setSubmitted(true)
         toast.success('Message sent - we will get back to you soon.')
+        api.submitConsent('contact_form', true)
+        if (onSubmitted) onSubmitted()
       } else {
         toast.error(data.message || 'Something went wrong - please try again.')
       }
@@ -117,7 +122,7 @@ export default function ContactPage() {
         <div className="lg-body" style={{ textAlign: 'center' }}>
           <button className="rk-tier-btn rk-tier-btn--accent" onClick={() => {
             setSubmitted(false)
-            setName(''); setEmail(''); setService(''); setMessage(''); setLinkedin(''); setErrors({})
+            setName(''); setEmail(''); setService(''); setMessage(''); setLinkedin(''); setConsentChecked(false); setErrors({})
           }}>
             Send another message
           </button>
@@ -211,6 +216,22 @@ export default function ContactPage() {
                 value={linkedin}
                 onChange={e => setLinkedin(e.target.value)}
               />
+            </div>
+
+            <div className="icp-field-group" style={{ marginBottom: 18 }}>
+              <label className="icp-consent-label" htmlFor="contact-consent">
+                <input
+                  id="contact-consent"
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={e => { setConsentChecked(e.target.checked); if (errors.consent) setErrors(p => ({ ...p, consent: '' })) }}
+                />
+                <span>
+                  I agree to be contacted about my enquiry and accept the{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.<span className="icp-required">*</span>
+                </span>
+              </label>
+              {errors.consent && <p className="icp-error">{errors.consent}</p>}
             </div>
 
             <button type="submit" className="rk-tier-btn rk-tier-btn--accent" disabled={submitting} style={{ width: '100%' }}>

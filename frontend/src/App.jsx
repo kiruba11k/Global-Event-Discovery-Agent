@@ -27,6 +27,9 @@ import TermsPage         from './components/TermsPage'
 import PricingPage       from './components/PricingPage'
 import FaqPage           from './components/FaqPage'
 import ContactPage       from './components/ContactPage'
+import ThankYouPage      from './components/ThankYouPage'
+import SampleReport      from './components/SampleReport'
+import CookieBanner      from './components/CookieBanner'
 import { api }           from './api/client'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
@@ -216,7 +219,7 @@ function LandingFooter({ onNavigate }) {
 // goTo() already handles it client-side. Ranking/deep-dive screens are
 // intentionally excluded: they depend on in-memory search results that
 // don't exist on a cold load, so there's nothing valid to restore there.
-const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricing': 'pricing', '/faq': 'faq', '/contact': 'contact' }
+const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricing': 'pricing', '/faq': 'faq', '/contact': 'contact', '/thank-you': 'thank-you' }
 
 function screenFromPath(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -328,7 +331,16 @@ export default function App() {
     setSuggestedGeos([])
 
     try {
-      const initial = await api.search({ profile: email ? { ...profile, email } : profile })
+      // captcha_token/honeypot/consent are bot-protection/consent fields
+      // ICPForm.jsx attaches to the profile object - the backend expects
+      // them as siblings of `profile`, not nested inside it.
+      const { captcha_token, honeypot, consent, ...profileFields } = email ? { ...profile, email } : profile
+      const initial = await api.search({
+        profile: profileFields,
+        captcha_token: captcha_token || '',
+        honeypot: honeypot || '',
+        consent: !!consent,
+      })
       // Search queue active (REDIS_URL set on the backend) → poll until
       // done; no queue configured → result is already attached inline.
       const res = initial.status === 'queued'
@@ -445,6 +457,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
+        <CookieBanner />
         {loading && <LoadingOverlay profile={loadingProfile} stats={stats} />}
         <ShowRankingPage
           events={allDisplay}
@@ -496,6 +509,7 @@ export default function App() {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
+        <CookieBanner />
         <ShowDeepDivePage
           event={deepDiveEvent}
           profile={lastProfile}
@@ -509,16 +523,18 @@ export default function App() {
   }
 
   /* ── Screens: Privacy / Terms / Pricing / FAQ / Contact ──────── */
-  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing' || screen === 'faq' || screen === 'contact') {
+  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing' || screen === 'faq' || screen === 'contact' || screen === 'thank-you') {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
+        <CookieBanner />
         <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} onGoHome={() => goTo('home')} />
-        {screen === 'privacy' && <PrivacyPage />}
-        {screen === 'terms'   && <TermsPage />}
-        {screen === 'pricing' && <PricingPage onScrollToForm={scrollToForm} />}
-        {screen === 'faq'     && <FaqPage stats={stats} />}
-        {screen === 'contact' && <ContactPage />}
+        {screen === 'privacy'    && <PrivacyPage />}
+        {screen === 'terms'      && <TermsPage />}
+        {screen === 'pricing'    && <PricingPage onScrollToForm={scrollToForm} />}
+        {screen === 'faq'        && <FaqPage stats={stats} />}
+        {screen === 'contact'    && <ContactPage onSubmitted={() => goTo('thank-you', '/thank-you')} />}
+        {screen === 'thank-you'  && <ThankYouPage onGoHome={() => goTo('home')} onContactAgain={() => goTo('contact', '/contact')} />}
         <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
       </div>
     )
@@ -535,6 +551,7 @@ export default function App() {
           error:   { iconTheme: { primary: '#C93A2B', secondary: '#FFFFFF' } },
         }}
       />
+      <CookieBanner />
 
       <LandingNav onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} onScrollToAnchor={scrollToAnchor} onGoHome={() => goTo('home')} />
       <HeroSection onScrollToForm={scrollToForm} stats={stats} />
@@ -544,6 +561,7 @@ export default function App() {
       <PipelineMachine stats={stats} />
       <PathCards onScrollToForm={scrollToForm} />
       <SocialProof />
+      <SampleReport onScrollToForm={scrollToForm} />
       <FormSection
         onSubmit={onSearch}
         loading={loading}

@@ -428,6 +428,29 @@ legend.icp-label {
   opacity:    .85;
 }
 
+/* ── Consent checkbox + CAPTCHA widget ───────────────────────────── */
+.icp-consent-label {
+  display:     flex;
+  align-items: flex-start;
+  gap:         8px;
+  font-size:   12.5px;
+  line-height: 1.5;
+  color:       var(--ink-soft, #4A5560);
+  cursor:      pointer;
+}
+.icp-consent-label input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.icp-consent-label a {
+  color: var(--c-find, #0E7C6B);
+  text-decoration: underline;
+}
+.icp-turnstile {
+  min-height: 65px;
+}
+
 /* ── Date notice ─────────────────────────────────────────────────── */
 .icp-date-notice {
   display:       flex;

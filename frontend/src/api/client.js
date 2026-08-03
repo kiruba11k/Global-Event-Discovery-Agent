@@ -177,6 +177,14 @@ export const api = {
       }),
     }).catch(() => {}),   // tracking must never surface an error to the UI
 
+  // ── Consent: cookie banner + form consent checkboxes ──
+  // consentType: 'cookie_banner' | 'contact_form' | 'icp_form'
+  submitConsent: (consentType, accepted, categories = []) =>
+    request('/consent', {
+      method: 'POST',
+      body:   JSON.stringify({ consent_type: consentType, accepted, categories, session_id: getSessionId() }),
+    }).catch(() => {}),   // consent logging must never surface an error to the UI
+
   // ── CSV export URL helper ─────────────────────────────
   exportCsvUrl: (profileId) => `${BASE}/api/export/csv?profile_id=${profileId}`,
 }
