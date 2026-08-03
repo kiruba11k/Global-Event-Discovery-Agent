@@ -69,17 +69,30 @@ async function main() {
   const page = await browser.newPage()
 
   for (const route of ROUTES) {
-    await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'networkidle' })
-    // Wait for React to have actually painted content into #root.
-    await page.waitForFunction(() => document.getElementById('root')?.childElementCount > 0)
-    const html = await page.content()
+    try {
+      // 'domcontentloaded', not 'networkidle': the home route now loads a
+      // third-party script (Cloudflare Turnstile, when VITE_TURNSTILE_SITE_KEY
+      // is set) that this sandboxed build browser often can't reach at all -
+      // networkidle would then hang until Playwright's timeout. The explicit
+      // waitForFunction below is what actually guarantees the page is ready
+      // to snapshot; networkidle was never load-bearing for that.
+      await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: 'domcontentloaded', timeout: 15000 })
+      // Wait for React to have actually painted content into #root.
+      await page.waitForFunction(() => document.getElementById('root')?.childElementCount > 0, null, { timeout: 15000 })
+      const html = await page.content()
 
-    const outPath = route === '/'
-      ? join(DIST_DIR, 'index.html')
-      : join(DIST_DIR, route.slice(1), 'index.html')
-    await mkdir(join(outPath, '..'), { recursive: true })
-    await writeFile(outPath, html)
-    console.log(`prerendered ${route} -> ${outPath.replace(DIST_DIR, 'dist')}`)
+      const outPath = route === '/'
+        ? join(DIST_DIR, 'index.html')
+        : join(DIST_DIR, route.slice(1), 'index.html')
+      await mkdir(join(outPath, '..'), { recursive: true })
+      await writeFile(outPath, html)
+      console.log(`prerendered ${route} -> ${outPath.replace(DIST_DIR, 'dist')}`)
+    } catch (err) {
+      // One route failing (e.g. a slow/unreachable third-party script on
+      // just that page) shouldn't cost every other route its prerender -
+      // ship the plain vite-built shell for this route and keep going.
+      console.warn(`prerender skipped for ${route}:`, err.message || err)
+    }
   }
 
   await browser.close()
