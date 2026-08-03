@@ -98,6 +98,10 @@ class AnalyticsICPSubmissionORM(Base):
     go_count                 = Column(Integer, default=0)
     consider_count           = Column(Integer, default=0)
 
+    # ── Bot protection / consent (see api/bot_protection.py) ─────
+    captcha_verified          = Column(Boolean, default=False)
+    consent_given             = Column(Boolean, default=False)
+
 
 class AnalyticsSearchResultORM(Base):
     """One row per event actually shown to a user for a given

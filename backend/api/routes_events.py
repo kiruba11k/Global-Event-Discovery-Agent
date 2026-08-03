@@ -1083,12 +1083,18 @@ async def _process_search_job(payload: dict) -> dict:
 # if REDIS_URL isn't configured — see queueing/search_queue.enqueue().
 # ══════════════════════════════════════════════════════════════════════
 
-async def _analytics_track_start(db: AsyncSession, submission_id: str, session_id: str, ip: str, profile) -> None:
+async def _analytics_track_start(
+    db: AsyncSession, submission_id: str, session_id: str, ip: str, profile,
+    captcha_verified: bool = False, consent_given: bool = False,
+) -> None:
     """Best-effort — analytics is a monitoring concern, never allowed to
     fail or slow down a real search."""
     try:
         from db import analytics_crud as _ac
-        await _ac.create_icp_submission(db, submission_id, session_id, ip, profile.model_dump())
+        row = await _ac.create_icp_submission(db, submission_id, session_id, ip, profile.model_dump())
+        row.captcha_verified = captcha_verified
+        row.consent_given = consent_given
+        await db.commit()
     except Exception as exc:
         logger.debug(f"analytics submission-start skipped: {exc}")
 
@@ -1115,16 +1121,58 @@ async def search_events(
     http_request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from api.rate_limit import enforce_daily_search_limit
+    from api.bot_protection import (
+        check_duplicate_submission, honeypot_triggered, verify_captcha,
+    )
+    from api.rate_limit import client_ip, enforce_daily_search_limit
+    from db import consent_crud as _cc
     from queueing.search_queue import enqueue
 
     profile = request.profile
+    session_id = http_request.headers.get("x-session-id", "")
+    ip_for_bot_check = client_ip(http_request)
+
+    # ── Bot protection: honeypot → CAPTCHA → duplicate-submission ─────
+    # Checked before the rate limiter so a blocked bot never burns a
+    # legitimate daily-limit slot for its (fake) email/device.
+    if honeypot_triggered(request.honeypot):
+        await _cc.record_bot_protection_event(
+            db, session_id, ip_for_bot_check, "", captcha_verified=False,
+            honeypot_triggered=True, duplicate_detected=False, outcome="blocked_honeypot",
+        )
+        raise HTTPException(400, "Submission rejected.")
+
+    captcha_ok = await verify_captcha(request.captcha_token, ip_for_bot_check)
+    if not captcha_ok:
+        await _cc.record_bot_protection_event(
+            db, session_id, ip_for_bot_check, "", captcha_verified=False,
+            honeypot_triggered=False, duplicate_detected=False, outcome="blocked_captcha",
+        )
+        raise HTTPException(400, "CAPTCHA verification failed - please try again.")
+
+    is_duplicate, fingerprint = await check_duplicate_submission(
+        ip_for_bot_check, profile.email or "", profile.company_name or "", profile.buyer_description or "",
+    )
+    if is_duplicate:
+        await _cc.record_bot_protection_event(
+            db, session_id, ip_for_bot_check, fingerprint, captcha_verified=captcha_ok,
+            honeypot_triggered=False, duplicate_detected=True, outcome="blocked_duplicate",
+        )
+        raise HTTPException(429, "This form was already submitted - please wait a moment before trying again.")
+
+    await _cc.record_bot_protection_event(
+        db, session_id, ip_for_bot_check, fingerprint, captcha_verified=captcha_ok,
+        honeypot_triggered=False, duplicate_detected=False, outcome="allowed",
+    )
+
     ip = await enforce_daily_search_limit(http_request, email=profile.email or "")
 
     profile_dict = profile.model_dump()
     submission_id = str(uuid.uuid4())
-    session_id = http_request.headers.get("x-session-id", "")
-    await _analytics_track_start(db, submission_id, session_id, ip, profile)
+    await _analytics_track_start(
+        db, submission_id, session_id, ip, profile,
+        captcha_verified=captcha_ok, consent_given=request.consent,
+    )
 
     payload = {
         "profile":             profile_dict,
