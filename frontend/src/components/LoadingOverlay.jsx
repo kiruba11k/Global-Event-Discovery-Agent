@@ -301,9 +301,7 @@ export default function LoadingOverlay({ profile, stats }) {
               Based on your ICP, deal size and differentiator - we can pre-book meetings at your top event.
             </div>
             <a
-              href="https://leadstrategus.com/contact/"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/contact"
               style={{
                 display:        'inline-flex',
                 alignItems:     'center',
