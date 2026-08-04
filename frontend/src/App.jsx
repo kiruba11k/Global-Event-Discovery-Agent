@@ -155,9 +155,7 @@ function FooterCTA({ onScrollToForm }) {
           </button>
           <a
             className="ds-btn-outline ld-cta-invert-outline"
-            href="https://leadstrategus.com/contact/"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/contact"
             onClick={() => pushEvent('demo_click', { location: 'footer_cta' })}
           >
             Book a demo

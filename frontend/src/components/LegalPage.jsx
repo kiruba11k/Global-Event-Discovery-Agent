@@ -42,7 +42,7 @@ export default function LegalPage({ eyebrow, title, updated, sections, pageTitle
           <strong>Questions about this policy?</strong>
           <p style={{ margin: '8px 0 0', fontSize: 14 }}>
             Reach us at <a href="mailto:kingshuk@leadstrategus.com">kingshuk@leadstrategus.com</a> or through
-            our <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">contact page</a>.
+            our <a href="/contact">contact page</a>.
           </p>
           <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--ink-faint, #6B7680)' }}>
             <strong>LeadStrategus Private Limited</strong><br />

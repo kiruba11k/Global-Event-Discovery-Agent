@@ -84,7 +84,7 @@ export default function FaqPage({ stats }) {
           {live(`Answers to what people ask us most: how we rank 17,000+ B2B trade shows, what the free
           tier actually includes, how meetings get booked before a show opens, what a qualified
           meeting is, and what each package costs. If your question is not here,`)}{' '}
-          <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer">ask us</a> and we will add it.
+          <a href="/contact">ask us</a> and we will add it.
         </div>
       </div>
 
@@ -156,7 +156,7 @@ qualified meetings booked before the show floor opens, each with a tailored talk
             <a href="/#icp-form" className="rk-tier-btn rk-tier-btn--accent" style={{ textDecoration: 'none' }}>
               Rank my shows, it's free
             </a>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer"
+            <a href="/contact"
                className="rk-tier-btn rk-tier-btn--outline" style={{ textDecoration: 'none' }}>
               Talk to the team
             </a>

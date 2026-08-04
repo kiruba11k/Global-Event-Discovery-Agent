@@ -539,7 +539,7 @@ export default function ShowDeepDivePage({
             </div>
           </div>
           <div className="ddv-cta-right">
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="ddv-cta-btn">See how it works →</a>
+            <a href="/contact" className="ddv-cta-btn">See how it works →</a>
             <p className="ddv-cta-caveat">No obligation · Response within 24 hours</p>
           </div>
         </div>

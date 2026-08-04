@@ -395,7 +395,7 @@ export default function ShowRankingPage({
                   </div>
                   <div className="rk-stat-label">total ICPs across all relevant shows</div>
                   <div className="rk-stat-method">
-                    estimated decision-makers · <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-method-link">methodology →</a>
+                    estimated decision-makers · <a href="/contact" className="rk-method-link">methodology →</a>
                   </div>
                 </>
               ) : (
@@ -655,7 +655,7 @@ export default function ShowRankingPage({
                 <li>10 confirmed meetings</li>
                 <li>Post-event follow-up</li>
               </ul>
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--accent" aria-label="Get started with the Starter Pack - 10 qualified meetings">
+              <a href="/contact" className="rk-tier-btn rk-tier-btn--accent" aria-label="Get started with the Starter Pack - 10 qualified meetings">
                 Get started →
               </a>
             </div>
@@ -671,7 +671,7 @@ export default function ShowRankingPage({
                 <li>20 confirmed meetings</li>
                 <li>Named ICP account list</li>
               </ul>
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--accent" aria-label="Get started with the Growth Pack - 20 qualified meetings">
+              <a href="/contact" className="rk-tier-btn rk-tier-btn--accent" aria-label="Get started with the Growth Pack - 20 qualified meetings">
                 Get started →
               </a>
             </div>
@@ -686,7 +686,7 @@ export default function ShowRankingPage({
                 <li>Outreach copy + sequences</li>
                 <li>Full remote support</li>
               </ul>
-              <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-tier-btn rk-tier-btn--outline" aria-label="Contact us about a Full Takeover programme">
+              <a href="/contact" className="rk-tier-btn rk-tier-btn--outline" aria-label="Contact us about a Full Takeover programme">
                 Contact us →
               </a>
             </div>
@@ -702,7 +702,7 @@ export default function ShowRankingPage({
             <h3 className="rk-services-title">Want us to actually set up the meetings?</h3>
             <p className="rk-services-sub">We research your target accounts, reach out pre-show, and fill your calendar with confirmed meetings before you fly out.</p>
           </div>
-          <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="rk-services-btn">See how it works →</a>
+          <a href="/contact" className="rk-services-btn">See how it works →</a>
         </div>
       </div>
 

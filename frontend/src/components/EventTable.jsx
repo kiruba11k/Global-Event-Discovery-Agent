@@ -109,7 +109,7 @@ function PricingDisclaimer({ dealSizeCategory }) {
       <AlertTriangle size={15} style={{ color: 'var(--c-talk)', flexShrink: 0, marginTop: 1 }} />
       <div style={{ fontSize: 11, color: '#7A5200', lineHeight: 1.6 }}>
         <strong>Pricing shown is an estimate, in USD, plus local taxes as applicable.</strong> Actual engagement fee may vary by event complexity, geography, and GTM motion. Pipeline projections assume 40% qualification and 25% close rate on your stated deal size ({label}).{' '}
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: '#7A5200', fontWeight: 700 }}>Request a formal quote</a> for binding pricing.
+        <a href="/contact" style={{ color: '#7A5200', fontWeight: 700 }}>Request a formal quote</a> for binding pricing.
       </div>
     </div>
   )
@@ -145,7 +145,7 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
       {unknownAttendees && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--c-find-soft)', border: '1px solid rgba(14,124,107,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 2, fontSize: 11, color: 'var(--ink-soft)' }}>
           <Info size={13} style={{ color: 'var(--c-find)', flexShrink: 0, marginTop: 1 }} />
-          Attendee count not yet available for this event. Showing our Starter pack - <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-find)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
+          Attendee count not yet available for this event. Showing our Starter pack - <a href="/contact" style={{ color: 'var(--c-find)', fontWeight: 600 }}>contact us</a> for a tailored quote once confirmed.
         </div>
       )}
 
@@ -182,10 +182,10 @@ function PricingCard({ attendees, eventName, dealSizeCategory }) {
       <PricingDisclaimer dealSizeCategory={category} />
 
       <div className="pc-cta-row" style={{ marginTop: 14 }}>
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'get_a_free_quote' })}>
+        <a href="/contact" className="roi-cta" onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'get_a_free_quote' })}>
           <Phone size={11} /> Get a Free Quote
         </a>
-        <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'book_a_demo' })}>
+        <a href="/contact" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '9px 18px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'pricing_calculator', cta: 'book_a_demo' })}>
           Book a Demo
         </a>
       </div>
@@ -476,10 +476,10 @@ export default function EventTable({ events, dealSizeCategory }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" className="roi-cta" style={{ fontSize: 11 }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'get_a_free_quote' })}>
+            <a href="/contact" className="roi-cta" style={{ fontSize: 11 }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'get_a_free_quote' })}>
               <Phone size={10} /> Get a Free Quote
             </a>
-            <a href="https://leadstrategus.com/contact/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'book_a_demo' })}>
+            <a href="/contact" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1.5px solid var(--c-meet)', color: 'var(--c-meet)', borderRadius: 999, padding: '7px 14px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }} onClick={() => pushEvent('demo_click', { location: 'meeting_potential_card', cta: 'book_a_demo' })}>
               Book a Demo
             </a>
           </div>
