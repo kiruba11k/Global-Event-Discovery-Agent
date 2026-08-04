@@ -10,8 +10,8 @@ pipeline" philosophy as api/rate_limit.py:
 
 2. CAPTCHA (Cloudflare Turnstile) — verified server-side against
    Cloudflare's siteverify endpoint. Fails OPEN (treated as verified)
-   if TURNSTILE_SECRET_KEY isn't configured, so this doesn't brick the
-   form in dev / before the site key is provisioned — same fallback
+   if TURNSTILE_SECRET isn't configured, so this doesn't brick the
+   form in dev / before the secret is provisioned — same fallback
    pattern as lib/redis_client.py / api/rate_limit.py.
 
 3. Duplicate-submission — a short-lived Redis lock keyed by a
@@ -30,7 +30,7 @@ from loguru import logger
 
 from lib.redis_client import get_redis
 
-TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_SECRET = os.environ.get("TURNSTILE_SECRET", "")
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 DUPLICATE_WINDOW_SECONDS = 45
@@ -44,15 +44,15 @@ async def verify_captcha(token: str, ip: str = "") -> bool:
     """Returns True if verified (or CAPTCHA isn't configured — fail-open).
     Returns False only when Turnstile is configured AND actively rejects
     the token."""
-    if not TURNSTILE_SECRET_KEY:
-        logger.debug("bot_protection: TURNSTILE_SECRET_KEY not set — captcha check skipped (fail-open)")
+    if not TURNSTILE_SECRET:
+        logger.debug("bot_protection: TURNSTILE_SECRET not set — captcha check skipped (fail-open)")
         return True
     if not token:
         return False
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.post(TURNSTILE_VERIFY_URL, data={
-                "secret":   TURNSTILE_SECRET_KEY,
+                "secret":   TURNSTILE_SECRET,
                 "response": token,
                 "remoteip": ip,
             })

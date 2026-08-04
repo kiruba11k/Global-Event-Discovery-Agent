@@ -351,7 +351,12 @@ export default function ICPForm({
   const [captchaToken,  setCaptchaToken]  = useState('')
   const [consentChecked, setConsentChecked] = useState(false)
   const turnstileRef = useRef(null)
-  const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
+  // Turnstile sitekeys are public by design (they're embedded client-side
+  // in every Turnstile integration) - not a secret, safe to hardcode. This
+  // is the "Global event agent icp form" widget in the Cloudflare
+  // dashboard; the matching secret lives server-side only, as
+  // TURNSTILE_SECRET (see backend/api/bot_protection.py).
+  const TURNSTILE_SITE_KEY = '0x4AAAAAAEFPmIRRrqFyz0Pf'
 
   // Fires once per mount, on the first field the user actually touches -
   // "form_start" needs to fire on genuine engagement, not on render (the
@@ -1049,7 +1054,7 @@ export default function ICPForm({
         />
       </div>
 
-      {/* CAPTCHA - Cloudflare Turnstile (skipped when VITE_TURNSTILE_SITE_KEY isn't set) */}
+      {/* CAPTCHA - Cloudflare Turnstile ("Global event agent icp form" widget) */}
       {TURNSTILE_SITE_KEY && (
         <div className="icp-field-group">
           <div ref={turnstileRef} className="icp-turnstile" />
