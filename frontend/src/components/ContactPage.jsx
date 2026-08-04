@@ -13,6 +13,7 @@ import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
 import { pushEvent } from '../lib/gtm'
+import { usePageSeo } from '../lib/usePageSeo'
 import '../legal.css'
 import '../icp-form.css'
 import '../ranking.css'
@@ -46,6 +47,12 @@ const SERVICE_OPTIONS = [
 ]
 
 export default function ContactPage({ onSubmitted }) {
+  usePageSeo(
+    'Contact Us | ExpoToFunnel',
+    'Get in touch with the ExpoToFunnel team for collaboration or sales enquiries.',
+    '/contact',
+    { ogTitle: 'Contact ExpoToFunnel', ogDescription: 'Collaboration, sales, or anything else - tell us what you are looking for.' },
+  )
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [service, setService] = useState('')
