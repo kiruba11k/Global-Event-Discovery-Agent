@@ -376,15 +376,22 @@ export default function ICPForm({
   // Turnstile is provisioned.
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY) return
-    window.__onTurnstileVerified = (token) => setCaptchaToken(token)
-    window.__onTurnstileExpired = () => setCaptchaToken('')
 
     const renderWidget = () => {
       if (window.turnstile && turnstileRef.current && !turnstileRef.current.dataset.rendered) {
+        // Explicit rendering (turnstile.render(container, params)) needs
+        // real function references for callback/expired-callback - a
+        // string name (e.g. '__onTurnstileVerified') only works for the
+        // *implicit* HTML data-attribute style (data-callback="..."), not
+        // here. Passing a string silently no-ops: the widget still shows
+        // as solved, but captchaToken never actually gets set, so
+        // validate() keeps blocking submit even after a real human passes
+        // the check.
         window.turnstile.render(turnstileRef.current, {
           sitekey: TURNSTILE_SITE_KEY,
-          callback: '__onTurnstileVerified',
-          'expired-callback': '__onTurnstileExpired',
+          callback: (token) => setCaptchaToken(token),
+          'expired-callback': () => setCaptchaToken(''),
+          'error-callback': () => setCaptchaToken(''),
         })
         turnstileRef.current.dataset.rendered = 'true'
       }
