@@ -9,9 +9,10 @@
   domains client-side before submitting, since this form is for
   business enquiries (collaboration / sales), not consumer signups.
 */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
+import { pushEvent } from '../lib/gtm'
 import '../legal.css'
 import '../icp-form.css'
 import '../ranking.css'
@@ -54,6 +55,12 @@ export default function ContactPage({ onSubmitted }) {
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const formStartFired = useRef(false)
+  const fireFormStart = () => {
+    if (formStartFired.current) return
+    formStartFired.current = true
+    pushEvent('form_start', { form_name: 'contact_form' })
+  }
 
   const validate = () => {
     const next = {}
@@ -100,6 +107,7 @@ export default function ContactPage({ onSubmitted }) {
         setSubmitted(true)
         toast.success('Message sent - we will get back to you soon.')
         api.submitConsent('contact_form', true)
+        pushEvent('form_submit', { form_name: 'contact_form', service })
         if (onSubmitted) onSubmitted()
       } else {
         toast.error(data.message || 'Something went wrong - please try again.')
@@ -152,6 +160,7 @@ export default function ContactPage({ onSubmitted }) {
                 type="text"
                 className={`icp-input ${errors.name ? 'icp-input--error' : ''}`}
                 value={name}
+                onFocus={fireFormStart}
                 onChange={e => { setName(e.target.value); if (errors.name) setErrors(p => ({ ...p, name: '' })) }}
               />
               {errors.name && <p className="icp-error">{errors.name}</p>}

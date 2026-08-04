@@ -16,6 +16,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
 import { isFreeEmailDomain, deriveCompanyNameFromEmail } from '../lib/workEmail'
+import { pushEvent } from '../lib/gtm'
 import '../icp-form.css'
 
 // ── Smart suggestion bank ─────────────────────────────────────────
@@ -352,6 +353,17 @@ export default function ICPForm({
   const turnstileRef = useRef(null)
   const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
 
+  // Fires once per mount, on the first field the user actually touches -
+  // "form_start" needs to fire on genuine engagement, not on render (the
+  // form is on the home page below the fold, so most page views never
+  // reach it at all).
+  const formStartFired = useRef(false)
+  const fireFormStart = () => {
+    if (formStartFired.current) return
+    formStartFired.current = true
+    pushEvent('form_start', { form_name: 'icp_form' })
+  }
+
   // Loads the Cloudflare Turnstile widget script once and renders it
   // into turnstileRef when a site key is configured. No site key → the
   // widget is skipped entirely and the backend fails open (see
@@ -622,6 +634,7 @@ export default function ICPForm({
       consent:              consentChecked,
     }
     api.submitConsent('icp_form', true)
+    pushEvent('form_submit', { form_name: 'icp_form' })
     onSubmit && onSubmit(profile, email)
   }
 
@@ -641,7 +654,7 @@ export default function ICPForm({
             type="text"
             value={buyer}
             onChange={e => { setBuyer(e.target.value); setErrors(p => ({ ...p, buyer: '' })) }}
-            onFocus={() => setShowSugs(true)}
+            onFocus={() => { setShowSugs(true); fireFormStart() }}
             placeholder="e.g. CFOs at mid-market SaaS companies"
             autoComplete="off"
             required
