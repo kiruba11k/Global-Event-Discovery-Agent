@@ -14,7 +14,20 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-P3WGC42HZC');
+      // Cross-domain measurement: every "Book a Demo"/"Get a Free Quote"
+      // CTA on this site links out to leadstrategus.com/contact/. Without
+      // this, GA4 treats that click as the end of one session and the
+      // start of a brand-new anonymous one on the other domain - the
+      // linker config appends a `_gl` parameter to outbound links to
+      // these domains so GA4 can stitch the two into one user journey.
+      // Requires leadstrategus.com to run the SAME measurement ID
+      // (G-P3WGC42HZC) with matching linker config to actually complete
+      // the stitch - this half only covers the expotofunnel.com side.
+      gtag('config', 'G-P3WGC42HZC', {
+        linker: {
+          domains: ['leadstrategus.com', 'www.leadstrategus.com']
+        }
+      });
     </script>
 
     <!-- Core -->
