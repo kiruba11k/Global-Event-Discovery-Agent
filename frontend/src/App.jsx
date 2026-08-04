@@ -31,7 +31,7 @@ import ThankYouPage      from './components/ThankYouPage'
 import SampleReport      from './components/SampleReport'
 import CookieBanner      from './components/CookieBanner'
 import { api }           from './api/client'
-import { initGTM, pushEvent } from './lib/gtm'
+import { pushEvent } from './lib/gtm'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
 import './App.css'
@@ -255,14 +255,6 @@ export default function App() {
   const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
-
-  // Google Tag Manager - no-op if VITE_GTM_ID isn't set (see lib/gtm.js).
-  // Actual GA4/tag configuration lives entirely in the GTM dashboard once
-  // a container is created; this just loads the container + fires a
-  // virtual pageview on every client-side route change (goTo() below),
-  // since GTM's own history-change trigger doesn't see this app's
-  // pushState-based router by default.
-  useEffect(() => { initGTM() }, [])
 
   // Browser back/forward between the static pages (privacy/terms/pricing)
   // and home - goTo() already updates `screen` on click-through navigation,
