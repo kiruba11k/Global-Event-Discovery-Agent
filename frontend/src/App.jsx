@@ -30,8 +30,9 @@ import ContactPage       from './components/ContactPage'
 import ThankYouPage      from './components/ThankYouPage'
 import SampleReport      from './components/SampleReport'
 import CookieBanner      from './components/CookieBanner'
+import NotFoundPage      from './components/NotFoundPage'
 import { api }           from './api/client'
-import { pushEvent } from './lib/gtm'
+import { pushEvent }     from './lib/gtm'
 import { motion }        from 'framer-motion'
 import { ArrowRight }    from 'lucide-react'
 import './App.css'
@@ -230,7 +231,15 @@ const STATIC_SCREEN_PATHS = { '/privacy': 'privacy', '/terms': 'terms', '/pricin
 
 function screenFromPath(pathname) {
   const path = pathname.replace(/\/+$/, '') || '/'
-  return STATIC_SCREEN_PATHS[path] || 'home'
+  if (path === '/') return 'home'
+  if (STATIC_SCREEN_PATHS[path]) return STATIC_SCREEN_PATHS[path]
+  // /show/:slug is a real, intentional route (deep-dive pages) - it just
+  // has nothing to restore on a cold load/back-nav since it depends on
+  // in-memory search results (see the comment above STATIC_SCREEN_PATHS).
+  // That's "gracefully degrade to home", not "this URL doesn't exist" -
+  // a 404 here would be wrong for a link someone bookmarked/shared.
+  if (path.startsWith('/show/')) return 'home'
+  return 'notfound'
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -368,7 +377,14 @@ export default function App() {
 
       const display = events.filter(e => e.fit_verdict !== 'SKIP')
       if (!display.length) {
+        // Previously this just toasted and stayed on the home screen -
+        // ShowRankingPage already has a proper "no results" state
+        // (rk-empty, with a CTA back to the form) that was never actually
+        // reachable because of this early return. Navigate there instead
+        // so a genuine no-results search gets a real page, not a toast
+        // that vanishes in a few seconds with no other trace.
         toast.error('No matching events found - try a wider geography or different buyer description.')
+        goTo('ranking', '/')
         setLoading(false)
         return
       }
@@ -536,7 +552,7 @@ export default function App() {
   }
 
   /* ── Screens: Privacy / Terms / Pricing / FAQ / Contact ──────── */
-  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing' || screen === 'faq' || screen === 'contact' || screen === 'thank-you') {
+  if (screen === 'privacy' || screen === 'terms' || screen === 'pricing' || screen === 'faq' || screen === 'contact' || screen === 'thank-you' || screen === 'notfound') {
     return (
       <div className="app">
         <Toaster position="top-right" toastOptions={TOAST_STYLE} />
@@ -548,6 +564,7 @@ export default function App() {
         {screen === 'faq'        && <FaqPage stats={stats} />}
         {screen === 'contact'    && <ContactPage onSubmitted={() => goTo('thank-you', '/thank-you')} />}
         {screen === 'thank-you'  && <ThankYouPage onGoHome={() => goTo('home')} onContactAgain={() => goTo('contact', '/contact')} />}
+        {screen === 'notfound'   && <NotFoundPage onGoHome={() => goTo('home')} onScrollToForm={scrollToForm} onNavigate={(s) => goTo(s, `/${s}`)} />}
         <LandingFooter onNavigate={(s) => goTo(s, `/${s}`)} />
       </div>
     )

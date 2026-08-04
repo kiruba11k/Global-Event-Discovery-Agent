@@ -5,8 +5,19 @@
   (privacy/terms/contact) in App.jsx's STATIC_SCREEN_PATHS + screen router.
 */
 import '../legal.css'
+import { usePageSeo } from '../lib/usePageSeo'
 
 export default function ThankYouPage({ onGoHome, onContactAgain }) {
+  // noindex: a thin confirmation page with no unique content - not
+  // useful in search results, and would otherwise read as duplicate
+  // content against the Contact page it follows.
+  usePageSeo(
+    'Thank You | ExpoToFunnel',
+    'Your message has been received - the ExpoToFunnel team will be in touch shortly.',
+    '/thank-you',
+    { noindex: true },
+  )
+
   return (
     <div className="lg-page">
       <div className="lg-hero">
