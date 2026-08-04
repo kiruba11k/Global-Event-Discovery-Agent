@@ -10,9 +10,12 @@ public API. Read endpoints expose aggregate + per-user activity data
 """
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,6 +115,56 @@ async def icp_submissions(page: int = Query(1, ge=1), limit: int = Query(50, ge=
                            status: str = Query(""), date_from: str = Query(""), date_to: str = Query(""),
                            db: AsyncSession = Depends(get_db)):
     return await crud.list_icp_submissions(db, page, limit, status, date_from, date_to)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# GET /api/analytics/icp-submissions/export — CSV lead list
+#
+# The dashboard-facing JSON endpoint above is paginated and trimmed for
+# UI display; this is the "give me every lead as a spreadsheet" export
+# a sales team actually works from (open in Excel/Sheets, import to a
+# CRM). Same ANALYTICS_API_TOKEN gate — this is real PII (names, emails,
+# buyer descriptions), not aggregate data.
+# ══════════════════════════════════════════════════════════════════════
+
+_EXPORT_COLUMNS = [
+    "submitted_at", "status", "company_name", "email",
+    "target_industries", "target_personas", "target_geographies",
+    "preferred_event_types", "extra_keywords", "buyer_description",
+    "deal_size_bracket", "budget_usd", "date_from", "date_to",
+    "min_attendees", "differentiator_score", "client_count_range", "client_names",
+    "total_found", "go_count", "consider_count",
+    "captcha_verified", "consent_given", "ip_address", "session_id", "id",
+]
+
+
+@router.get("/analytics/icp-submissions/export", dependencies=[Depends(_require_analytics_token)])
+async def icp_submissions_export(status: str = Query(""), date_from: str = Query(""), date_to: str = Query(""),
+                                  db: AsyncSession = Depends(get_db)):
+    rows = await crud.list_icp_submissions_for_export(db, status, date_from, date_to)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_EXPORT_COLUMNS)
+    for r in rows:
+        writer.writerow([
+            r.submitted_at.isoformat() if r.submitted_at else "",
+            r.status, r.company_name, r.email,
+            r.target_industries, r.target_personas, r.target_geographies,
+            r.preferred_event_types, r.extra_keywords, r.buyer_description,
+            r.deal_size_bracket, r.budget_usd, r.date_from, r.date_to,
+            r.min_attendees, r.differentiator_score, r.client_count_range, r.client_names,
+            r.total_found, r.go_count, r.consider_count,
+            r.captcha_verified, r.consent_given, r.ip_address, r.session_id, r.id,
+        ])
+    buf.seek(0)
+
+    filename = f"icp-leads-{date_from or 'all'}-to-{date_to or 'all'}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/analytics/search-results", dependencies=[Depends(_require_analytics_token)])

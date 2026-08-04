@@ -228,6 +228,21 @@ async def list_icp_submissions(db: AsyncSession, page: int = 1, limit: int = 50,
     ]}
 
 
+async def list_icp_submissions_for_export(db: AsyncSession, status: str = "", date_from: str = "",
+                                           date_to: str = "", limit: int = 10000) -> List[AnalyticsICPSubmissionORM]:
+    """Full ORM rows (every column, not the trimmed dict list_icp_submissions
+    returns) for CSV export — the lead list a sales team actually works from,
+    so it needs every field the ICP form collected, not just the dashboard
+    display subset. `limit` is a hard cap, not pagination — this is a
+    one-shot full-range export, not a paged UI list."""
+    stmt = select(AnalyticsICPSubmissionORM).order_by(AnalyticsICPSubmissionORM.submitted_at.desc())
+    if status:
+        stmt = stmt.where(AnalyticsICPSubmissionORM.status == status)
+    stmt = _date_range(stmt, AnalyticsICPSubmissionORM.submitted_at, date_from, date_to)
+    rows = (await db.execute(stmt.limit(limit))).scalars().all()
+    return list(rows)
+
+
 async def list_search_results(db: AsyncSession, submission_id: str) -> List[Dict]:
     rows = (await db.execute(
         select(AnalyticsSearchResultORM)
