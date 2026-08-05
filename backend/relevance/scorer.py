@@ -775,9 +775,44 @@ INDUSTRY_UNKNOWN_PENALTY  = 0.75
 
 # ── Main rule scorer ───────────────────────────────────────────────
 
+def _best_segment_scores(
+    event: EventORM, profile: ICPProfile,
+) -> Tuple[Tuple[float, list[str]], Tuple[float, list[str]]]:
+    """
+    When the ICP has explicit persona/industry pairs (profile.icp_segments -
+    e.g. "CEO at BFSI" and "CIO at Medtech" as two separate groups), score
+    each pair independently and keep whichever pair fits this event best,
+    rather than the flat behaviour of matching "any persona" against "any
+    industry" (which would wrongly credit an event for CEO + Medtech, a
+    combination nobody asked for). No segments -> unchanged flat scoring.
+    """
+    segments = getattr(profile, "icp_segments", None) or []
+    if not segments:
+        return _score_industry(event, profile), _score_persona(event, profile)
+
+    best = None
+    for seg in segments:
+        seg_industries = seg.get("industries") or []
+        seg_personas   = seg.get("personas") or []
+        if not seg_industries and not seg_personas:
+            continue
+        seg_profile = profile.model_copy(update={
+            "target_industries": seg_industries,
+            "target_personas":   seg_personas,
+        })
+        ind = _score_industry(event, seg_profile)
+        per = _score_persona(event, seg_profile)
+        combined = ind[0] + per[0]
+        if best is None or combined > best[0]:
+            best = (combined, ind, per)
+
+    if best is None:
+        return _score_industry(event, profile), _score_persona(event, profile)
+    return best[1], best[2]
+
+
 def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
-    ind_score, ind_matched  = _score_industry(event, profile)
-    per_score, per_matched  = _score_persona(event, profile)
+    (ind_score, ind_matched), (per_score, per_matched) = _best_segment_scores(event, profile)
     geo_score, geo_matched  = _score_geo(event, profile)
     type_score              = _score_type(event, profile)
     att_score, att_tier     = _score_attendees(event, profile)

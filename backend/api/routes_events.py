@@ -1243,6 +1243,7 @@ async def parse_icp(payload: dict):
         "extra_keywords": result.extra_keywords,
         "seniority":      result.seniority,
         "confidence":     result.confidence,
+        "segments":       [s.model_dump() for s in result.segments],
     }
 
 
