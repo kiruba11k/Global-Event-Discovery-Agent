@@ -456,7 +456,11 @@ export default function ICPForm({
     llmParseTimer.current = setTimeout(async () => {
       try {
         const data = await api.parseIcp(text)
-        if (data?.source === 'llm' && data.industries?.length)
+        // Trust the LLM response if it found EITHER an industry or a
+        // persona - requiring industries specifically discarded a
+        // correct "industries: []" LLM parse for industry-agnostic
+        // buyer descriptions (see effectiveParse below for the same fix).
+        if (data?.source === 'llm' && (data.industries?.length || data.personas?.length))
           setLlmParse({ forText: text, ...data })
       } catch (_) { /* keep local keyword parse */ }
     }, 900)

@@ -102,11 +102,30 @@ RULES:
   industry", "industry-agnostic", "sold horizontally") - do NOT guess a
   single vertical just to have something to return. An empty industries list
   correctly means "no industry restriction" downstream, not "unparsed."
+- Use your general world knowledge to resolve industry jargon, abbreviations,
+  regional terms and acronyms into the canonical list - do not require exact
+  wording. These are NOT hardcoded anywhere else in the system, so this is the
+  only place they get resolved. Examples:
+    "BFSI" -> ["Fintech"]                       (Banking, Financial Services & Insurance)
+    "FMCG" or "CPG" -> ["Retail / Ecommerce"]    (fast-moving consumer goods)
+    "D2C" or "DTC" -> ["Retail / Ecommerce"]     (direct-to-consumer brands)
+    "MSME" or "SME" manufacturers -> ["Manufacturing"]
+    "ISV" (independent software vendor) -> ["Technology"]
+    "GovTech" -> ["Government / Public Sector"]
+    "OTT platforms" -> ["Media / Publishing"]
+    "Web3" -> ["Fintech"] with extra_keywords ["web3", "crypto"] unless the
+    text is clearly about infra/tooling, then ["Technology"]
+  These are illustrative, not exhaustive - apply the same reasoning to any
+  other acronym, regional term, or industry shorthand you recognise.
 - personas: canonical role labels - return ALL roles mentioned, not just the
   first one (e.g. "CIOs and CISOs" -> ["CIO", "CISO"], not just ["CIO"]). If a
   stated role has no canonical equivalent (e.g. "Head of Perioperative
   Services"), return the role verbatim in Title Case instead - never drop it
-  and never force a wrong label.
+  and never force a wrong label. Resolve role jargon/abbreviations the same
+  way as industries, e.g. "CXO" -> the specific C-suite roles implied by
+  context, or ["CEO", "CFO", "CTO", "COO"] if genuinely unspecified; "IT
+  Head" -> ["CIO"]; "L&D leaders" -> ["Head of Growth"] only if no closer
+  match exists, otherwise keep as verbatim "L&D Leader".
 - extra_keywords: 0-5 lowercase niche descriptors from the text that a keyword
   search over event listings would benefit from (e.g. "ambulatory surgery",
   "clinical operations"). Only terms actually implied by the input.
