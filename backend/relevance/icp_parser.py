@@ -93,13 +93,20 @@ CANONICAL BUYER ROLES (map to these EXACT labels where possible):
 {", ".join(CANONICAL_PERSONAS)}
 
 RULES:
-- industries: 1-3 canonical labels, primary first. Only industries of the
+- industries: 0-3 canonical labels, primary first. Only industries of the
   BUYER's organisation, never the seller's product category. Example: "CISO at
   healthcare organisations" -> ["Healthcare / Medtech"] (the buyer works in
   healthcare; do NOT add Cybersecurity just because the role is security).
-- personas: canonical role labels. If the stated role has no canonical
-  equivalent (e.g. "Head of Perioperative Services"), return the role verbatim
-  in Title Case instead - never drop it and never force a wrong label.
+  Return an EMPTY list when the input explicitly says the buyer spans every
+  industry / is industry-agnostic (e.g. "CIOs across all industries", "any
+  industry", "industry-agnostic", "sold horizontally") - do NOT guess a
+  single vertical just to have something to return. An empty industries list
+  correctly means "no industry restriction" downstream, not "unparsed."
+- personas: canonical role labels - return ALL roles mentioned, not just the
+  first one (e.g. "CIOs and CISOs" -> ["CIO", "CISO"], not just ["CIO"]). If a
+  stated role has no canonical equivalent (e.g. "Head of Perioperative
+  Services"), return the role verbatim in Title Case instead - never drop it
+  and never force a wrong label.
 - extra_keywords: 0-5 lowercase niche descriptors from the text that a keyword
   search over event listings would benefit from (e.g. "ambulatory surgery",
   "clinical operations"). Only terms actually implied by the input.

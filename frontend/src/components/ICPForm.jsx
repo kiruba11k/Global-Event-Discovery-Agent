@@ -41,6 +41,12 @@ const BUYER_SUGGESTIONS = [
   'leaders in energy and sustainability',
   'decision-makers in retail technology',
   'executives in real estate technology',
+  // Multi-persona, industry-agnostic examples — a vertical-agnostic
+  // platform (e.g. cybersecurity/cloud sold across every industry) can
+  // list multiple roles and skip a vertical entirely; leaving industry
+  // out of the sentence means "no industry restriction," not "guess one."
+  'CIOs and CISOs across all industries',
+  'CTOs and VP Engineering, any industry',
 ]
 
 const GEO_OPTIONS = [
@@ -457,13 +463,18 @@ export default function ICPForm({
     return () => clearTimeout(llmParseTimer.current)
   }, [buyer])
 
-  // Best available parse: LLM result when fresh, keyword parse otherwise
+  // Best available parse: LLM result when fresh, keyword parse otherwise.
+  // Trust the LLM result if it found EITHER an industry OR a persona -
+  // previously this required industries specifically, which discarded an
+  // otherwise-correct LLM parse of a genuinely industry-agnostic buyer
+  // description ("CIOs across all industries" -> industries: [] is the
+  // right answer, not a sign the LLM found nothing).
   const effectiveParse = useCallback((text) => {
     const t = text.trim()
     const local = parseBuyerText(t)
-    if (llmParse?.forText === t && llmParse.industries?.length) {
+    if (llmParse?.forText === t && (llmParse.industries?.length || llmParse.personas?.length)) {
       return {
-        industries:     llmParse.industries,
+        industries:     llmParse.industries?.length ? llmParse.industries : [],
         personas:       llmParse.personas?.length ? llmParse.personas : local.personas,
         extra_keywords: llmParse.extra_keywords || [],
         source:         'llm',
@@ -480,12 +491,15 @@ export default function ICPForm({
     geoHintTimer.current = setTimeout(async () => {
       try {
         const { industries, personas } = effectiveParse(buyer)
-        // Must match the fallback applied at submit time (target_industries
-        // below) — otherwise the hint checks a looser filter (geo+persona
-        // only) than the search actually applies (geo+persona+industry),
-        // so the coverage count promises more than the search can deliver.
-        const hintIndustries = industries.length ? industries : ['Technology']
-        const data = await api.geoHint(geos, hintIndustries, personas)
+        // Must match what's actually sent at submit time (target_industries
+        // below) — an empty array here means "no industry restriction",
+        // same as the backend scorer treats it (see scorer.py's
+        // strict_industry = bool(profile.target_industries)). Previously
+        // this force-defaulted to ['Technology'] whenever no industry
+        // keyword matched, which silently narrowed genuinely
+        // industry-agnostic buyer descriptions ("CIOs across all
+        // industries") into a single wrong vertical.
+        const data = await api.geoHint(geos, industries, personas)
         const map = {}
         for (const item of (data.coverage || [])) map[item.geo] = item
         setGeoHints(map)
@@ -539,7 +553,7 @@ export default function ICPForm({
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
         company_name:           companyName || deriveCompanyNameFromEmail(email),
-        target_industries:      industries.length ? industries : ['Technology'],
+        target_industries:      industries,   // empty = no industry restriction (see scorer.py)
         target_personas:        personas,
         target_geographies:     updated,
         preferred_event_types:  ['conference', 'trade show', 'summit', 'expo'],
@@ -627,7 +641,7 @@ export default function ICPForm({
     if (pendingGeo) { setGeos(finalGeos); setGeoSearch('') }
     const profile = {
       company_name:          companyName || deriveCompanyNameFromEmail(email),
-      target_industries:     industries.length ? industries : ['Technology'],
+      target_industries:     industries,   // empty = no industry restriction (see scorer.py)
       target_personas:       personas.length   ? personas   : [],
       target_geographies:    finalGeos,
       preferred_event_types: ['conference', 'trade show', 'summit', 'expo'],
@@ -659,7 +673,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-buyer">
           Who do you sell to?<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint" id="icp-buyer-help">Role + industry. e.g. "CTOs at fintech companies"</p>
+        <p className="icp-hint" id="icp-buyer-help">Role + industry, or multiple roles across all industries. e.g. "CTOs at fintech companies" or "CIOs and CISOs across all industries"</p>
         <div ref={buyerRef} style={{ position: 'relative' }}>
           <input
             id="icp-buyer"
