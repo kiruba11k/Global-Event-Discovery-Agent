@@ -211,6 +211,21 @@ legend.icp-label {
   font-weight:600;
   margin-right:2px;
 }
+.icp-parse-preview--grouped {
+  flex-direction: column;
+  align-items:    flex-start;
+  gap:            4px;
+}
+.icp-parse-group {
+  display:     flex;
+  flex-wrap:   wrap;
+  gap:         5px;
+  align-items: center;
+}
+.icp-parse-group-sep {
+  font-size:  10px;
+  color:      var(--ink-faint, #8A959C);
+}
 .icp-tag {
   font-size:     10px;
   font-weight:   600;

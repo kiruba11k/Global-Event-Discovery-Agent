@@ -56,12 +56,33 @@ _CANON_IND_LOWER = {c.lower(): c for c in CANONICAL_INDUSTRIES}
 _CANON_PER_LOWER = {c.lower(): c for c in CANONICAL_PERSONAS}
 
 
+class ICPSegmentResult(BaseModel):
+    """One persona/industry pair, e.g. {"personas": ["CEO"], "industries": ["Fintech"]}."""
+    personas:   List[str] = []
+    industries: List[str] = []
+
+    model_config = {"extra": "ignore"}
+
+    @field_validator("personas", "industries", mode="before")
+    @classmethod
+    def _listify(cls, v):
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v or []
+
+
 class ICPParseResult(BaseModel):
     industries:     List[str] = []
     personas:       List[str] = []
     extra_keywords: List[str] = []   # niche descriptors outside the taxonomy
     seniority:      str = ""         # c-suite | vp | director | manager | ""
     confidence:     float = 0.0
+    # Only populated when the input names 2+ DISTINCT role+vertical pairs
+    # ("CEO at BFSI, CIO at Medtech companies"). industries/personas above
+    # always stay the flat union of every segment for back-compat; this is
+    # the extra pairing info the scorer uses to keep groups from
+    # cross-matching. Empty for single-group or role-only/industry-only input.
+    segments:       List[ICPSegmentResult] = []
 
     model_config = {"extra": "ignore"}
 
@@ -133,9 +154,51 @@ RULES:
 - confidence: 0.0-1.0, how unambiguous the input was.
 - Input may be misspelled or partial - infer sensibly, never invent industries
   that are not implied.
+- segments: populate ONLY when the input names two or more DISTINCT
+  role+vertical pairs that should NOT be cross-matched with each other -
+  e.g. "CEO at BFSI companies, CIO at Medtech firms" means find a CEO buyer
+  at a BFSI company OR a CIO buyer at a Medtech company, NEVER a CEO at a
+  Medtech company. Each segment is {{"personas": [...], "industries": [...]}}
+  using the same canonical labels as above.
+
+  HOW TO DECIDE WHERE ONE PAIR ENDS AND THE NEXT BEGINS - read the input as
+  a human would, using punctuation, repeated prepositions, and clause
+  structure as your evidence, not just presence of "and":
+    - A comma, semicolon, or "and also" between two "ROLE at/in VERTICAL"
+      clauses is a strong signal of two separate pairs: "CEOs at BFSI firms,
+      CIOs at Medtech companies" -> 2 segments.
+    - A role preposition ("at", "in", "for", "within") repeated once per
+      clause confirms each clause is its own pair: "CTOs in cloud computing
+      and Plant Managers in manufacturing" -> 2 segments (the second "in"
+      re-anchors a new pair, it does not extend the first).
+    - Roles joined by "and"/"&" immediately before ONE shared preposition +
+      vertical are ONE pair, not several: "CIOs and CISOs at healthcare
+      orgs" -> segments EMPTY, personas=["CIO","CISO"], industries=
+      ["Healthcare / Medtech"] (only one preposition, one vertical - no
+      pairing ambiguity to resolve).
+    - Verticals joined by "and" immediately after ONE shared role+preposition
+      are also ONE pair: "CIOs at fintech and healthcare companies" ->
+      segments EMPTY, personas=["CIO"], industries=["Fintech","Healthcare /
+      Medtech"] (one role, two verticals it's equally happy with - not two
+      role/vertical pairings).
+    - GENUINE ambiguity ("CEOs and CIOs at fintech and healthcare firms" -
+      unclear whether every role should pair with every vertical, or
+      role[i] pairs with vertical[i]): DO NOT force a guess into segments.
+      Leave segments EMPTY and return the flat union instead - an
+      incorrectly split pairing is worse than no pairing, since it would
+      wrongly exclude combinations the buyer actually wants. Only emit
+      segments when the clause structure makes the pairing unambiguous.
+    - Leave segments EMPTY when the buyer is industry-agnostic (no verticals
+      to pair against) even if multiple roles are listed.
+  When segments IS populated, industries/personas at the top level must
+  still be the flat union of every persona/industry across all segments.
+  Example: "CEO at BFSI, CIO at Medtech" ->
+  {{"industries": ["Fintech", "Healthcare / Medtech"], "personas": ["CEO", "CIO"],
+    "segments": [{{"personas": ["CEO"], "industries": ["Fintech"]}},
+                 {{"personas": ["CIO"], "industries": ["Healthcare / Medtech"]}}]}}
 
 Return ONLY JSON:
-{{"industries": [], "personas": [], "extra_keywords": [], "seniority": "", "confidence": 0.0}}"""
+{{"industries": [], "personas": [], "extra_keywords": [], "seniority": "", "confidence": 0.0, "segments": []}}"""
 
 
 def _normalise(parsed: ICPParseResult) -> ICPParseResult:
@@ -157,12 +220,29 @@ def _normalise(parsed: ICPParseResult) -> ICPParseResult:
         if label and label not in personas:
             personas.append(label)
 
+    def _canon_persona(p: str) -> str:
+        canon = _CANON_PER_LOWER.get(p.strip().lower())
+        return canon or p.strip()
+
+    segments: list[ICPSegmentResult] = []
+    for seg in parsed.segments:
+        seg_industries = list(dict.fromkeys(
+            _CANON_IND_LOWER.get(i.strip().lower(), i.strip()) for i in seg.industries if i.strip()
+        ))
+        seg_personas = list(dict.fromkeys(_canon_persona(p) for p in seg.personas if p.strip()))
+        # A pairing needs both sides to mean anything - a segment with only
+        # a persona or only an industry can't be scored any differently
+        # from the flat behaviour, so it isn't worth the added restriction.
+        if seg_industries and seg_personas:
+            segments.append(ICPSegmentResult(personas=seg_personas, industries=seg_industries))
+
     return ICPParseResult(
         industries=industries[:3],
         personas=personas[:4],
         extra_keywords=[e for e in extra if e][:5],
         seniority=parsed.seniority,
         confidence=parsed.confidence,
+        segments=segments[:5],
     )
 
 
@@ -181,7 +261,7 @@ async def parse_icp_text(text: str) -> Optional[ICPParseResult]:
         f'BUYER DESCRIPTION: "{text[:400]}"',
         label="icp-parser",
         schema=ICPParseResult,
-        max_completion_tokens=300,
+        max_completion_tokens=450,
         temperature=0.0,
         timeout=12,
         cache_ttl=3600,
@@ -194,6 +274,7 @@ async def parse_icp_text(text: str) -> Optional[ICPParseResult]:
         return None
     logger.info(
         f"ICP parsed via LLM: {text[:60]!r} -> ind={result.industries} "
-        f"per={result.personas} extra={result.extra_keywords}"
+        f"per={result.personas} extra={result.extra_keywords} "
+        f"segments={[(s.personas, s.industries) for s in result.segments]}"
     )
     return result

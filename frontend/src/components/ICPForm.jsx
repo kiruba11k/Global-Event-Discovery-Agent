@@ -481,10 +481,14 @@ export default function ICPForm({
         industries:     llmParse.industries?.length ? llmParse.industries : [],
         personas:       llmParse.personas?.length ? llmParse.personas : local.personas,
         extra_keywords: llmParse.extra_keywords || [],
+        // Paired role+vertical groups ("CEO at BFSI, CIO at Medtech") -
+        // only the LLM parse can produce these, the local keyword parser
+        // has no notion of pairing clauses together.
+        segments:       llmParse.segments || [],
         source:         'llm',
       }
     }
-    return { ...local, extra_keywords: [], source: 'rules' }
+    return { ...local, extra_keywords: [], segments: [], source: 'rules' }
   }, [llmParse])
 
   // ── Geo hint: debounced live fetch after geo selection changes ──
@@ -552,13 +556,14 @@ export default function ICPForm({
     setGeos(updated)
     setErrors(p => ({ ...p, geos: '' }))
     // Auto-resubmit: build profile with swapped geos and call onSubmit
-    const { industries, personas, extra_keywords } = effectiveParse(buyer)
+    const { industries, personas, extra_keywords, segments } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
     if (onSubmit && dealSize && buyer.trim() && email.trim()) {
       const profile = {
         company_name:           companyName || deriveCompanyNameFromEmail(email),
         target_industries:      industries,   // empty = no industry restriction (see scorer.py)
         target_personas:        personas,
+        icp_segments:           segments || [],   // paired role+vertical groups, see scorer.py
         target_geographies:     updated,
         preferred_event_types:  ['conference', 'trade show', 'summit', 'expo'],
         avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
@@ -623,7 +628,7 @@ export default function ICPForm({
       })
       return
     }
-    const { industries, personas, extra_keywords } = effectiveParse(buyer)
+    const { industries, personas, extra_keywords, segments } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
     // Commit any client name still sitting in the input box (typed but
     // never Enter/comma/Add'd) so it isn't silently dropped on submit.
@@ -647,6 +652,7 @@ export default function ICPForm({
       company_name:          companyName || deriveCompanyNameFromEmail(email),
       target_industries:     industries,   // empty = no industry restriction (see scorer.py)
       target_personas:       personas.length   ? personas   : [],
+      icp_segments:          segments || [],   // paired role+vertical groups, see scorer.py
       target_geographies:    finalGeos,
       preferred_event_types: ['conference', 'trade show', 'summit', 'expo'],
       avg_deal_size_category: dealSize === 'strategic' ? 'enterprise' : dealSize,
@@ -700,18 +706,37 @@ export default function ICPForm({
           )}
         </div>
         {buyer.trim() && (() => {
-          const { industries, personas, source } = effectiveParse(buyer)
+          const { industries, personas, segments, source } = effectiveParse(buyer)
           if (!industries.length && !personas.length) return null
+          const aiBadge = source === 'llm' && (
+            <span className="icp-tag" style={{ background: 'rgba(46,94,170,0.08)', color: '#2E5EAA', border: '1px solid rgba(46,94,170,0.25)' }} title="Refined by AI from your exact wording">
+              ✦ AI
+            </span>
+          )
+          // Paired groups ("CEO at BFSI, CIO at Medtech") get shown as
+          // separate rows so it's visible each pair is scored on its own,
+          // not combined into one loose CEO+CIO+BFSI+Medtech match.
+          if (segments?.length) {
+            return (
+              <div className="icp-parse-preview icp-parse-preview--grouped" aria-live="polite">
+                <span className="icp-parse-label">Parsed as {segments.length} groups →</span>
+                {segments.map((seg, i) => (
+                  <div key={i} className="icp-parse-group">
+                    {seg.personas.map(p => <span key={p} className="icp-tag icp-tag--per">{p}</span>)}
+                    <span className="icp-parse-group-sep">at</span>
+                    {seg.industries.map(ind => <span key={ind} className="icp-tag icp-tag--ind">{ind}</span>)}
+                  </div>
+                ))}
+                {aiBadge}
+              </div>
+            )
+          }
           return (
             <div className="icp-parse-preview" aria-live="polite">
               <span className="icp-parse-label">Parsed →</span>
               {industries.map(i => <span key={i} className="icp-tag icp-tag--ind">{i}</span>)}
               {personas.map(p  => <span key={p}  className="icp-tag icp-tag--per">{p}</span>)}
-              {source === 'llm' && (
-                <span className="icp-tag" style={{ background: 'rgba(46,94,170,0.08)', color: '#2E5EAA', border: '1px solid rgba(46,94,170,0.25)' }} title="Refined by AI from your exact wording">
-                  ✦ AI
-                </span>
-              )}
+              {aiBadge}
             </div>
           )
         })()}

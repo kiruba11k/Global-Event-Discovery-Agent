@@ -1,5 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, TypedDict
+
+
+class ICPSegment(TypedDict):
+    personas:   List[str]
+    industries: List[str]
 
 
 class ICPProfile(BaseModel):
@@ -8,6 +13,19 @@ class ICPProfile(BaseModel):
     target_personas:        List[str]       # ["CIO", "CTO", "Head of Data"]
     target_geographies:     List[str]       # ["Singapore", "India", "US", "Global"]
     preferred_event_types:  List[str]       # ["conference", "trade show", "summit"]
+
+    # ── Paired persona/industry groups ─────────────────────────
+    # When the buyer description names distinct role+vertical pairs
+    # ("CEO at BFSI, CIO at Medtech companies"), target_industries and
+    # target_personas above stay the UNION of everything mentioned (used
+    # for coarse filtering / display / back-compat with older clients),
+    # but icp_segments carries the actual pairing so the scorer can
+    # require persona AND industry from the SAME group, instead of
+    # scoring "any persona" against "any industry" and letting an event
+    # that only matches CEO + Medtech (a pairing nobody asked for) count
+    # as a full match. Empty means "no explicit pairing" - falls back to
+    # the flat cross-product behaviour via target_industries/target_personas.
+    icp_segments:            List[ICPSegment] = []
     budget_usd:             Optional[float] = None
     date_from:              Optional[str]   = None   # YYYY-MM-DD
     date_to:                Optional[str]   = None   # YYYY-MM-DD
