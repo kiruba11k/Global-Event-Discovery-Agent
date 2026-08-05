@@ -170,6 +170,18 @@ class Settings(BaseSettings):
     consider_threshold: float = 0.42
     top_k_for_llm: int = 10   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
 
+    # ── New retrieval pipeline (candidate_retriever.py / llm_selector.py) ──
+    # Off by default: the SQL-keyword-match + embedding + top-12->6 LLM
+    # selection path is additive, gated behind this flag so production
+    # keeps using the existing score_candidates/rank_with_groq flow until
+    # this is explicitly turned on (env var USE_KEYWORD_PIPELINE=true).
+    use_keyword_pipeline: bool = False
+    keyword_match_weight: float = 0.5
+    semantic_match_weight: float = 0.5
+    candidate_pool_size: int = 12
+    selection_size: int = 6
+    region_widen_threshold: int = 12
+
     # ── Scheduler ────────────────────────────────
     refresh_interval_hours: int = 24
 
