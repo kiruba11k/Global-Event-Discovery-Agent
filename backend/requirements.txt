@@ -15,6 +15,10 @@ asyncpg
 pydantic
 pydantic-settings
 python-dotenv
+# Pinned directly (not just relying on it as pydantic's transitive dep) -
+# models/icp_profile.py's TypedDict field needs typing_extensions.TypedDict
+# specifically; pydantic v2 rejects typing.TypedDict on Python < 3.12.
+typing_extensions
 
 # ── LLM ──────────────────────────────────────────────────────────────
 openai
