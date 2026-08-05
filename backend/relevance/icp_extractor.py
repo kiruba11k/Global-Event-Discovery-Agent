@@ -73,46 +73,45 @@ async def extract_industry_persona_pairs(
     Returns [{"industry": str, "persona": str}, ...] — the flat pairing
     the SQL keyword-match/candidate_retriever layer scores against.
 
-    industries are validated against the DB's actual related_industries
+    industry is validated against the DB's actual related_industries
     vocabulary when a `db` session is given: an unmatched industry is
     fuzzy-corrected to the nearest real vocabulary term, or dropped (with
     a logged warning) if nothing is close enough. Without a db session
-    (or on a DB error) the LLM's canonical labels pass through unchecked —
+    (or on a DB error) the LLM's canonical label passes through unchecked —
     degrade gracefully rather than block extraction on a vocab lookup.
+
+    Returns EXACTLY ONE pair — this pipeline only ever targets a single
+    industry + persona, never icp_parser.py's multi-segment pairing
+    ("CEO at BFSI, CIO at Medtech" -> two groups). When the input names
+    multiple industries/personas/segments, only the PRIMARY one (first
+    named — icp_parser.py's system prompt already orders industries with
+    the primary first) is kept; the rest are intentionally dropped, not
+    silently unioned into a cross-product that could cross-match a
+    persona from one group with an industry from another.
     """
     parsed = await parse_icp_text(raw_text)
     if parsed is None:
-        return []
+        return [{"industry": "", "persona": ""}]
 
     vocab = await _db_industry_vocab(db) if db is not None else []
 
-    pairs: list[dict] = []
     segments = parsed.segments or []
     if segments:
-        for seg in segments:
-            industries = seg.industries or [""]
-            personas   = seg.personas or [""]
-            for industry in industries:
-                corrected = _fuzzy_correct(industry, vocab) if industry else ""
-                if industry and vocab and corrected is None:
-                    logger.warning(f"icp_extractor: dropping unmatched industry "
-                                   f"'{industry}' (no close DB vocab match)")
-                    continue
-                for persona in personas:
-                    pairs.append({"industry": corrected or industry, "persona": persona})
+        primary_industry = (segments[0].industries or [""])[0]
+        primary_persona  = (segments[0].personas or [""])[0]
     else:
-        industries = parsed.industries or [""]
-        personas   = parsed.personas or [""]
-        for industry in industries:
-            corrected = _fuzzy_correct(industry, vocab) if industry else ""
-            if industry and vocab and corrected is None:
-                logger.warning(f"icp_extractor: dropping unmatched industry "
-                               f"'{industry}' (no close DB vocab match)")
-                continue
-            for persona in personas:
-                pairs.append({"industry": corrected or industry, "persona": persona})
+        primary_industry = (parsed.industries or [""])[0]
+        primary_persona  = (parsed.personas or [""])[0]
 
-    return pairs or [{"industry": "", "persona": ""}]
+    corrected = _fuzzy_correct(primary_industry, vocab) if primary_industry else ""
+    if primary_industry and vocab and corrected is None:
+        logger.warning(f"icp_extractor: dropping unmatched industry "
+                        f"'{primary_industry}' (no close DB vocab match)")
+        primary_industry = ""
+    else:
+        primary_industry = corrected or primary_industry
+
+    return [{"industry": primary_industry, "persona": primary_persona}]
 
 
 def normalize_geo(raw_geo: str) -> dict:

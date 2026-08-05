@@ -424,26 +424,23 @@ def _icp_profile_dict(profile: ICPProfile) -> dict:
     expect: {"pairs": [{"industry","persona"}], "region": {...},
     "extra_keywords": [...], "_profile_obj": ICPProfile}.
 
-    Uses profile.icp_segments when the user's ICP named explicit
-    persona/industry pairs (same "don't cross-match unrelated pairs"
-    rationale as scorer.py's _best_segment_scores) — falls back to the
-    flat cross-product of target_industries × target_personas otherwise.
+    Always exactly ONE pair — this pipeline targets a single industry +
+    persona, not scorer.py's multi-segment pairing ("CEO at BFSI, CIO at
+    Medtech" as two independent groups). Takes the PRIMARY industry/
+    persona only (first named — icp_parser.py already orders the primary
+    industry first); anything else in profile.icp_segments/
+    target_industries/target_personas is intentionally dropped here, not
+    cross-producted.
     """
     segments = getattr(profile, "icp_segments", None) or []
-    pairs: list[dict] = []
     if segments:
-        for seg in segments:
-            industries = seg.get("industries") or [""]
-            personas   = seg.get("personas") or [""]
-            for industry in industries:
-                for persona in personas:
-                    pairs.append({"industry": industry, "persona": persona})
+        primary_industry = (segments[0].get("industries") or [""])[0]
+        primary_persona  = (segments[0].get("personas") or [""])[0]
     else:
-        industries = profile.target_industries or [""]
-        personas   = profile.target_personas or [""]
-        for industry in industries:
-            for persona in personas:
-                pairs.append({"industry": industry, "persona": persona})
+        primary_industry = (profile.target_industries or [""])[0]
+        primary_persona  = (profile.target_personas or [""])[0]
+
+    pairs = [{"industry": primary_industry, "persona": primary_persona}]
 
     geo_raw = (profile.target_geographies or [""])[0]
     region  = resolve_region({"raw": geo_raw})
