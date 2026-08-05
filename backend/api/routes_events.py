@@ -1345,6 +1345,15 @@ async def geo_hint(
         """
         from relevance.geo_aliases import expand_geo as _expand_geo
         geo_l = geo.strip().lower()
+        # "Global"/"worldwide"/"international"/"any" means no geo
+        # restriction at all — mirror get_candidate_events() (db/crud.py)
+        # and the scorer's own is_global check (relevance/scorer.py).
+        # Without this, "Global" was treated as a literal place name and
+        # ILIKE-matched against country/city text (which almost never
+        # contains the word "global"), so the preview reported near-zero
+        # coverage for a selection that the real search actually treats
+        # as "search every region."
+        is_global_geo = geo_l in ("global", "worldwide", "international", "any")
         geo_parts = [geo_l]
         if " - " in geo_l:
             geo_parts.extend(p.strip() for p in geo_l.split(" - "))
@@ -1352,11 +1361,12 @@ async def geo_hint(
             variant for part in geo_parts for variant in _expand_geo(part)
         ))
         geo_filters = []
-        for part in geo_parts:
-            if len(part) > 1:
-                geo_filters.append(_ORM.country.ilike(f"%{part}%"))
-                geo_filters.append(_ORM.city.ilike(f"%{part}%"))
-                geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
+        if not is_global_geo:
+            for part in geo_parts:
+                if len(part) > 1:
+                    geo_filters.append(_ORM.country.ilike(f"%{part}%"))
+                    geo_filters.append(_ORM.city.ilike(f"%{part}%"))
+                    geo_filters.append(_ORM.event_cities.ilike(f"%{part}%"))
         # NOTE: industry/persona are intentionally NOT filtered in SQL here.
         # The ILIKE 8-char-stem match used to be applied at the SQL layer
         # (as an AND alongside geo), but that stem match is far weaker than
@@ -1368,7 +1378,11 @@ async def geo_hint(
         # the real pipeline would score GO/CONSIDER (e.g. industry_tags=
         # "Software" never matched an ILIKE stem of "technolo"), causing
         # this hint to under-report versus the actual search results.
-        if not geo_filters:
+        if is_global_geo:
+            stmt = _sel(_ORM.id).where(_ORM.start_date >= today)
+            result = await db.execute(stmt)
+            candidate_ids = {row[0] for row in result.all()}
+        elif not geo_filters:
             candidate_ids = set(_semantic_ids_for_geo(geo)) if with_industries and with_personas else set()
         else:
             stmt = _sel(_ORM.id).where(
