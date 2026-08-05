@@ -418,18 +418,35 @@ def _word_in_text(word: str, text: str) -> bool:
     return bool(re.search(r"\b" + re.escape(word) + r"\b", text, re.I))
 
 
+# Synonyms that are already complete dictionary words, deliberately
+# excluded from the prefix-stem behaviour below because they happen to be
+# an exact prefix of a common, UNRELATED word — the open-ended "\bsyn"
+# match would silently treat every event tagged with the unrelated word
+# as a match. Confirmed in production data: "hospital" (Healthcare
+# synonym) is a literal prefix of "Hospitality" (Travel/Hospitality's own
+# EventsEye tag, "Catering & Hospitality Industries"), so every
+# hospitality/travel/catering event in the catalog was scoring as a
+# Healthcare match - on one real DB dump this alone flooded 499 of 500
+# candidates as false Healthcare "GO" matches, drowning out the ~13 real
+# ones. Add to this set (not `manufactur`/`technolog`-style intentional
+# stems, which are safe) whenever a new collision like this is found.
+_NO_STEM_SYNONYMS = {"hospital"}
+
+
 def _syn_in_text(syn: str, text: str) -> bool:
     """
     Boundary-aware synonym match.
     Short synonyms (≤4 chars) must match whole words only, so "auto"
     never fires inside "automation" and "ev" never fires inside "event".
     Longer synonyms are stems anchored at a word start ("manufactur"
-    matches "manufacturing", "technolog" matches "technology").
+    matches "manufacturing", "technolog" matches "technology") UNLESS
+    listed in _NO_STEM_SYNONYMS, where the stem itself is a complete word
+    that collides with an unrelated longer word (see comment above).
     """
     syn = syn.strip().lower()
     if not syn:
         return False
-    if len(syn) <= 4:
+    if len(syn) <= 4 or syn in _NO_STEM_SYNONYMS:
         return bool(re.search(r"\b" + re.escape(syn) + r"\b", text, re.I))
     return bool(re.search(r"\b" + re.escape(syn), text, re.I))
 

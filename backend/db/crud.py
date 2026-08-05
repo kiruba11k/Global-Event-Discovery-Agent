@@ -270,9 +270,21 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
     terms: list[str] = []
     seen:  set[str]  = set()
 
+    # Terms excluded from ILIKE expansion because they're a literal
+    # substring PREFIX of a common, unrelated EventsEye tag word - ILIKE
+    # '%term%' has no word-boundary concept at all (unlike the regex-based
+    # matching in relevance/scorer.py's _syn_in_text, which has its own
+    # parallel _NO_STEM_SYNONYMS guard for the same reason). Confirmed on
+    # real data: "hospital" ILIKE-matches "Hospitality" ("Catering &
+    # Hospitality Industries" - Travel/Hospitality's own tag), so every
+    # Healthcare search's candidate recall was flooded with travel/food/
+    # hotel events. "health"/"medical"/"clinical"/"healthcare" already
+    # cover genuine hospital-related events without this collision.
+    _ILIKE_UNSAFE_TERMS = {"hospital"}
+
     def _add(t: str):
         t = t.strip().lower()
-        if t and len(t) >= 2 and t not in seen:
+        if t and len(t) >= 2 and t not in seen and t not in _ILIKE_UNSAFE_TERMS:
             seen.add(t)
             terms.append(t)
 
