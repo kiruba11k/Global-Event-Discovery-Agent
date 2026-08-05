@@ -97,20 +97,37 @@ async def get_region_candidate_count(
 ) -> int:
     """Lightweight COUNT(*) — never returned to the user, only used to
     decide whether to widen the geo filter before the real retrieval
-    query runs in Layer 4."""
+    query runs in Layer 4.
+
+    ILIKE is Postgres-only (SQLite has no case-insensitive LIKE operator
+    by that name) and ILIKE ANY(:array) doubly so — both raised on
+    SQLite, silently caught below, always returning 0 and forcing
+    should_widen_geo() to fire regardless of actual data. Dialect-aware
+    (mirrors sql_keyword_match's own is_postgres branch) so this signal
+    is meaningful in local/SQLite dev too, not just production Postgres.
+    """
+    is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
+    match_op = "ILIKE" if is_postgres else "LIKE"
+
     where = ["1=1"]
     params: dict = {}
     if geo.get("city"):
-        where.append("(city ILIKE :city OR event_cities ILIKE :city_like)")
+        where.append(f"(city {match_op} :city OR event_cities {match_op} :city_like)")
         params["city"] = geo["city"]
         params["city_like"] = f"%{geo['city']}%"
     elif geo.get("country"):
-        where.append("(country ILIKE :country OR event_cities ILIKE :country_like)")
+        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
         params["country"] = geo["country"]
         params["country_like"] = f"%{geo['country']}%"
-    if industries:
-        where.append("(related_industries ILIKE ANY(:inds) OR relevant_keywords ILIKE ANY(:inds))")
-        params["inds"] = [f"%{i}%" for i in industries if i]
+    # OR of individual clauses, not ILIKE ANY(:array) (Postgres-only).
+    ind_terms = [i for i in industries if i]
+    if ind_terms:
+        ind_clauses = []
+        for i, term in enumerate(ind_terms):
+            key = f"ind{i}"
+            ind_clauses.append(f"(related_industries {match_op} :{key} OR relevant_keywords {match_op} :{key})")
+            params[key] = f"%{term}%"
+        where.append("(" + " OR ".join(ind_clauses) + ")")
 
     try:
         row = (await db.execute(
@@ -281,6 +298,54 @@ def blend_and_rank(
     return ranked
 
 
+async def _fallback_recent_events(
+    db: AsyncSession, geo: dict, top_n: int,
+) -> list[tuple[EventORM, float]]:
+    """
+    Last-resort retrieval when the ICP has genuinely no industry/keyword
+    signal at all (e.g. "industry-agnostic" — icp_parser.py deliberately
+    returns an empty industries list for that rather than guessing a
+    vertical) AND semantic recall found nothing (no embedding provider
+    active, or no embeddings backfilled yet). Without this,
+    sql_keyword_match() short-circuits on an empty search_terms list and
+    semantic_recall() needs pgvector active — an industry-agnostic ICP
+    with no embedding provider configured would otherwise get zero
+    candidates every time, even though the region may have plenty of
+    upcoming events worth showing the LLM selector.
+
+    Filters by region only (best-effort ILIKE, no hard requirement — an
+    empty region still returns something), ordered by soonest start_date,
+    given a flat neutral score so it never outranks a real keyword or
+    semantic match when both are combined elsewhere.
+    """
+    is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
+    match_op = "ILIKE" if is_postgres else "LIKE"
+    where = ["1=1"]
+    params: dict = {}
+    if geo.get("country"):
+        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
+        params["country"] = geo["country"] if is_postgres else f"%{geo['country']}%"
+        params["country_like"] = f"%{geo['country']}%"
+
+    try:
+        rows = (await db.execute(
+            text(f"SELECT * FROM events WHERE {' AND '.join(where)} "
+                 f"ORDER BY start_date ASC LIMIT :n"),
+            {**params, "n": top_n},
+        )).mappings().all()
+    except Exception as exc:
+        logger.warning(f"candidate_retriever: fallback recall failed ({exc})")
+        return []
+
+    events = dedupe_by_hash(
+        EventORM(**{k: v for k, v in dict(r).items() if k in EventORM.__table__.columns.keys()})
+        for r in rows
+    )
+    logger.info(f"candidate_retriever: no keyword/semantic signal — "
+                f"fell back to {len(events)} region/date-ordered events")
+    return [(e, 0.10) for e in events]  # flat neutral score — never a real match, just a fill
+
+
 # ── Public entry point ────────────────────────────────────────────
 
 async def get_top_candidates(
@@ -294,6 +359,7 @@ async def get_top_candidates(
     top_n = top_n or settings.candidate_pool_size
     region = icp_profile.get("region", {})
     industries = [p["industry"] for p in icp_profile.get("pairs", []) if p.get("industry")]
+    keywords   = icp_profile.get("extra_keywords", []) or []
 
     count = await get_region_candidate_count(db, region, industries)
     widen = should_widen_geo(count)
@@ -306,6 +372,13 @@ async def get_top_candidates(
     semantic_hits = await semantic_recall(db, icp_profile, exclude_ids)
 
     ranked = blend_and_rank(keyword_hits, semantic_hits)
+
+    if not ranked and not industries and not keywords:
+        # Genuinely no signal to search on (industry-agnostic ICP) and
+        # semantic recall found nothing — fall back to region/date rather
+        # than returning zero candidates to the LLM selector.
+        ranked = await _fallback_recent_events(db, region, top_n)
+
     top = ranked[:top_n]
     logger.info(f"candidate_retriever: {len(keyword_hits)} keyword hits, "
                 f"{len(semantic_hits)} semantic-only hits -> top {len(top)} candidates")
