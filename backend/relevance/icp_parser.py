@@ -159,12 +159,37 @@ RULES:
   e.g. "CEO at BFSI companies, CIO at Medtech firms" means find a CEO buyer
   at a BFSI company OR a CIO buyer at a Medtech company, NEVER a CEO at a
   Medtech company. Each segment is {{"personas": [...], "industries": [...]}}
-  using the same canonical labels as above. Leave segments EMPTY when:
-    - only one role/vertical pair is mentioned ("CIOs at fintech firms")
-    - roles are listed together sharing ONE vertical ("CIOs and CISOs at
-      healthcare orgs" - this is one segment, i.e. no pairing ambiguity, so
-      leave segments empty and just fill industries/personas normally)
-    - the buyer is industry-agnostic (no verticals to pair against)
+  using the same canonical labels as above.
+
+  HOW TO DECIDE WHERE ONE PAIR ENDS AND THE NEXT BEGINS - read the input as
+  a human would, using punctuation, repeated prepositions, and clause
+  structure as your evidence, not just presence of "and":
+    - A comma, semicolon, or "and also" between two "ROLE at/in VERTICAL"
+      clauses is a strong signal of two separate pairs: "CEOs at BFSI firms,
+      CIOs at Medtech companies" -> 2 segments.
+    - A role preposition ("at", "in", "for", "within") repeated once per
+      clause confirms each clause is its own pair: "CTOs in cloud computing
+      and Plant Managers in manufacturing" -> 2 segments (the second "in"
+      re-anchors a new pair, it does not extend the first).
+    - Roles joined by "and"/"&" immediately before ONE shared preposition +
+      vertical are ONE pair, not several: "CIOs and CISOs at healthcare
+      orgs" -> segments EMPTY, personas=["CIO","CISO"], industries=
+      ["Healthcare / Medtech"] (only one preposition, one vertical - no
+      pairing ambiguity to resolve).
+    - Verticals joined by "and" immediately after ONE shared role+preposition
+      are also ONE pair: "CIOs at fintech and healthcare companies" ->
+      segments EMPTY, personas=["CIO"], industries=["Fintech","Healthcare /
+      Medtech"] (one role, two verticals it's equally happy with - not two
+      role/vertical pairings).
+    - GENUINE ambiguity ("CEOs and CIOs at fintech and healthcare firms" -
+      unclear whether every role should pair with every vertical, or
+      role[i] pairs with vertical[i]): DO NOT force a guess into segments.
+      Leave segments EMPTY and return the flat union instead - an
+      incorrectly split pairing is worse than no pairing, since it would
+      wrongly exclude combinations the buyer actually wants. Only emit
+      segments when the clause structure makes the pairing unambiguous.
+    - Leave segments EMPTY when the buyer is industry-agnostic (no verticals
+      to pair against) even if multiple roles are listed.
   When segments IS populated, industries/personas at the top level must
   still be the flat union of every persona/industry across all segments.
   Example: "CEO at BFSI, CIO at Medtech" ->
