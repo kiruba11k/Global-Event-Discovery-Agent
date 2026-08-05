@@ -11,6 +11,7 @@ Flow: resolve_region() -> get_region_candidate_count()/should_widen_geo()
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable, Optional
 
 from loguru import logger
@@ -21,8 +22,57 @@ from config import get_settings
 from models.event import EventORM
 from relevance import pgvector_store
 from relevance.icp_extractor import normalize_geo
+from relevance.scorer import _PROFILE_TO_EVENTSEYE
 
 settings = get_settings()
+
+# Cap how many synonyms one industry can contribute to the search term
+# list — _PROFILE_TO_EVENTSEYE entries run 10-30 synonyms each; sending
+# all of them per industry would blow up the tsquery for multi-industry
+# ICPs and dilute the match toward generic terms.
+_MAX_SYNONYMS_PER_INDUSTRY = 8
+
+
+def _expand_industry_synonyms(industry: str) -> list[str]:
+    """
+    Same taxonomy bridge scorer.py's _score_industry() Pass 2 uses
+    (EventsEye's industry vocabulary rarely says "Fintech" verbatim — it
+    says "Financial Technology", "Digital Banking", "Payment Systems",
+    etc.) — reused here, not duplicated, so the keyword-match layer gets
+    the same synonym coverage the old rule scorer had. Without this, the
+    keyword-match layer only ever searched for the LLM's canonical label
+    itself, missing events whose related_industries/relevant_keywords
+    use a synonym instead of that exact word.
+    """
+    ind_lower = industry.lower().strip()
+    if not ind_lower:
+        return []
+    ind_tokens = [t for t in re.split(r"[^a-z0-9]+", ind_lower) if len(t) > 2]
+
+    for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
+        key_words = [kw for kw in key.split() if len(kw) > 2]
+        if not key_words:
+            continue
+        if all(any(t == kw or t.startswith(kw) for t in ind_tokens) for kw in key_words):
+            return synonyms[:_MAX_SYNONYMS_PER_INDUSTRY]
+    return []
+
+
+def _to_tsquery_string(terms: list[str]) -> str:
+    """
+    Build a to_tsquery-safe OR-of-ANDs string: each term's own words are
+    ANDed together (a multi-word term must match as a phrase-ish unit),
+    terms are OR'd against each other (matching any one term is enough).
+    Strips punctuation to_tsquery would otherwise choke on (unbalanced
+    quotes/operators raise a syntax error, not an empty result).
+    """
+    clauses = []
+    for t in terms:
+        words = re.sub(r"[^a-zA-Z0-9\s]", " ", t or "").split()
+        if not words:
+            continue
+        clauses.append(" & ".join(words))
+    return " | ".join(f"({c})" for c in clauses if c)
 
 
 # ── Layer 1: region resolution ──────────────────────────────────────
@@ -90,21 +140,32 @@ async def sql_keyword_match(
     """
     industries = [p["industry"] for p in icp_profile.get("pairs", []) if p.get("industry")]
     keywords   = icp_profile.get("extra_keywords", []) or []
-    search_terms = list(dict.fromkeys(industries + keywords))
+    synonyms: list[str] = []
+    for industry in industries:
+        synonyms.extend(_expand_industry_synonyms(industry))
+    search_terms = list(dict.fromkeys(industries + keywords + synonyms))
     if not search_terms:
         return []
 
     geo = icp_profile.get("region", {})
     where = ["1=1"]
-    params: dict = {"query": " | ".join(t.replace(" ", " & ") for t in search_terms if t)}
+    params: dict = {}
 
     is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
     if is_postgres:
+        # OR across terms (any industry/synonym/keyword can match), AND
+        # within a multi-word term's own words. plainto_tsquery has no OR
+        # operator — it silently ANDs every word across every term, which
+        # would require an event to match EVERY industry/synonym at once.
+        # to_tsquery supports '|' (OR) / '&' (AND) explicitly instead.
+        tsquery = _to_tsquery_string(search_terms)
+        if not tsquery:
+            return []
         where.append(
-            "(to_tsvector('english', coalesce(relevant_keywords,'')) @@ plainto_tsquery('english', :raw_q) "
-            "OR to_tsvector('english', coalesce(related_industries,'')) @@ plainto_tsquery('english', :raw_q))"
+            "(to_tsvector('english', coalesce(relevant_keywords,'')) @@ to_tsquery('english', :raw_q) "
+            "OR to_tsvector('english', coalesce(related_industries,'')) @@ to_tsquery('english', :raw_q))"
         )
-        params["raw_q"] = " ".join(search_terms)
+        params["raw_q"] = tsquery
     else:
         like_clauses = []
         for i, term in enumerate(search_terms):
