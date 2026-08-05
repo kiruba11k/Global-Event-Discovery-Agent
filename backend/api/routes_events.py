@@ -46,13 +46,15 @@ from db.database import get_db
 from ingestion.ingestion_manager import run_ingestion, run_seed_only
 from ingestion.platform_normaliser import _iso_date
 from ingestion.realtime_pipeline import fetch_realtime_candidates
-from models.event import EventCreate
+from models.event import EventCreate, RankedEvent
 from models.icp_profile import CompanyContext, ICPProfile, SearchRequest, SearchResponse
 from relevance.groq_ranker import rank_with_groq
-from relevance.scorer import score_candidates
+from relevance.scorer import score_candidates, build_fallback_rationale
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
 from relevance.profile_store import profile_core_hash
 from relevance.meeting_calculator import calculate_meeting_potential
+from relevance.candidate_retriever import get_top_candidates, resolve_region
+from relevance.llm_selector import select_top_6, validate_reasons
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
 from scripts.seed_eventseye_global import run_eventseye_seed
@@ -416,6 +418,120 @@ def _extract_pdf_text(fb):
         return ""
 
 
+def _icp_profile_dict(profile: ICPProfile) -> dict:
+    """
+    Shape ICPProfile into the dict candidate_retriever.py / llm_selector.py
+    expect: {"pairs": [{"industry","persona"}], "region": {...},
+    "extra_keywords": [...], "_profile_obj": ICPProfile}.
+
+    Always exactly ONE pair — this pipeline targets a single industry +
+    persona, not scorer.py's multi-segment pairing ("CEO at BFSI, CIO at
+    Medtech" as two independent groups). Takes the PRIMARY industry/
+    persona only (first named — icp_parser.py already orders the primary
+    industry first); anything else in profile.icp_segments/
+    target_industries/target_personas is intentionally dropped here, not
+    cross-producted.
+    """
+    segments = getattr(profile, "icp_segments", None) or []
+    if segments:
+        primary_industry = (segments[0].get("industries") or [""])[0]
+        primary_persona  = (segments[0].get("personas") or [""])[0]
+    else:
+        primary_industry = (profile.target_industries or [""])[0]
+        primary_persona  = (profile.target_personas or [""])[0]
+
+    pairs = [{"industry": primary_industry, "persona": primary_persona}]
+
+    geo_raw = (profile.target_geographies or [""])[0]
+    region  = resolve_region({"raw": geo_raw})
+
+    return {
+        "pairs": pairs,
+        "region": region,
+        "extra_keywords": getattr(profile, "extra_keywords", None) or [],
+        "_profile_obj": profile,
+    }
+
+
+async def _run_keyword_embedding_pipeline(
+    db: AsyncSession,
+    profile: ICPProfile,
+    company_ctx: CompanyContext | None,
+) -> tuple[list, dict, list, int]:
+    """
+    Layers 4-5 of the keyword+embedding rework: SQL keyword match +
+    semantic recall -> top 12 -> single LLM call selects top 6 with a
+    reason each. Returns (top_events, pre_scores, ranked, candidate_count)
+    shaped to drop straight into the same Step 9/10 code the old
+    score_candidates/rank_with_groq path feeds — enrichment and fit
+    scoring don't need to know which retrieval path produced `ranked`.
+
+    fit_verdict is still populated (GO for the first 3 selections, ranked
+    LLM ordering: CONSIDER for the rest of the 6) purely so the existing
+    RankedEvent schema / frontend badges keep working unchanged — this
+    pipeline itself has no verdict concept, only a ranked pick + reason.
+    """
+    icp_profile = _icp_profile_dict(profile)
+    candidates = await get_top_candidates(db, icp_profile)
+    candidate_count = len(candidates)
+
+    if not candidates:
+        return [], {}, [], 0
+
+    selected = await select_top_6(icp_profile, candidates)
+    selected = await validate_reasons(selected, candidates)
+
+    by_id = {e.id: (e, s) for e, s in candidates}
+    top_events = [e for e, _ in candidates]
+    pre_scores = {e.id: s for e, s in candidates}
+
+    ranked: list[RankedEvent] = []
+    for i, sel in enumerate(selected):
+        event, blended_score = by_id.get(sel["event_id"], (None, 0.0))
+        if event is None:
+            continue
+        verdict = "GO" if i < 3 else "CONSIDER"
+        reason = sel.get("reason") or ""
+        if not reason:
+            fallback_detail = {
+                "industry_matched": [], "persona_matched": [],
+                "geo_matched": icp_profile["region"].get("canonical_geo", ""),
+                "attendee_tier": "",
+            }
+            reason = build_fallback_rationale(event, profile, fallback_detail,
+                                               blended_score, verdict)
+
+        start_date = (event.start_date or "").strip()[:10]
+        end_date   = (event.end_date or "").strip()[:10]
+        ranked.append(RankedEvent(
+            id=event.id,
+            event_name=event.name,
+            date=start_date + (f" - {end_date}" if end_date and end_date != start_date else ""),
+            place=f"{event.venue_name or ''}, {event.city or ''}".strip(", "),
+            event_link=event.source_url or event.website or "",
+            what_its_about=(event.short_summary or event.description or "")[:200],
+            key_numbers=f"{event.est_attendees:,} attendees" if event.est_attendees else "See event website",
+            industry=(getattr(event, "related_industries", "") or event.industry_tags or event.category or ""),
+            buyer_persona=event.audience_personas or "",
+            pricing=event.price_description or "See website",
+            pricing_link=event.source_url or event.website or "",
+            fit_verdict=verdict,
+            verdict_notes=reason,
+            sponsors=event.sponsors or "",
+            speakers_link=event.speakers_url or "",
+            agenda_link=event.agenda_url or "",
+            relevance_score=blended_score,
+            source_platform=event.source_platform,
+            est_attendees=event.est_attendees or 0,
+            organizer=getattr(event, "organizer", "") or "",
+            website=event.website or event.source_url or "",
+            serpapi_enriched=False,
+        ))
+
+    logger.info(f"keyword_pipeline: {candidate_count} candidates -> {len(ranked)} selected")
+    return top_events, pre_scores, ranked, candidate_count
+
+
 # ══════════════════════════════════════════════════════════════════════
 # POST /api/search  —  REAL-TIME PIPELINE
 # ══════════════════════════════════════════════════════════════════════
@@ -463,7 +579,7 @@ async def _run_search_pipeline(
             _sel(_ORM).where(
                 _ORM.start_date >= (profile.date_from or today),
                 _ORM.start_date <= (profile.date_to   or "2030-12-31"),
-            ).limit(500)
+            ).order_by(_ORM.start_date.asc()).limit(500)
         )
         candidates = list(r.scalars().all())
         logger.info(f"Wide fallback: {len(candidates)} candidates from DB")
@@ -574,57 +690,70 @@ async def _run_search_pipeline(
         except Exception as exc:
             logger.warning(f"Semantic search: {exc}")
 
-    # ── Step 6: Rule-based scoring ───────────────────────────────────
-    scored = score_candidates(candidates, profile, cosine_scores)
-
-    # ── Determine relevance threshold dynamically ─────────────────
-    # Events with score >= threshold are "worth considering".
-    # Threshold = 10% of the max score (so at least 10% ICP match).
-    # Always guarantee at least RESULT_LIMIT events pass the cut.
-    if scored:
-        max_score = max(s for _, s, _, _ in scored)
-        threshold = max(0.10, max_score * 0.10)
+    if settings.use_keyword_pipeline:
+        # ── Steps 6-8 (new path): SQL keyword+embedding retrieval →
+        # top-12 → single LLM selection → top-6 with reason. Response
+        # shape stays RankedEvent-compatible (fit_verdict/verdict_notes
+        # still populated) so nothing downstream — enrichment, fit
+        # scoring, frontend — needs to change while this is gated behind
+        # settings.use_keyword_pipeline (off by default).
+        top_events, pre_scores, ranked, shows_worth_considering_count = \
+            await _run_keyword_embedding_pipeline(
+                db=db, profile=profile, company_ctx=company_ctx,
+            )
+        _store_last_results(profile_id, ranked)
     else:
-        threshold = 0.10
+        # ── Step 6: Rule-based scoring ───────────────────────────────────
+        scored = score_candidates(candidates, profile, cosine_scores)
 
-    all_relevant = [(e, s, t, d) for e, s, t, d in scored if s >= threshold]
+        # ── Determine relevance threshold dynamically ─────────────────
+        # Events with score >= threshold are "worth considering".
+        # Threshold = 10% of the max score (so at least 10% ICP match).
+        # Always guarantee at least RESULT_LIMIT events pass the cut.
+        if scored:
+            max_score = max(s for _, s, _, _ in scored)
+            threshold = max(0.10, max_score * 0.10)
+        else:
+            threshold = 0.10
 
-    shows_worth_considering_count = len(all_relevant)
+        all_relevant = [(e, s, t, d) for e, s, t, d in scored if s >= threshold]
 
-    top        = all_relevant[:settings.top_k_for_llm]
-    top_events = [e for e, _, _, _ in top]
-    pre_scores = {e.id: s for e, s, _, _ in top}
-    pre_tiers  = {e.id: t for e, _, t, _ in top}
-    pre_details= {e.id: d for e, _, _, d in top}
+        shows_worth_considering_count = len(all_relevant)
 
-    logger.info(
-        f"Scored top {len(top_events)} (of {shows_worth_considering_count} relevant): "
-        f"GO={sum(1 for _,_,t,_ in top if t=='GO')}  "
-        f"CONSIDER={sum(1 for _,_,t,_ in top if t=='CONSIDER')}  "
-        f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
-    )
+        top        = all_relevant[:settings.top_k_for_llm]
+        top_events = [e for e, _, _, _ in top]
+        pre_scores = {e.id: s for e, s, _, _ in top}
+        pre_tiers  = {e.id: t for e, _, t, _ in top}
+        pre_details= {e.id: d for e, _, _, d in top}
 
-    # NOTE: used to build a shared Groq async client here for SerpAPI
-    # enrichment (enrichment/serp_enricher.py's optional groq_client
-    # param). Enrichment is disabled (DB-only mode) and the LLM gateway
-    # moved to OpenAI (relevance/llm_client.py handles its own client),
-    # so there's nothing to build.
+        logger.info(
+            f"Scored top {len(top_events)} (of {shows_worth_considering_count} relevant): "
+            f"GO={sum(1 for _,_,t,_ in top if t=='GO')}  "
+            f"CONSIDER={sum(1 for _,_,t,_ in top if t=='CONSIDER')}  "
+            f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
+        )
 
-    # ── Step 7: Groq LLM ranking + cross-validation (no enrichment yet) ─
-    # Run ranking first on raw DB data to select the 6 final events,
-    # then enrich only those 6 — avoids wasting SerpAPI quota on events
-    # that won't be shown.
-    ranked = await rank_with_groq(
-        events=top_events, profile=profile,
-        pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
-        company_ctx=company_ctx, enrichments={},
-        deal_size_category=deal_size,
-    )
-    ranked = _sort_ranked(ranked)
+        # NOTE: used to build a shared Groq async client here for SerpAPI
+        # enrichment (enrichment/serp_enricher.py's optional groq_client
+        # param). Enrichment is disabled (DB-only mode) and the LLM gateway
+        # moved to OpenAI (relevance/llm_client.py handles its own client),
+        # so there's nothing to build.
 
-    # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
-    ranked = _apply_result_mix(ranked)
-    _store_last_results(profile_id, ranked)
+        # ── Step 7: Groq LLM ranking + cross-validation (no enrichment yet) ─
+        # Run ranking first on raw DB data to select the 6 final events,
+        # then enrich only those 6 — avoids wasting SerpAPI quota on events
+        # that won't be shown.
+        ranked = await rank_with_groq(
+            events=top_events, profile=profile,
+            pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
+            company_ctx=company_ctx, enrichments={},
+            deal_size_category=deal_size,
+        )
+        ranked = _sort_ranked(ranked)
+
+        # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
+        ranked = _apply_result_mix(ranked)
+        _store_last_results(profile_id, ranked)
 
     # ── Step 9: SerpAPI enrichment — only for the 6 final events ──────
     # Cost optimisation: skip events already enriched in DB (serpapi_enriched=True
@@ -763,14 +892,22 @@ async def _run_search_pipeline(
     # Attach fit_grade (A+/A/B+/B/C), icp_count, and universe_stats
     # These replace the GO/CONSIDER labels in the frontend.
     serialised_events = []
+    top_events_by_id = {e.id: e for e in top_events}
     for r in ranked:
         ev_dict = r.model_dump()
         # Look up the pre-scoring rule_score for this event (0..1 range)
         rule_s = pre_scores.get(r.event_id or r.id, 0.0) if hasattr(r, "event_id") else pre_scores.get(r.id, 0.0)
         # Find the original EventORM for factor scoring
-        event_orm = next((e for e in top_events if e.id == (r.event_id if hasattr(r, "event_id") else r.id)), None)
+        event_orm = top_events_by_id.get(r.event_id if hasattr(r, "event_id") else r.id)
         if event_orm:
-            fit = calculate_fit_score(event_orm, profile, rule_s)
+            # score_max=1.0 for the keyword+embedding pipeline: its
+            # blended_score is scaled 0..1 (keyword_weight + semantic_weight
+            # sum to 1), unlike scorer.py's rule_score which tops out at
+            # MAX_RULE_SCORE (~0.6) — see fit_scorer._factor_icp_density.
+            fit_score_max = 1.0 if settings.use_keyword_pipeline else None
+            fit = (calculate_fit_score(event_orm, profile, rule_s, fit_score_max)
+                   if fit_score_max is not None else
+                   calculate_fit_score(event_orm, profile, rule_s))
             icp = estimate_icp_count(event_orm, profile, rule_s)
             comp_cnt = count_competitors(event_orm, profile)
             ev_dict["fit_grade"]          = fit["fit_grade"]

@@ -80,6 +80,7 @@ from typing import Optional
 from config import get_settings
 from models.event import EventORM
 from models.icp_profile import ICPProfile
+from relevance.scorer import MAX_RULE_SCORE
 
 settings = get_settings()
 
@@ -97,7 +98,8 @@ ICP_ROUND_TO       = getattr(settings, "icp_round_to",      10)
 DEAL_MIN_STRATEGIC = getattr(settings, "deal_min_strategic", 5000)
 DEAL_MIN_ENTERPRISE= getattr(settings, "deal_min_enterprise",1000)
 DEAL_MIN_HIGH      = getattr(settings, "deal_min_high",      500)
-RULE_SCORE_MAX     = 0.60   # max possible rule_score from scorer.py (0.35 ind + 0.25 persona)
+RULE_SCORE_MAX     = MAX_RULE_SCORE   # max possible rule_score, imported from scorer.py — stays
+                                       # in sync automatically if scorer.py's weights change
 
 # ── Grade thresholds ──────────────────────────────────────────────
 # Applied AFTER normalisation to 0–100.
@@ -158,16 +160,24 @@ def _event_text(event: EventORM) -> str:
 # ─────────────────────────────────────────────────────────────────
 
 def _factor_icp_density(
-    event: EventORM, profile: ICPProfile, rule_score: float
+    event: EventORM, profile: ICPProfile, rule_score: float,
+    score_max: float = RULE_SCORE_MAX,
 ) -> tuple:
     """
     ICP density — max weight 40.
     Always available: we always have industry_tags + persona data from DB + profile.
-    
-    raw = (rule_score / RULE_SCORE_MAX) × 40
+
+    raw = (rule_score / score_max) × 40
     Capped so a perfect industry + persona match = full 40 points.
+
+    score_max defaults to scorer.py's rule-score ceiling (0..0.6), but the
+    keyword+embedding pipeline (candidate_retriever.py) produces a
+    differently-scaled blended_score (0..1, keyword_weight + semantic_weight
+    summing to 1) — callers on that path must pass score_max=1.0 so density
+    is normalized against the right ceiling instead of silently clamping to
+    a lower max via the min(...,1.0) guard below.
     """
-    density = min(rule_score / RULE_SCORE_MAX, 1.0) if rule_score > 0 else 0.0
+    density = min(rule_score / score_max, 1.0) if rule_score > 0 and score_max > 0 else 0.0
     raw     = round(density * 40.0, 2)
     notes   = f"ICP density {int(density*100)}% (industry + persona match)"
     return raw, 40, True, notes
@@ -315,7 +325,10 @@ def _factor_competitive_intensity(
 def calculate_fit_score(
     event:      EventORM,
     profile:    ICPProfile,
-    rule_score: float,    # 0..1 from scorer.py (industry + persona)
+    rule_score: float,    # 0..score_max — scorer.py's rule_score (0..0.6) by
+                           # default, or candidate_retriever.py's blended_score
+                           # (0..1) when score_max=1.0 is passed
+    score_max:  float = RULE_SCORE_MAX,
 ) -> dict:
     """
     Calculate the fit score using available-factor normalisation.
@@ -336,7 +349,7 @@ def calculate_fit_score(
       data_gaps      list factors that were skipped and WHY
     """
     factors = [
-        ("icp_density",          *_factor_icp_density(event, profile, rule_score)),
+        ("icp_density",          *_factor_icp_density(event, profile, rule_score, score_max)),
         ("deal_size_fit",        *_factor_deal_size(event, profile)),
         ("geo_match",            *_factor_geo_match(event, profile)),
         ("competitive_intensity",*_factor_competitive_intensity(event, profile)),

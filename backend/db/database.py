@@ -121,6 +121,7 @@ _NEW_COLUMNS = [
     ("event_venues",       "TEXT",     "''"),
     ("event_cities",       "TEXT",     "''"),
     ("related_industries", "TEXT",     "''"),
+    ("relevant_keywords",  "TEXT",     "''"),
     ("website",            "TEXT",     "''"),
     ("organizer",          "TEXT",     "''"),
     ("serpapi_enriched",   "BOOLEAN",  "FALSE"),
@@ -269,6 +270,7 @@ async def init_db():
     from models.consent import (  # noqa: registers tables
         BotProtectionEventORM, ConsentRecordORM,
     )
+    from models.cache import EnrichmentCacheORM  # noqa: registers table
 
     async with engine.begin() as conn:
         # Create tables that don't exist yet
@@ -288,6 +290,21 @@ async def init_db():
             ))
         if await _run_isolated(conn, "events.dedup_hash unique index check failed", _ensure_dedup_index):
             logger.debug("events.dedup_hash unique index ensured.")
+
+        # GIN full-text indexes backing candidate_retriever.py's SQL
+        # keyword-match retrieval (Postgres only — SQLite has no GIN/tsvector).
+        if IS_POSTGRES:
+            async def _ensure_keyword_indexes():
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_events_relevant_keywords_fts "
+                    "ON events USING GIN (to_tsvector('english', coalesce(relevant_keywords, '')))"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_events_related_industries_fts "
+                    "ON events USING GIN (to_tsvector('english', coalesce(related_industries, '')))"
+                ))
+            if await _run_isolated(conn, "events keyword GIN indexes failed", _ensure_keyword_indexes):
+                logger.debug("events.relevant_keywords / related_industries GIN indexes ensured.")
 
         # source_health circuit-breaker state (survives cold starts)
         async def _ensure_source_health():

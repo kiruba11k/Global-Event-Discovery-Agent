@@ -115,6 +115,21 @@ FIT_GRADE_RELEVANCE: dict[str, float] = {
     "C":  0.04,
 }
 
+def _smart_round(value: float, bucket: int) -> int:
+    """
+    Round to the nearest `bucket` for readability at scale, but fall back
+    to rounding to the nearest integer for small values. Bucket-rounding
+    small funnel steps (e.g. round(x/10)*10) floors anything under half
+    the bucket to 0 and then to the max(1, ...) clamp — so a 15-attendee
+    boutique event and any event with a C fit grade both always produced
+    identical funnel numbers regardless of actual fit quality. Rounding
+    to the nearest 1 for small values preserves the distinction.
+    """
+    if value < bucket * 5:
+        return max(1, round(value))
+    return max(1, round(value / bucket) * bucket)
+
+
 # ── Differentiator score → positioning tier ──────────────────────
 def _differentiator_tier(score: int) -> tuple[str, str]:
     """Returns (tier_key, description)."""
@@ -235,19 +250,19 @@ def calculate_meeting_potential(
         confidence = "low"
     else:
         # Step 1: unique companies
-        unique_companies = max(1, round(total_att * COMPANY_RATIO / 10) * 10)
+        unique_companies = _smart_round(total_att * COMPANY_RATIO, 10)
 
         # Step 2: relevant companies - driven by fit grade
         rel_ratio       = FIT_GRADE_RELEVANCE.get(fit_grade, 0.05)
-        relevant_cos    = max(1, round(unique_companies * rel_ratio / 5) * 5)
+        relevant_cos    = _smart_round(unique_companies * rel_ratio, 5)
 
         # Step 3: relevant DMs - 20% of relevant attendees
         # First approximate relevant attendees = relevant_cos / COMPANY_RATIO
         rel_att         = round(relevant_cos / COMPANY_RATIO)
-        relevant_dms    = max(1, round(rel_att * DM_PER_COMPANY / 5) * 5)
+        relevant_dms    = _smart_round(rel_att * DM_PER_COMPANY, 5)
 
         # Step 4: reachable ICPs - 15% reachability
-        reachable       = max(1, round(relevant_dms * REACHABILITY_RATE / 5) * 5)
+        reachable       = _smart_round(relevant_dms * REACHABILITY_RATE, 5)
 
         funnel = {
             "total_attendees":    {"value": total_att, "source": "event database"},
@@ -340,8 +355,11 @@ def calculate_meeting_potential(
                 f"({break_even_pct}% close rate)"
             ),
         }
-    elif avg_deal_usd > 0 and mid_meetings > 0:
-        # Free/custom pricing - can't calculate cost-based ROI, show deal value context
+    elif pkg_cost_usd is None and avg_deal_usd > 0 and mid_meetings > 0:
+        # Custom/unknown pricing only — a real $0 "Discover" package has no
+        # cost to weigh against deal value, so it correctly gets no ROI
+        # block at all rather than a misleading "covers campaign costs"
+        # summary next to a free tier.
         roi = {
             "avg_deal_usd":     avg_deal_usd,
             "avg_deal_display": f"${avg_deal_usd:,.0f}",

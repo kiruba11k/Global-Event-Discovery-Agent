@@ -72,6 +72,7 @@ class EventORM(Base):
     category         = Column(String, default="")
     industry_tags    = Column(Text, default="")      # old field
     related_industries = Column(Text, default="")    # NEW: rich industry list from source
+    relevant_keywords = Column(Text, default="")     # NEW: curated keywords for full-text match
     audience_personas = Column(Text, default="")
     organizer        = Column(String, default="")    # NEW: event organiser
 

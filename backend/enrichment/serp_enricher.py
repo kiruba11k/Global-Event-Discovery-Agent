@@ -1085,3 +1085,65 @@ async def enrich_events_batch(
         f"att={att_n} prc={prc_n} link={link_n} personas={per_n}"
     )
     return enriched_map
+
+
+# ── Persistent enrichment cache (Layer 6 of the keyword pipeline) ────
+# enrich_event() above already has an in-process `_cache` dict, but that
+# is per-worker and lost on every restart/deploy. This wrapper adds a
+# DB-backed cache keyed by dedup_hash (stable across re-ingestion, see
+# models/cache.py) so the final-6 enrichment call — the only enrichment
+# path this app makes an external SerpAPI request for — doesn't re-spend
+# quota on the same event across requests, workers, or deploys.
+
+_ENRICHMENT_CACHE_TTL_HOURS = 24 * 7  # a week — event facts rarely change faster
+
+
+async def get_or_fetch_enrichment(db, event, serpapi_key: str, **enrich_kwargs) -> dict:
+    """
+    Cache-through wrapper around enrich_event(), keyed by event.dedup_hash.
+    On a cache hit, returns the stored dict without any external call.
+    On a miss, calls enrich_event() and persists the result (even an
+    empty dict, so a genuine "nothing found" doesn't re-trigger a SerpAPI
+    call on every subsequent request for the same event).
+    """
+    import json
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import select
+
+    from models.cache import EnrichmentCacheORM
+
+    dedup_hash = getattr(event, "dedup_hash", None)
+    if not dedup_hash:
+        return await enrich_event(
+            event.name, (event.start_date or "")[:4], event.city or "",
+            event.source_url or "", serpapi_key,
+            getattr(event, "industry_tags", "") or "", **enrich_kwargs,
+        )
+
+    cutoff = datetime.utcnow() - timedelta(hours=_ENRICHMENT_CACHE_TTL_HOURS)
+    row = (await db.execute(
+        select(EnrichmentCacheORM).where(
+            EnrichmentCacheORM.dedup_hash == dedup_hash,
+            EnrichmentCacheORM.cached_at >= cutoff,
+        )
+    )).scalar_one_or_none()
+    if row is not None:
+        try:
+            return json.loads(row.data_json)
+        except (TypeError, ValueError):
+            pass  # corrupt cache row — fall through and refetch
+
+    data = await enrich_event(
+        event.name, (event.start_date or "")[:4], event.city or "",
+        event.source_url or "", serpapi_key,
+        getattr(event, "industry_tags", "") or "", **enrich_kwargs,
+    )
+
+    cache_row = EnrichmentCacheORM(
+        dedup_hash=dedup_hash, data_json=json.dumps(data or {}),
+        cached_at=datetime.utcnow(),
+    )
+    await db.merge(cache_row)
+    await db.commit()
+    return data or {}
