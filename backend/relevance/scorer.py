@@ -58,6 +58,17 @@ TIER_SKIP     = "SKIP"
 RULE_GO_THRESHOLD       = 0.38
 RULE_CONSIDER_THRESHOLD = 0.18
 
+# Max points per scoring factor — single source of truth. Other modules
+# (fit_scorer.py) that need to normalize against the rule scorer's scale
+# must import these rather than hardcoding a duplicate constant that can
+# silently drift out of sync when weights change here.
+MAX_INDUSTRY_SCORE  = 0.35
+MAX_PERSONA_SCORE   = 0.25
+MAX_GEO_SCORE       = 0.22
+MAX_TYPE_SCORE      = 0.10
+MAX_ATTENDEE_SCORE  = 0.08
+MAX_RULE_SCORE      = MAX_INDUSTRY_SCORE + MAX_PERSONA_SCORE
+
 
 # ══════════════════════════════════════════════════════════════════════
 # TAXONOMY BRIDGE
@@ -727,17 +738,11 @@ PERSONA_MISMATCH_PENALTY = 0.15
 # it's the wrong one" — many events (especially not yet backfilled from
 # a curated CSV, see the "Designations attending" column) simply have an
 # empty audience_personas field, not a confirmed-wrong one. Genuinely
-# wrong persona data still gets the harsh penalty above.
-#
-# SUPERSEDED: this used to be a flat multiplier applied to the "no data"
-# case, same as the real-mismatch case just softer. Now that case doesn't
-# get penalized at all — _rule_score redistributes persona's 0.25 weight
-# into industry/geography instead, since a flat penalty applied to EVERY
-# event in a catalog with near-zero persona coverage was uniform (not
-# biased) but pure wasted weight, needlessly deflating every score by the
-# same amount rather than actually differentiating anything. Kept here,
-# unused, as a record of the prior approach.
-PERSONA_UNKNOWN_PENALTY = 0.55
+# wrong persona data still gets the harsh penalty above. (This used to be
+# a flat PERSONA_UNKNOWN_PENALTY multiplier on the "no data" case; that's
+# now handled by redistributing persona's weight into industry/geo below
+# instead of penalizing every event in a low-persona-coverage catalog by
+# the same fixed amount.)
 
 # Geography is SECONDARY, a backfill preference once designation is
 # satisfied — not a hard requirement. A persona-matching event from a
@@ -841,17 +846,25 @@ def _rule_score(event: EventORM, profile: ICPProfile) -> Tuple[float, dict]:
         ind_score + per_score + geo_score + type_score + att_score,
         4
     )
-    # Persona mismatch penalty only applies to a CONFIRMED wrong
-    # designation now (event.audience_personas is populated and named a
-    # different role) - the "no data at all" case is already handled above
-    # via redistribution, not a penalty multiplier.
+    # Mismatch penalties: apply only the SINGLE strongest applicable
+    # penalty, not all of them multiplicatively. Stacking them (e.g.
+    # persona 0.15 * geo 0.65 * industry 0.50) compounds into an
+    # undocumented ~5% multiplier for any event missing all three
+    # dimensions — far harsher than any one penalty was designed for,
+    # and it swamps genuine partial signal in whichever dimension DID
+    # match. Taking the min (strongest single) penalty still clearly
+    # demotes a multi-dimension mismatch below a single-dimension one,
+    # without the compounding blowup.
+    applicable_penalties: list[float] = []
     if profile.target_personas and per_score == 0.0 and persona_data_present:
-        total = round(total * PERSONA_MISMATCH_PENALTY, 4)
+        applicable_penalties.append(PERSONA_MISMATCH_PENALTY)
     if geo_matched not in ("Global", "Virtual/Hybrid") and geo_score == 0.0:
-        total = round(total * GEO_MISMATCH_PENALTY, 4)
+        applicable_penalties.append(GEO_MISMATCH_PENALTY)
     if profile.target_industries and ind_score == 0.0:
         penalty = INDUSTRY_MISMATCH_PENALTY if _get_industry(event).strip() else INDUSTRY_UNKNOWN_PENALTY
-        total = round(total * penalty, 4)
+        applicable_penalties.append(penalty)
+    if applicable_penalties:
+        total = round(total * min(applicable_penalties), 4)
 
     detail = {
         "industry_matched":  ind_matched[:4],

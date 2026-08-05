@@ -463,7 +463,7 @@ async def _run_search_pipeline(
             _sel(_ORM).where(
                 _ORM.start_date >= (profile.date_from or today),
                 _ORM.start_date <= (profile.date_to   or "2030-12-31"),
-            ).limit(500)
+            ).order_by(_ORM.start_date.asc()).limit(500)
         )
         candidates = list(r.scalars().all())
         logger.info(f"Wide fallback: {len(candidates)} candidates from DB")
@@ -763,12 +763,13 @@ async def _run_search_pipeline(
     # Attach fit_grade (A+/A/B+/B/C), icp_count, and universe_stats
     # These replace the GO/CONSIDER labels in the frontend.
     serialised_events = []
+    top_events_by_id = {e.id: e for e in top_events}
     for r in ranked:
         ev_dict = r.model_dump()
         # Look up the pre-scoring rule_score for this event (0..1 range)
         rule_s = pre_scores.get(r.event_id or r.id, 0.0) if hasattr(r, "event_id") else pre_scores.get(r.id, 0.0)
         # Find the original EventORM for factor scoring
-        event_orm = next((e for e in top_events if e.id == (r.event_id if hasattr(r, "event_id") else r.id)), None)
+        event_orm = top_events_by_id.get(r.event_id if hasattr(r, "event_id") else r.id)
         if event_orm:
             fit = calculate_fit_score(event_orm, profile, rule_s)
             icp = estimate_icp_count(event_orm, profile, rule_s)

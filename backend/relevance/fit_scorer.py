@@ -80,6 +80,7 @@ from typing import Optional
 from config import get_settings
 from models.event import EventORM
 from models.icp_profile import ICPProfile
+from relevance.scorer import MAX_RULE_SCORE
 
 settings = get_settings()
 
@@ -97,7 +98,8 @@ ICP_ROUND_TO       = getattr(settings, "icp_round_to",      10)
 DEAL_MIN_STRATEGIC = getattr(settings, "deal_min_strategic", 5000)
 DEAL_MIN_ENTERPRISE= getattr(settings, "deal_min_enterprise",1000)
 DEAL_MIN_HIGH      = getattr(settings, "deal_min_high",      500)
-RULE_SCORE_MAX     = 0.60   # max possible rule_score from scorer.py (0.35 ind + 0.25 persona)
+RULE_SCORE_MAX     = MAX_RULE_SCORE   # max possible rule_score, imported from scorer.py — stays
+                                       # in sync automatically if scorer.py's weights change
 
 # ── Grade thresholds ──────────────────────────────────────────────
 # Applied AFTER normalisation to 0–100.

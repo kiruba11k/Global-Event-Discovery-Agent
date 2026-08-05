@@ -37,6 +37,7 @@ from models.event import EventORM, RankedEvent
 from models.icp_profile import CompanyContext, ICPProfile
 from relevance.llm_client import llm, estimate_tokens
 from relevance.scorer import build_fallback_rationale
+from relevance.scorer import _get_industry as _industry
 
 settings = get_settings()
 
@@ -108,15 +109,6 @@ class ValidationResponse(BaseModel):
 
 
 # ── Field accessors with correct fallback order ────────────────────
-
-def _industry(event: EventORM) -> str:
-    """Always returns the populated industry_tags string."""
-    return (
-        (getattr(event, "related_industries", "") or "").strip() or
-        (event.industry_tags or "").strip() or
-        (event.category or "").strip()
-    )
-
 
 def _venue(event: EventORM) -> str:
     return (
@@ -782,7 +774,13 @@ async def rank_with_groq(
                 logger.warning(f"Ranker chunk {ci + 1}/{len(chunks)} failed — "
                                "events fall back to rule-based tier")
                 continue
-            groq_results.update({r.id: r for r in parsed.ranked_events})
+            chunk_ids = {ev["id"] for ev in chunk}
+            for r in parsed.ranked_events:
+                if r.id not in chunk_ids:
+                    logger.warning(f"Ranker returned unknown id '{r.id}' not in "
+                                    "sent candidates — dropping")
+                    continue
+                groq_results[r.id] = r
         logger.info(f"Ranker: {len(groq_results)}/{len(events_dicts)} events ranked")
 
         # Agent 2 — validator (hallucination check).
