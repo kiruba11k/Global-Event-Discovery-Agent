@@ -154,6 +154,11 @@ export const api = {
   // ── Live country list from the DB (for geography autocomplete) ─
   geoList: () => request('/geo-list'),
 
+  // ── City hint - does the typed city have matching events? If not,
+  // suggests other cities in the SAME country that do. ─────────────
+  cityHint: (country, city = '', industries = []) =>
+    request(`/city-hint?country=${encodeURIComponent(country)}&city=${encodeURIComponent(city)}&industries=${encodeURIComponent(industries.join(','))}`),
+
   // ── Analytics: session lifecycle + generic event tracking ─────
   // session_id is auto-attached as X-Session-Id on every request
   // (see getSessionId() above) — these calls create the row that

@@ -441,6 +441,12 @@ export default function ICPForm({
   const geoRef           = useRef(null)
   const clientNameInputRef = useRef(null)
 
+  // ── City hint state (effect defined after effectiveParse below,
+  // since it depends on that callback) ─────────────────────────────
+  const [cityHints,     setCityHints]     = useState({})   // { "India": {exact_match, suggestions} }
+  const [cityHintLoad,  setCityHintLoad]  = useState(false)
+  const cityHintTimer = useRef(null)
+
   useEffect(() => { setMounted(true) }, [])
 
   // Debounced LLM parse of the buyer text (backend caches repeats)
@@ -486,6 +492,31 @@ export default function ICPForm({
     }
     return { ...local, extra_keywords: [], segments: [], source: 'rules' }
   }, [llmParse])
+
+  // ── City hint: once a country is picked, show which cities within it
+  // actually have matching events for the typed role/industry — advisory
+  // only, never blocks submit. candidate_retriever.py's own city -> country
+  // -> no-geo widening already handles "no exact city" at search time
+  // regardless of what's suggested here.
+  useEffect(() => {
+    clearTimeout(cityHintTimer.current)
+    const countryList = geos.filter(g => g !== 'Global')
+    if (!countryList.length) { setCityHints({}); return }
+    setCityHintLoad(true)
+    cityHintTimer.current = setTimeout(async () => {
+      try {
+        const { industries } = effectiveParse(buyer)
+        const results = await Promise.all(
+          countryList.map(country => api.cityHint(country, '', industries).catch(() => null))
+        )
+        const map = {}
+        countryList.forEach((country, i) => { if (results[i]) map[country] = results[i] })
+        setCityHints(map)
+      } catch (_) { /* advisory only — never block the form on failure */ }
+      finally { setCityHintLoad(false) }
+    }, 600)
+    return () => clearTimeout(cityHintTimer.current)
+  }, [geos, buyer, effectiveParse])
 
   // Buyer suggestions
   useEffect(() => {
@@ -789,11 +820,54 @@ export default function ICPForm({
               </div>
             </div>
           )}
-               {/* Pre-search region-coverage hints removed: the search
-                   pipeline always returns the top 6 relevant events
-                   regardless of per-region counts, so a live "N events in
-                   this region" preview during form-fill no longer reflects
-                   what the results page will actually do. */}
+               {/* City hint: informational only, shown once a country is
+                   picked — suggests cities within it that actually have
+                   matching events, so the user can optionally narrow their
+                   own free-text city mention. Never blocks submit; the
+                   search itself always falls back gracefully regardless. */}
+        {geos.length > 0 && !geos.includes('Global') && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }} aria-live="polite">
+            {cityHintLoad && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'rgba(14,124,107,0.05)',
+                border: '1px solid rgba(14,124,107,0.18)',
+                borderRadius: 8, padding: '8px 12px',
+              }}>
+                <div style={{
+                  width: 14, height: 14, borderRadius: '50%',
+                  border: '2px solid rgba(14,124,107,0.3)',
+                  borderTopColor: '#0E7C6B',
+                  animation: 'icp-spin 0.8s linear infinite',
+                }} />
+                <span style={{ fontSize: 11, color: '#4C5A63' }}>Checking cities with matching events…</span>
+              </div>
+            )}
+            {!cityHintLoad && geos.filter(g => g !== 'Global').map(country => {
+              const hint = cityHints[country]
+              const suggestions = (hint?.suggestions || []).filter(s => s.city)
+              if (!suggestions.length) return null
+              return (
+                <div key={country} style={{
+                  background: '#F5F9F8',
+                  border: '1px solid rgba(14,124,107,0.18)',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  fontSize: 12,
+                }}>
+                  <span style={{ color: '#4C5A63' }}>
+                    Cities in <strong>{country}</strong> with matching events:{' '}
+                    {suggestions.map((s, i) => (
+                      <span key={s.city}>
+                        {s.city} ({s.count}){i < suggestions.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
         </div>
       </div>
 
