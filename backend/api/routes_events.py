@@ -460,16 +460,13 @@ async def _run_keyword_embedding_pipeline(
 ) -> tuple[list, dict, list, int]:
     """
     Layers 4-5 of the keyword+embedding rework: SQL keyword match +
-    semantic recall -> top 12 -> single LLM call selects top 6 with a
-    reason each. Returns (top_events, pre_scores, ranked, candidate_count)
-    shaped to drop straight into the same Step 9/10 code the old
-    score_candidates/rank_with_groq path feeds — enrichment and fit
-    scoring don't need to know which retrieval path produced `ranked`.
-
-    fit_verdict is still populated (GO for the first 3 selections, ranked
-    LLM ordering: CONSIDER for the rest of the 6) purely so the existing
-    RankedEvent schema / frontend badges keep working unchanged — this
-    pipeline itself has no verdict concept, only a ranked pick + reason.
+    semantic recall -> top 12 -> single LLM call selects top 6, each with
+    a reason AND its own GO/CONSIDER verdict (llm_selector.select_top_6 —
+    the LLM's per-event judgment, not a fixed positional split). Returns
+    (top_events, pre_scores, ranked, candidate_count) shaped to drop
+    straight into the same Step 9/10 code the old score_candidates/
+    rank_with_groq path feeds — enrichment and fit scoring don't need to
+    know which retrieval path produced `ranked`.
     """
     icp_profile = _icp_profile_dict(profile)
     candidates = await get_top_candidates(db, icp_profile)
@@ -486,11 +483,14 @@ async def _run_keyword_embedding_pipeline(
     pre_scores = {e.id: s for e, s in candidates}
 
     ranked: list[RankedEvent] = []
-    for i, sel in enumerate(selected):
+    for sel in selected:
         event, blended_score = by_id.get(sel["event_id"], (None, 0.0))
         if event is None:
             continue
-        verdict = "GO" if i < 3 else "CONSIDER"
+        # LLM's own per-event judgment (llm_selector.select_top_6), not a
+        # positional split — it's fine for all 6 to land the same verdict
+        # if that's genuinely what the data supports.
+        verdict = sel.get("verdict") or "CONSIDER"
         reason = sel.get("reason") or ""
         if not reason:
             fallback_detail = {
