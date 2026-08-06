@@ -196,7 +196,7 @@ def _factor_deal_size(
     """
     att = int(event.est_attendees or 0)
     if att == 0:
-        return 0, 25, False, "skipped: no attendee count in DB yet"
+        return 0, 25, False, "Attendee count not yet published for this event"
 
     deal_cat = (profile.avg_deal_size_category or "medium").lower()
     text     = _event_text(event)
@@ -244,7 +244,7 @@ def _factor_geo_match(
     country = (event.country or "").strip()
 
     if not city and not country:
-        return 0, 15, False, "skipped: event location not yet in DB"
+        return 0, 15, False, "Event location not yet confirmed"
 
     if not profile.target_geographies:
         # No geo preference = global scope = always match
@@ -283,11 +283,11 @@ def _factor_competitive_intensity(
     """
     sponsors_raw = (event.sponsors or "").strip()
     if not sponsors_raw:
-        return 0, 10, False, "skipped: no exhibitor/sponsor data in DB"
+        return 0, 10, False, "Exhibitor/sponsor list not yet available"
 
     sponsor_list = [s.strip().lower() for s in sponsors_raw.split(",") if s.strip()]
     if not sponsor_list:
-        return 0, 10, False, "skipped: sponsors field empty after parsing"
+        return 0, 10, False, "Exhibitor/sponsor list not yet available"
 
     # Build keyword set from ICP industries
     keywords: set[str] = set()
