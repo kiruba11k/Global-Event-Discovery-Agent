@@ -349,7 +349,9 @@ def _get_industry(event: EventORM) -> str:
     """
     Return the best available industry string from DB columns.
     Priority: related_industries → industry_tags → category
-    For this DB: related_industries is always NULL/empty, so industry_tags is used.
+    Priority: related_industries -> industry_tags -> category ->
+    industry_relevant_for (last resort — describes buyer-fit, not the
+    event's own vertical, so only used when nothing more direct exists).
     """
     ri = getattr(event, "related_industries", None)
     if ri and ri.strip():
@@ -357,7 +359,10 @@ def _get_industry(event: EventORM) -> str:
     it = event.industry_tags or ""
     if it.strip():
         return it.strip()
-    return (event.category or "").strip()
+    cat = (event.category or "").strip()
+    if cat:
+        return cat
+    return (getattr(event, "industry_relevant_for", "") or "").strip()
 
 
 def _get_event_text(event: EventORM) -> str:
@@ -383,6 +388,13 @@ def _get_event_text(event: EventORM) -> str:
         venue,
         location,
         getattr(event, "organizer", "") or "",
+        # Buyer-industry-fit signal ("who this event is relevant for", not
+        # the event's own vertical) — included here (not just in
+        # _get_industry's fallback chain) so every taxonomy pass in
+        # _score_industry (token match, synonym bridge, context match)
+        # sees it regardless of whether related_industries/industry_tags
+        # are already populated.
+        getattr(event, "industry_relevant_for", "") or "",
     ]
     return " ".join(p for p in parts if p).lower()
 

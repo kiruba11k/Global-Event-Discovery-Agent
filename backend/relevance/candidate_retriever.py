@@ -151,9 +151,13 @@ async def sql_keyword_match(
     db: AsyncSession, icp_profile: dict, widen_geo: bool = False,
 ) -> list[EventORM]:
     """
-    Full-text/ILIKE match against relevant_keywords + related_industries.
-    Uses plainto_tsquery on Postgres (backed by the GIN indexes ensured in
-    db.database.init_db()); falls back to ILIKE on SQLite/dev.
+    Full-text/ILIKE match against relevant_keywords + related_industries +
+    industry_relevant_for (curated CSV's "who this event is relevant for"
+    field — a direct buyer-industry-fit signal, arguably stronger than
+    related_industries which describes the event's own vertical rather
+    than its intended audience). Uses to_tsquery on Postgres (backed by
+    the GIN indexes ensured in db.database.init_db()); falls back to
+    ILIKE on SQLite/dev.
     """
     industries = [p["industry"] for p in icp_profile.get("pairs", []) if p.get("industry")]
     keywords   = icp_profile.get("extra_keywords", []) or []
@@ -180,14 +184,18 @@ async def sql_keyword_match(
             return []
         where.append(
             "(to_tsvector('english', coalesce(relevant_keywords,'')) @@ to_tsquery('english', :raw_q) "
-            "OR to_tsvector('english', coalesce(related_industries,'')) @@ to_tsquery('english', :raw_q))"
+            "OR to_tsvector('english', coalesce(related_industries,'')) @@ to_tsquery('english', :raw_q) "
+            "OR to_tsvector('english', coalesce(industry_relevant_for,'')) @@ to_tsquery('english', :raw_q))"
         )
         params["raw_q"] = tsquery
     else:
         like_clauses = []
         for i, term in enumerate(search_terms):
             key = f"kw{i}"
-            like_clauses.append(f"(relevant_keywords LIKE :{key} OR related_industries LIKE :{key})")
+            like_clauses.append(
+                f"(relevant_keywords LIKE :{key} OR related_industries LIKE :{key} "
+                f"OR industry_relevant_for LIKE :{key})"
+            )
             params[key] = f"%{term}%"
         where.append("(" + " OR ".join(like_clauses) + ")")
 
@@ -223,6 +231,7 @@ def embed_event_context(event: EventORM) -> str:
         getattr(event, "description", "") or "",
         getattr(event, "related_industries", "") or "",
         getattr(event, "relevant_keywords", "") or "",
+        getattr(event, "industry_relevant_for", "") or "",
     ]
     return " ".join(p for p in parts if p)[:2000]
 

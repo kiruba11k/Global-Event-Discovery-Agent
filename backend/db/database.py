@@ -122,6 +122,7 @@ _NEW_COLUMNS = [
     ("event_cities",       "TEXT",     "''"),
     ("related_industries", "TEXT",     "''"),
     ("relevant_keywords",  "TEXT",     "''"),
+    ("industry_relevant_for", "TEXT", "''"),
     ("website",            "TEXT",     "''"),
     ("organizer",          "TEXT",     "''"),
     ("serpapi_enriched",   "BOOLEAN",  "FALSE"),
@@ -302,6 +303,10 @@ async def init_db():
                 await conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS ix_events_related_industries_fts "
                     "ON events USING GIN (to_tsvector('english', coalesce(related_industries, '')))"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_events_industry_relevant_for_fts "
+                    "ON events USING GIN (to_tsvector('english', coalesce(industry_relevant_for, '')))"
                 ))
             if await _run_isolated(conn, "events keyword GIN indexes failed", _ensure_keyword_indexes):
                 logger.debug("events.relevant_keywords / related_industries GIN indexes ensured.")
