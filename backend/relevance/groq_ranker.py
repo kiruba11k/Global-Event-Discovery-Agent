@@ -629,6 +629,27 @@ def _chunk_events_by_budget(events_dicts: list, system: str, profile_dict: dict)
 
 # ── Hallucination guard ────────────────────────────────────────────
 
+# Phrases an LLM naturally uses to explain a genuine mismatch by naming
+# the client's own target industry ("...doesn't directly match your
+# target industries (Fintech)") — this is CORRECT, expected reasoning,
+# not a hallucination, but the old negated check only recognized the
+# literal adjacent phrasing "not fintech"/"outside fintech", which no
+# real LLM output actually uses. That gap meant almost every industry-
+# mismatch CONSIDER/SKIP rationale (the majority of results whenever the
+# client's industry doesn't literally appear in the event's own text)
+# got wrongly flagged and replaced with the generic fallback template —
+# confirmed in production logs: "Hallucination: 'Fintech' in notes...
+# but not in event data" firing on every mismatched result, every time.
+_MISMATCH_PHRASES = (
+    "doesn't match", "does not match", "doesn't directly match",
+    "does not directly match", "not a match", "doesn't align",
+    "does not align", "not relevant to", "not related to",
+    "no direct connection", "not aligned with", "outside your target",
+    "not designed for", "different from your target", "not a direct fit",
+    "doesn't overlap", "does not overlap", "mismatch",
+)
+
+
 def _is_hallucinated(
     result:  GroqEventResult,
     event:   EventORM,
@@ -647,6 +668,7 @@ def _is_hallucinated(
         f"{event.audience_personas or ''} {event.category or ''}"
     ).lower()
     matched_ind = {s.lower() for s in detail.get("industry_matched", [])}
+    has_mismatch_phrase = any(p in notes for p in _MISMATCH_PHRASES)
 
     for ind in profile.target_industries or []:
         tokens = [
@@ -660,7 +682,7 @@ def _is_hallucinated(
             any(t in event_text for t in tokens) or
             ind.lower() in matched_ind
         )
-        negated = any(
+        negated = has_mismatch_phrase or any(
             f"not {t}" in notes or f"outside {t}" in notes
             for t in tokens
         )
