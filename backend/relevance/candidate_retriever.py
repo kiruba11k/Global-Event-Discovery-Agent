@@ -47,6 +47,9 @@ def _to_tsquery_string(terms: list[str]) -> str:
 
 # ── Layer 1: region resolution ──────────────────────────────────────
 
+_GLOBAL_TOKENS = {"global", "worldwide", "international", "any", "anywhere"}
+
+
 def resolve_region(geo_input: dict) -> dict:
     """geo_input: {"raw": str} or already-shaped {"city","country"}.
     Returns {"city", "country", "canonical_geo"}."""
@@ -60,14 +63,64 @@ def resolve_region(geo_input: dict) -> dict:
     }
 
 
+def resolve_regions(geo_list: list[str]) -> list[dict]:
+    """
+    Resolve EVERY selected geography, not just the first — a user who
+    picks "India, Singapore, UAE" expects all three searched, not just
+    the first one silently used while the rest are dropped. "Global"/
+    "Worldwide"/etc. resolve to an empty list (no geo restriction at
+    all), matching how scorer.py and the rest of this codebase already
+    treat those tokens.
+    """
+    regions: list[dict] = []
+    for raw in geo_list or []:
+        if not raw or raw.strip().lower() in _GLOBAL_TOKENS:
+            continue
+        regions.append(normalize_geo(raw))
+    return regions
+
+
+def _geo_where_clause(
+    regions: list[dict], match_op: str, is_postgres: bool, widen_geo: bool, prefix: str,
+) -> tuple[str, dict]:
+    """
+    Builds "(region1 clause) OR (region2 clause) OR ..." across every
+    selected region — any one of them matching is enough, mirroring how
+    industry/keyword terms are already OR'd together. Each region uses
+    city-level matching when available and not widening, else country-
+    level. Returns ("", {}) when there's nothing to filter on (no
+    regions selected, or all resolved to "Global"/widen_geo=True with no
+    country to fall back to).
+    """
+    if not regions:
+        return "", {}
+    clauses: list[str] = []
+    params: dict = {}
+    for i, geo in enumerate(regions):
+        if not widen_geo and geo.get("city"):
+            key = f"{prefix}city{i}"
+            clauses.append(f"(city {match_op} :{key} OR event_cities {match_op} :{key}_like)")
+            params[key] = geo["city"] if is_postgres else f"%{geo['city']}%"
+            params[f"{key}_like"] = f"%{geo['city']}%"
+        elif geo.get("country"):
+            key = f"{prefix}country{i}"
+            clauses.append(f"(country {match_op} :{key} OR event_cities {match_op} :{key}_like)")
+            params[key] = geo["country"] if is_postgres else f"%{geo['country']}%"
+            params[f"{key}_like"] = f"%{geo['country']}%"
+    if not clauses:
+        return "", {}
+    return "(" + " OR ".join(clauses) + ")", params
+
+
 # ── Layer 2: region candidate count (internal control signal only) ──
 
 async def get_region_candidate_count(
-    db: AsyncSession, geo: dict, industries: list[str],
+    db: AsyncSession, regions: list[dict], industries: list[str],
 ) -> int:
     """Lightweight COUNT(*) — never returned to the user, only used to
     decide whether to widen the geo filter before the real retrieval
-    query runs in Layer 4.
+    query runs in Layer 4. `regions`: list of resolved geo dicts (see
+    resolve_regions()) — ORs across all of them, not just the first.
 
     ILIKE is Postgres-only (SQLite has no case-insensitive LIKE operator
     by that name) and ILIKE ANY(:array) doubly so — both raised on
@@ -81,14 +134,10 @@ async def get_region_candidate_count(
 
     where = ["1=1"]
     params: dict = {}
-    if geo.get("city"):
-        where.append(f"(city {match_op} :city OR event_cities {match_op} :city_like)")
-        params["city"] = geo["city"]
-        params["city_like"] = f"%{geo['city']}%"
-    elif geo.get("country"):
-        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
-        params["country"] = geo["country"]
-        params["country_like"] = f"%{geo['country']}%"
+    geo_clause, geo_params = _geo_where_clause(regions, match_op, is_postgres, widen_geo=False, prefix="cnt_")
+    if geo_clause:
+        where.append(geo_clause)
+        params.update(geo_params)
     # OR of individual clauses, not ILIKE ANY(:array) (Postgres-only).
     ind_terms = [i for i in industries if i]
     if ind_terms:
@@ -138,7 +187,7 @@ async def sql_keyword_match(
     if not search_terms:
         return []
 
-    geo = icp_profile.get("region", {})
+    regions = icp_profile.get("regions", [])
     where = ["1=1"]
     params: dict = {}
 
@@ -182,22 +231,16 @@ async def sql_keyword_match(
     params["date_from"] = date_from
     params["date_to"]   = date_to
 
-    # Two-tier geo: city-level when we have one and aren't widening,
-    # else country-level, else (widen_geo=True) no geo filter at all.
-    # Previously this only ever filtered by country — should_widen_geo()
-    # existed to signal "drop city, fall back to country" but there was
-    # no city filter here to drop in the first place, so widening just
-    # removed the only filter that existed rather than the documented
-    # two-step narrowing.
+    # Two-tier geo, OR'd across every selected region: city-level when
+    # we have one and aren't widening, else country-level, else
+    # (widen_geo=True) no geo filter at all. Any ONE of the selected
+    # regions matching is enough — a user who picks "India, Singapore"
+    # expects candidates from either, not just the first one selected.
     match_op = "ILIKE" if is_postgres else "LIKE"
-    if not widen_geo and geo.get("city"):
-        where.append(f"(city {match_op} :city OR event_cities {match_op} :city_like)")
-        params["city"] = geo["city"] if is_postgres else f"%{geo['city']}%"
-        params["city_like"] = f"%{geo['city']}%"
-    elif not widen_geo and geo.get("country"):
-        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
-        params["country"] = geo["country"] if is_postgres else f"%{geo['country']}%"
-        params["country_like"] = f"%{geo['country']}%"
+    geo_clause, geo_params = _geo_where_clause(regions, match_op, is_postgres, widen_geo, prefix="kw_")
+    if geo_clause:
+        where.append(geo_clause)
+        params.update(geo_params)
 
     try:
         rows = (await db.execute(
@@ -324,7 +367,7 @@ def blend_and_rank(
 
 
 async def _fallback_recent_events(
-    db: AsyncSession, geo: dict, top_n: int,
+    db: AsyncSession, regions: list[dict], top_n: int,
     date_from: Optional[str] = None, date_to: Optional[str] = None,
 ) -> list[tuple[EventORM, float]]:
     """
@@ -340,9 +383,10 @@ async def _fallback_recent_events(
     upcoming events worth showing the LLM selector.
 
     Filters by region only (best-effort ILIKE, no hard requirement — an
-    empty region still returns something), ordered by soonest start_date,
-    given a flat neutral score so it never outranks a real keyword or
-    semantic match when both are combined elsewhere.
+    empty region still returns something, and multiple regions are OR'd
+    together via _geo_where_clause), ordered by soonest start_date, given
+    a flat neutral score so it never outranks a real keyword or semantic
+    match when both are combined elsewhere.
     """
     is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
     match_op = "ILIKE" if is_postgres else "LIKE"
@@ -352,10 +396,10 @@ async def _fallback_recent_events(
         "date_from": date_from or today,
         "date_to":   date_to or "2099-12-31",
     }
-    if geo.get("country"):
-        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
-        params["country"] = geo["country"] if is_postgres else f"%{geo['country']}%"
-        params["country_like"] = f"%{geo['country']}%"
+    geo_clause, geo_params = _geo_where_clause(regions, match_op, is_postgres, widen_geo=False, prefix="fb_")
+    if geo_clause:
+        where.append(geo_clause)
+        params.update(geo_params)
 
     try:
         rows = (await db.execute(
@@ -387,11 +431,11 @@ async def get_top_candidates(
     Returns [(event, blended_score), ...] sorted descending.
     """
     top_n = top_n or settings.candidate_pool_size
-    region = icp_profile.get("region", {})
+    regions = icp_profile.get("regions", [])
     industries = [p["industry"] for p in icp_profile.get("pairs", []) if p.get("industry")]
     keywords   = icp_profile.get("extra_keywords", []) or []
 
-    count = await get_region_candidate_count(db, region, industries)
+    count = await get_region_candidate_count(db, regions, industries)
     widen = should_widen_geo(count)
     if widen:
         logger.info(f"candidate_retriever: region candidate count={count} "
@@ -408,7 +452,7 @@ async def get_top_candidates(
         # semantic recall found nothing — fall back to region/date rather
         # than returning zero candidates to the LLM selector.
         ranked = await _fallback_recent_events(
-            db, region, top_n,
+            db, regions, top_n,
             date_from=icp_profile.get("date_from"), date_to=icp_profile.get("date_to"),
         )
 
