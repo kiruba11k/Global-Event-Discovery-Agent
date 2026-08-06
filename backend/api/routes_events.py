@@ -1189,12 +1189,6 @@ async def _run_search_pipeline(
                             f"showing best global matches to complete your ranking."
                         )
 
-        elif region_fallback_note and original_geos:
-            # Early regional fallback already fired — compute live neighbour counts
-            non_global_geos = [g for g in original_geos if g.lower() not in ("global", "worldwide", "international")]
-            icp_industries   = list(profile.target_industries or [])
-            suggested_geos   = await _build_suggestions(non_global_geos, icp_industries)
-
     except Exception as _geo_err:
         logger.debug(f"Post-ranking geo check: {_geo_err}")
 
