@@ -58,26 +58,20 @@ async def _safe_run(coro, source_name: str, timeout: float = 45.0) -> list:
         return []
 
 
-async def fetch_realtime_candidates(
-    db:      AsyncSession,
-    profile: ICPProfile,
-) -> list[EventORM]:
+async def _fetch_via_live_apis(
+    db:        AsyncSession,
+    profile:   ICPProfile,
+    date_from: str,
+    date_to:   str,
+) -> list[dict]:
     """
-    Main entry point called from /api/search.
-
-    1.  build_queries()  — Groq LLM converts ICP form → targeted queries
-    2a. Ticketmaster             (up to 12 queries)
-    2b. Eventbrite               (up to 9 queries with lat/lon)
-    2c. ITA Trade Events         (up to 6 queries)
-    3.  Deduplicate across all sources
-    4.  Upsert new events to DB
-    5.  Query DB for all matching events (existing + new)
-    6.  Return EventORM list for scoring
+    Steps 1-5 of the pipeline: LLM query generation, live Ticketmaster/
+    Eventbrite/ITA fan-out, cross-source dedup, and DB upsert of anything
+    new. Returns the list of newly-upserted event dicts (empty if none).
+    Only called when settings.enable_realtime_apis is True — see
+    fetch_realtime_candidates() below, which always runs its own DB-only
+    query (steps 6-7) regardless of whether this ran.
     """
-    today     = date.today().isoformat()
-    date_from = profile.date_from or today
-    date_to   = profile.date_to   or "2030-12-31"
-
     # ── Step 1: Groq LLM query generation ─────────────────────────
     query_bundle = await build_queries(
         industries   = profile.target_industries    or [],
@@ -247,6 +241,37 @@ async def fetch_realtime_candidates(
         logger.info(f"DB upsert: {inserted} new, {dupes} duplicates")
     else:
         logger.info("No new events to upsert")
+
+    return new_events
+
+
+async def fetch_realtime_candidates(
+    db:      AsyncSession,
+    profile: ICPProfile,
+) -> list[EventORM]:
+    """
+    Main entry point called from /api/search.
+
+    1-5. _fetch_via_live_apis() — Ticketmaster/Eventbrite/ITA fan-out +
+         upsert of anything new. Skipped entirely when
+         settings.enable_realtime_apis is False — the catalog search
+         below (6-7) runs either way, unconditionally.
+    6.   Query DB for all matching events (existing + any newly upserted),
+         with 4-tier widening (industry+geo+date -> geo+date -> date only)
+         if the strict query comes back too thin.
+    7.   Embed any newly-ingested candidates (best-effort, no-op if
+         pgvector isn't configured).
+    """
+    today     = date.today().isoformat()
+    date_from = profile.date_from or today
+    date_to   = profile.date_to   or "2030-12-31"
+
+    if settings.enable_realtime_apis:
+        new_events = await _fetch_via_live_apis(db, profile, date_from, date_to)
+    else:
+        logger.info("Pipeline: enable_realtime_apis=False — searching catalog only, "
+                     "no Ticketmaster/Eventbrite/ITA calls")
+        new_events = []
 
     # ── Step 6: Query DB ───────────────────────────────────────────
     stmt = select(EventORM).where(

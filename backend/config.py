@@ -155,6 +155,17 @@ class Settings(BaseSettings):
     # data.trade.gov account | https://developer.trade.gov/api-details#api=trade-events
     ita_api_key: str = ""
 
+    # Master switch for the live real-time API fan-out (Ticketmaster,
+    # Eventbrite, ITA) in ingestion/realtime_pipeline.py. When False,
+    # fetch_realtime_candidates() skips the LLM query-building + API
+    # calls entirely and goes straight to its existing tiered DB-only
+    # query (industry+geo+persona -> industry+geo -> geo+date -> date
+    # window) — the same fallback path that already runs when those
+    # APIs return nothing, just used unconditionally instead of only as
+    # a last resort. True by default so existing deployments keep their
+    # current behavior; set to False to search only the local catalog.
+    enable_realtime_apis: bool = True
+
     # ── Scraper tuning ────────────────────────────
     scrape_delay_seconds: float = 2.0
     scrape_timeout_seconds: int = 15
