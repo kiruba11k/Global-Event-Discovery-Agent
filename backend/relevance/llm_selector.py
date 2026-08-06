@@ -1,8 +1,11 @@
 """
 relevance/llm_selector.py — Layer 5 of the new pipeline: single LLM call
-selects the top 6 of 12 candidates with a reason each. Replaces
-groq_ranker.py's GO/CONSIDER/SKIP tiering for callers that opt into
-settings.use_keyword_pipeline — no verdict, just a ranked pick + why.
+picks the top 6 of 12 candidates, each with a reason AND a GO/CONSIDER
+verdict (the LLM's own judgment per event, not a positional 3+3 split).
+Replaces groq_ranker.py's GO/CONSIDER/SKIP tiering for callers that opt
+into settings.use_keyword_pipeline. No SKIP here — anything selected
+into the top 6 already cleared the bar; SKIP only applies to events that
+never made the cut, which this function doesn't surface at all.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ settings = get_settings()
 class SelectedEvent(BaseModel):
     event_id: str
     reason: str = ""
+    verdict: str = "CONSIDER"
 
     model_config = {"extra": "ignore"}
 
@@ -29,6 +33,19 @@ class SelectedEvent(BaseModel):
     @classmethod
     def _clean(cls, v):
         return (str(v or "")).strip()
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def _check_verdict(cls, v) -> str:
+        # Forgiving, mirrors groq_ranker.GroqEventResult's own validator:
+        # never reject the whole event for a fixable verdict. No SKIP —
+        # this schema is only for events already selected into the top 6.
+        v = str(v or "").strip().upper()
+        if v not in {"GO", "CONSIDER"}:
+            if "GO" in v and "CONSIDER" not in v:
+                return "GO"
+            return "CONSIDER"
+        return v
 
 
 class SelectionResponse(BaseModel):
@@ -58,11 +75,22 @@ Each candidate includes a blended_score (0-1, from keyword + semantic matching) 
 prior — trust it as a strong signal but you may re-rank based on the event's own
 description, industry focus and location matching the client's ICP.
 
-Pick EXACTLY {n} events. For each: write a 1-2 sentence reason grounded ONLY in that
-event's own data (name, description, industry_focus, location) — never invent facts,
-never reference the client's wishlist as if the event confirmed it.
+Pick EXACTLY {n} events. For each:
+- reason: 1-2 sentences grounded ONLY in that event's own data (name, description,
+  industry_focus, location) — never invent facts, never reference the client's
+  wishlist as if the event confirmed it.
+- verdict: "GO" or "CONSIDER" — your own judgment per event, not a fixed split.
+    GO       = strong, clear match: industry, location and (if known) buyer role
+               all line up well with the client's ICP.
+    CONSIDER = a real match worth showing, but with a genuine gap or uncertainty
+               (e.g. industry fits but buyer role is unconfirmed, or it's a
+               plausible-but-not-perfect geography match).
+  Do not force a fixed ratio of GO vs CONSIDER — judge each event on its own
+  merits; it is fine for all 6 to be GO, or all 6 to be CONSIDER, if that is
+  genuinely what the data supports.
 
-Output ONLY valid JSON: {{"selected": [{{"event_id": "...", "reason": "..."}}]}}"""
+Output ONLY valid JSON:
+{{"selected": [{{"event_id": "...", "reason": "...", "verdict": "GO|CONSIDER"}}]}}"""
 
 
 def _event_dict(event: EventORM, blended_score: float) -> dict:
@@ -98,10 +126,11 @@ async def select_top_6(
 ) -> list[dict]:
     """
     candidates: [(EventORM, blended_score), ...] — the Layer 4 output.
-    Returns [{"event_id": str, "reason": str}, ...], length <= n.
-    Falls back to the top-n by blended_score (empty reason) if the LLM
-    call fails — selection must never come back empty just because the
-    LLM was unavailable.
+    Returns [{"event_id": str, "reason": str, "verdict": "GO"|"CONSIDER"}, ...],
+    length <= n. Falls back to the top-n by blended_score (empty reason,
+    verdict defaulted from blended_score) if the LLM call fails —
+    selection must never come back empty just because the LLM was
+    unavailable.
     """
     n = n or settings.selection_size
     if not candidates:
@@ -116,7 +145,7 @@ async def select_top_6(
         user,
         label="selector",
         schema=SelectionResponse,
-        max_completion_tokens=max(400, n * 120),
+        max_completion_tokens=max(500, n * 150),
         timeout=settings.openai_timeout_seconds,
         cache_ttl=600,
     )
@@ -125,15 +154,22 @@ async def select_top_6(
         logger.warning("llm_selector: selection failed — falling back to "
                         "top-N by blended_score")
         top = sorted(candidates, key=lambda pair: -pair[1])[:n]
-        return [{"event_id": e.id, "reason": ""} for e, _ in top]
+        return [_fallback_entry(e, s) for e, s in top]
 
     selected: list[dict] = []
+    seen_ids: set = set()
     for item in parsed.selected:
         if item.event_id not in candidate_ids:
             logger.warning(f"llm_selector: dropping unknown id '{item.event_id}' "
                             "not in candidate set")
             continue
-        selected.append({"event_id": item.event_id, "reason": item.reason})
+        if item.event_id in seen_ids:
+            logger.warning(f"llm_selector: dropping duplicate id '{item.event_id}' "
+                            "returned more than once")
+            continue
+        seen_ids.add(item.event_id)
+        selected.append({"event_id": item.event_id, "reason": item.reason,
+                          "verdict": item.verdict})
 
     if len(selected) < n:
         chosen_ids = {s["event_id"] for s in selected}
@@ -141,10 +177,24 @@ async def select_top_6(
             (pair for pair in candidates if pair[0].id not in chosen_ids),
             key=lambda pair: -pair[1],
         )
-        for e, _ in backfill[: n - len(selected)]:
-            selected.append({"event_id": e.id, "reason": ""})
+        for e, s in backfill[: n - len(selected)]:
+            selected.append(_fallback_entry(e, s))
 
     return selected[:n]
+
+
+def _fallback_entry(event: EventORM, blended_score: float) -> dict:
+    """
+    Used when the LLM didn't cover an event (call failed, or it filled
+    fewer than n slots and this is backfilled by score). No LLM judgment
+    exists for it, so verdict is derived from the same blended_score
+    that ranked it here — above the midpoint of the pipeline's own
+    weight split (keyword_weight + semantic_weight, i.e. a "both signals
+    at least moderately agree" bar) is GO, otherwise CONSIDER.
+    """
+    go_bar = (settings.keyword_match_weight + settings.semantic_match_weight) * 0.5
+    verdict = "GO" if blended_score >= go_bar else "CONSIDER"
+    return {"event_id": event.id, "reason": "", "verdict": verdict}
 
 
 async def validate_reasons(

@@ -189,6 +189,8 @@ def build_event_text(event) -> str:
         getattr(event, "category", "") or "",
         getattr(event, "city", "") or "",
         getattr(event, "country", "") or "",
+        getattr(event, "industry_relevant_for", "") or "",
+        getattr(event, "relevant_keywords", "") or "",
     ]
     return " ".join(p for p in parts if p)[:2000]
 
