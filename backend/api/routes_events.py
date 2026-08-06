@@ -1792,6 +1792,102 @@ async def geo_list(db: AsyncSession = Depends(get_db)):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# GET /api/city-hint  —  live check: does the typed city (within the
+# chosen country) have matching upcoming events for the given industry?
+# If not, suggest other cities in the SAME country that do. Advisory
+# only — shown once the region field is filled, before submit; never
+# blocks the search itself (see candidate_retriever.py's own city->
+# country->no-geo widening, which already handles this at query time
+# regardless of what this endpoint suggests).
+# ══════════════════════════════════════════════════════════════════════
+
+@router.get("/city-hint")
+async def city_hint(
+    country:    str = Query(...),
+    city:       str = Query(""),
+    industries: str = Query(""),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select as _sel, func as _func, or_ as _or, text as _text
+    from models.event import EventORM as _ORM
+    from relevance.scorer import expand_industry_synonyms
+
+    country = country.strip()
+    city    = city.strip()
+    if not country:
+        return {"exact_match": None, "suggestions": []}
+
+    today = date.today().isoformat()
+
+    # Same taxonomy-bridge synonym expansion the real keyword-match
+    # pipeline uses (candidate_retriever.py) — a suggestion that doesn't
+    # reflect what search would actually find is worse than no
+    # suggestion at all.
+    industry_list = [i.strip() for i in industries.split(",") if i.strip()]
+    synonyms: list[str] = []
+    for ind in industry_list:
+        synonyms.extend(expand_industry_synonyms(ind))
+    search_terms = list(dict.fromkeys(industry_list + synonyms))
+
+    is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
+    match_op = "ILIKE" if is_postgres else "LIKE"
+
+    def _industry_clause(alias: str, params: dict, prefix: str) -> str:
+        if not search_terms:
+            return "1=1"
+        clauses = []
+        for i, term in enumerate(search_terms):
+            key = f"{prefix}{i}"
+            clauses.append(
+                f"({alias}.relevant_keywords {match_op} :{key} "
+                f"OR {alias}.related_industries {match_op} :{key} "
+                f"OR {alias}.industry_relevant_for {match_op} :{key})"
+            )
+            params[key] = f"%{term}%"
+        return "(" + " OR ".join(clauses) + ")"
+
+    try:
+        # 1. Does the exact typed city already have matches?
+        if city:
+            params: dict = {"country": f"%{country}%", "city": f"%{city}%", "today": today}
+            ind_clause = _industry_clause("e", params, "ind")
+            row = (await db.execute(
+                _text(
+                    f"SELECT COUNT(*) FROM events e WHERE "
+                    f"e.start_date >= :today AND "
+                    f"(e.country {match_op} :country) AND "
+                    f"(e.city {match_op} :city OR e.event_cities {match_op} :city) AND "
+                    f"{ind_clause}"
+                ),
+                params,
+            )).fetchone()
+            exact_count = int(row[0]) if row else 0
+            if exact_count > 0:
+                return {"exact_match": True, "count": exact_count, "suggestions": []}
+
+        # 2. No exact match (or no city typed yet) — suggest other cities
+        #    in the SAME country with real matches, ranked by count.
+        params2: dict = {"country": f"%{country}%", "today": today}
+        ind_clause2 = _industry_clause("e", params2, "sind")
+        rows = (await db.execute(
+            _text(
+                f"SELECT e.city, COUNT(*) as cnt FROM events e WHERE "
+                f"e.start_date >= :today AND "
+                f"(e.country {match_op} :country) AND "
+                f"e.city IS NOT NULL AND e.city != '' AND "
+                f"{ind_clause2} "
+                f"GROUP BY e.city ORDER BY cnt DESC LIMIT 5"
+            ),
+            params2,
+        )).fetchall()
+        suggestions = [{"city": r[0], "count": int(r[1])} for r in rows if r[0]]
+        return {"exact_match": False if city else None, "count": 0, "suggestions": suggestions}
+    except Exception as exc:
+        logger.warning(f"city_hint failed (non-fatal): {exc}")
+        return {"exact_match": None, "count": 0, "suggestions": []}
+
+
+# ══════════════════════════════════════════════════════════════════════
 # GET /api/stats  —  includes real-time API key status
 # ══════════════════════════════════════════════════════════════════════
 
