@@ -12,6 +12,7 @@ Flow: resolve_region() -> get_region_candidate_count()/should_widen_geo()
 from __future__ import annotations
 
 import re
+from datetime import date as _date
 from typing import Iterable, Optional
 
 from loguru import logger
@@ -168,6 +169,19 @@ async def sql_keyword_match(
             params[key] = f"%{term}%"
         where.append("(" + " OR ".join(like_clauses) + ")")
 
+    # Upcoming events only, and within the ICP's requested date window
+    # when one was given. Previously unfiltered — the only date-related
+    # thing this query did was ORDER BY start_date, which sorts but
+    # doesn't exclude anything, so already-past or out-of-window events
+    # (e.g. a July event when the ICP asked for Sep 2026-Aug 2027) could
+    # surface just as easily as a genuinely upcoming one.
+    today = _date.today().isoformat()
+    date_from = icp_profile.get("date_from") or today
+    date_to   = icp_profile.get("date_to") or "2099-12-31"
+    where.append("start_date >= :date_from AND start_date <= :date_to")
+    params["date_from"] = date_from
+    params["date_to"]   = date_to
+
     # Two-tier geo: city-level when we have one and aren't widening,
     # else country-level, else (widen_geo=True) no geo filter at all.
     # Previously this only ever filtered by country — should_widen_geo()
@@ -220,14 +234,25 @@ async def semantic_recall(
     db: AsyncSession, icp_profile: dict, exclude_ids: set,
 ) -> list[tuple[EventORM, float]]:
     """Runs pgvector semantic search over the whole index, then filters
-    out anything sql_keyword_match already caught — the residual pool."""
+    out anything sql_keyword_match already caught — the residual pool.
+
+    Passes date_from/date_to through to semantic_scores() — that function
+    already supports a date window (its own SQL filters start_date), but
+    this caller was never actually passing them, so semantic recall could
+    surface events from any date at all regardless of what the ICP asked
+    for, same bug as sql_keyword_match's missing date filter.
+    """
     from models.icp_profile import ICPProfile
 
     profile_obj = icp_profile.get("_profile_obj")
     if profile_obj is None or not isinstance(profile_obj, ICPProfile):
         return []
 
-    scores = await pgvector_store.semantic_scores(db, profile_obj)
+    today = _date.today().isoformat()
+    date_from = icp_profile.get("date_from") or today
+    date_to   = icp_profile.get("date_to") or None
+
+    scores = await pgvector_store.semantic_scores(db, profile_obj, date_from=date_from, date_to=date_to)
     if not scores:
         return []
 
@@ -300,6 +325,7 @@ def blend_and_rank(
 
 async def _fallback_recent_events(
     db: AsyncSession, geo: dict, top_n: int,
+    date_from: Optional[str] = None, date_to: Optional[str] = None,
 ) -> list[tuple[EventORM, float]]:
     """
     Last-resort retrieval when the ICP has genuinely no industry/keyword
@@ -320,8 +346,12 @@ async def _fallback_recent_events(
     """
     is_postgres = db.bind.dialect.name == "postgresql" if db.bind else False
     match_op = "ILIKE" if is_postgres else "LIKE"
-    where = ["1=1"]
-    params: dict = {}
+    today = _date.today().isoformat()
+    where = ["start_date >= :date_from AND start_date <= :date_to"]
+    params: dict = {
+        "date_from": date_from or today,
+        "date_to":   date_to or "2099-12-31",
+    }
     if geo.get("country"):
         where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
         params["country"] = geo["country"] if is_postgres else f"%{geo['country']}%"
@@ -377,7 +407,10 @@ async def get_top_candidates(
         # Genuinely no signal to search on (industry-agnostic ICP) and
         # semantic recall found nothing — fall back to region/date rather
         # than returning zero candidates to the LLM selector.
-        ranked = await _fallback_recent_events(db, region, top_n)
+        ranked = await _fallback_recent_events(
+            db, region, top_n,
+            date_from=icp_profile.get("date_from"), date_to=icp_profile.get("date_to"),
+        )
 
     top = ranked[:top_n]
     logger.info(f"candidate_retriever: {len(keyword_hits)} keyword hits, "
