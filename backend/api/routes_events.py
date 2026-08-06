@@ -718,6 +718,15 @@ async def _run_search_pipeline(
                 db=db, profile=profile, company_ctx=company_ctx,
             )
         _store_last_results(profile_id, ranked)
+        # No equivalent "relevant but outside the top 6" set on this path —
+        # get_top_candidates() only ever surfaces a 12-candidate shortlist,
+        # not the old pipeline's full scored-and-thresholded universe, and
+        # its (event, score) pairs don't carry the (tier, detail) shape the
+        # secondary Event Table below expects. The old pipeline's variable
+        # of the same name (all_relevant) is referenced unconditionally
+        # further down (all_relevant_events); leaving it undefined here
+        # crashed every keyword-pipeline search with an UnboundLocalError.
+        all_relevant: list = []
     else:
         # ── Step 6: Rule-based scoring ───────────────────────────────────
         scored = score_candidates(candidates, profile, cosine_scores)
