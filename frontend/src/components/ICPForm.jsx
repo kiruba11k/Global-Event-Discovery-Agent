@@ -418,11 +418,6 @@ export default function ICPForm({
     }
   }, [TURNSTILE_SITE_KEY])
 
-  // ── Geo hint state ─────────────────────────────────────────────
-  const [geoHints,     setGeoHints]     = useState({})   // { "Indonesia": {count,status,suggestions} }
-  const [geoHintLoad,  setGeoHintLoad]  = useState(false)
-  const geoHintTimer = useRef(null)
-
   // ── Live country list from the DB — replaces the static GEO_OPTIONS
   // fallback once loaded, so the dropdown always reflects what's
   // actually in the event catalog (falls back to GEO_OPTIONS on error).
@@ -490,32 +485,6 @@ export default function ICPForm({
     }
     return { ...local, extra_keywords: [], segments: [], source: 'rules' }
   }, [llmParse])
-
-  // ── Geo hint: debounced live fetch after geo selection changes ──
-  useEffect(() => {
-    clearTimeout(geoHintTimer.current)
-    if (!geos.length) { setGeoHints({}); return }
-    setGeoHintLoad(true)
-    geoHintTimer.current = setTimeout(async () => {
-      try {
-        const { industries, personas } = effectiveParse(buyer)
-        // Must match what's actually sent at submit time (target_industries
-        // below) — an empty array here means "no industry restriction",
-        // same as the backend scorer treats it (see scorer.py's
-        // strict_industry = bool(profile.target_industries)). Previously
-        // this force-defaulted to ['Technology'] whenever no industry
-        // keyword matched, which silently narrowed genuinely
-        // industry-agnostic buyer descriptions ("CIOs across all
-        // industries") into a single wrong vertical.
-        const data = await api.geoHint(geos, industries, personas)
-        const map = {}
-        for (const item of (data.coverage || [])) map[item.geo] = item
-        setGeoHints(map)
-      } catch (_) {}
-      finally { setGeoHintLoad(false) }
-    }, 600)
-    return () => clearTimeout(geoHintTimer.current)
-  }, [geos, buyer, effectiveParse])
 
   // Buyer suggestions
   useEffect(() => {
@@ -819,94 +788,11 @@ export default function ICPForm({
               </div>
             </div>
           )}
-               {/* Live geo coverage hints - shown as soon as a region is added */}
-        {geos.length > 0 && !geos.includes('Global') && (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }} aria-live="polite">
-            {geoHintLoad && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: 'rgba(14,124,107,0.05)',
-                border: '1px solid rgba(14,124,107,0.18)',
-                borderRadius: 8, padding: '8px 12px',
-              }}>
-                <div style={{
-                  width: 14, height: 14, borderRadius: '50%',
-                  border: '2px solid rgba(14,124,107,0.3)',
-                  borderTopColor: '#0E7C6B',
-                animation: 'icp-spin 0.8s linear infinite',
-                }} />
-                <span style={{ fontSize: 11, color: '#4C5A63' }}>Checking event coverage for your regions…</span>
-              </div>
-            )}
-            {!geoHintLoad && geos.filter(g => g !== 'Global').map(geo => {
-              const hint = geoHints[geo]
-              if (!hint) return null
-              const isGood   = hint.status === 'good'
-              const isSparse = hint.status === 'sparse'
-              const isNone   = hint.status === 'none'
-              return (
-                <div key={geo} style={{
-                  background:   isGood ? '#DCF2EC' : isNone ? '#FCE7DF' : '#FCF0D4',
-                  border:       `1px solid ${isGood ? 'rgba(14,124,107,0.35)' : isNone ? 'rgba(201,58,43,0.35)' : 'rgba(217,144,0,0.35)'}`,
-                  borderRadius: 8,
-                  padding:      '10px 12px',
-                  fontSize:     12,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: (isSparse || isNone) && hint.suggestions?.length ? 10 : 0 }}>
-                    <span style={{ fontSize: 14 }}>{isGood ? '✅' : isNone ? '🚫' : '⚠️'}</span>
-                    <span style={{ color: isGood ? '#0E7C6B' : isNone ? '#C93A2B' : '#9A6700', fontWeight: 700 }}>
-                      {geo}
-                    </span>
-                    <span style={{ color: '#4C5A63' }}>
-                      {isGood   && `- ${hint.count} events match your criteria here; final results depend on deeper relevance ranking`}
-                      {isSparse && `- only ${hint.count} event${hint.count !== 1 ? 's' : ''} match, consider a nearby hub`}
-                      {isNone   && '- no matching events for this region'}
-                    </span>
-                  </div>
-                  {(isSparse || isNone) && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, color: '#4C5A63', fontWeight: 600 }}>
-                        {hint.suggestions?.length > 0 ? 'Switch to:' : 'No nearby data found'}
-                      </span>
-                      {(hint.suggestions || []).map(s => (
-                        <button
-                          key={s.geo}
-                          type="button"
-                          onClick={() => swapGeo(geo, s.geo)}
-                          style={{
-                            display:      'inline-flex',
-                            alignItems:   'center',
-                            gap:          5,
-                            background:   '#DCF2EC',
-                            border:       '1px solid rgba(14,124,107,0.4)',
-                            borderRadius: 20,
-                            padding:      '4px 12px',
-                            fontSize:     11.5,
-                            color:        '#0E7C6B',
-                            cursor:       'pointer',
-                            fontWeight:   600,
-                          }}
-                        >
-                          {s.geo}
-                          <span style={{
-                            background: 'rgba(14,124,107,0.14)',
-                            borderRadius: 4,
-                            padding: '1px 5px',
-                            fontSize: 10,
-                            color: '#0A6154',
-                            fontWeight: 700,
-                          }}>{s.count}</span>
-                        </button>
-                      ))}
-                    </div>
- 
-
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
+               {/* Pre-search region-coverage hints removed: the search
+                   pipeline always returns the top 6 relevant events
+                   regardless of per-region counts, so a live "N events in
+                   this region" preview during form-fill no longer reflects
+                   what the results page will actually do. */}
         </div>
       </div>
 
