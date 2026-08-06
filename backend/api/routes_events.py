@@ -53,7 +53,7 @@ from relevance.scorer import score_candidates, build_fallback_rationale
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
 from relevance.profile_store import profile_core_hash
 from relevance.meeting_calculator import calculate_meeting_potential
-from relevance.candidate_retriever import get_top_candidates, resolve_region
+from relevance.candidate_retriever import get_top_candidates, resolve_region, resolve_regions
 from relevance.llm_selector import select_top_6, validate_reasons
 from relevance.icp_extractor import _db_industry_vocab, _industry_present_in_catalog
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
@@ -458,12 +458,19 @@ async def _icp_profile_dict(db: AsyncSession, profile: ICPProfile) -> dict:
 
     pairs = [{"industry": primary_industry, "persona": primary_persona}]
 
-    geo_raw = (profile.target_geographies or [""])[0]
-    region  = resolve_region({"raw": geo_raw})
+    # regions: ALL selected geographies, resolved and OR'd together at
+    # query time (candidate_retriever.py) — a user who picks "India,
+    # Singapore" expects candidates from either, not just the first one
+    # selected. region (singular) stays as the first for display-only
+    # text (fallback rationale, LLM selection prompt context) where a
+    # single representative location reads better than a list.
+    regions = resolve_regions(profile.target_geographies or [])
+    region  = regions[0] if regions else resolve_region({"raw": ""})
 
     return {
         "pairs": pairs,
         "region": region,
+        "regions": regions,
         "extra_keywords": getattr(profile, "extra_keywords", None) or [],
         "date_from": profile.date_from,
         "date_to":   profile.date_to,
