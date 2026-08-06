@@ -749,6 +749,12 @@ async def rank_with_groq(
     enrichments  = enrichments or {}
     groq_results: Dict[str, GroqEventResult] = {}
     hallucinated: set[str] = set()
+    # True once Agent 2 (the real LLM cross-check validator) has actually
+    # run and returned a verdict for this batch — see its use below, where
+    # it makes the validator's clearance authoritative instead of letting
+    # the much cruder local _is_hallucinated() keyword heuristic override
+    # a rationale the real LLM cross-check already judged legitimate.
+    validator_succeeded = False
 
     if events:
         events_dicts = [
@@ -805,10 +811,16 @@ async def rank_with_groq(
                 groq_results[r.id] = r
         logger.info(f"Ranker: {len(groq_results)}/{len(events_dicts)} events ranked")
 
-        # Agent 2 — validator (hallucination check).
-        # Cheap and non-blocking: slim payload, short hard timeout. If it
-        # fails or times out we just log and proceed — the local
-        # _is_hallucinated heuristic still runs on every result.
+        # Agent 2 — validator (hallucination check). This is the REAL
+        # cross-check: an independent LLM call that reads each event's
+        # own source data alongside the ranker's rationale and judges
+        # whether it's actually grounded — far more robust than pattern-
+        # matching fixed phrases, since it adapts to however the ranker
+        # happened to phrase things. When it succeeds, its clearance is
+        # authoritative (see validator_succeeded below) — the local
+        # _is_hallucinated() keyword heuristic only acts as a fallback
+        # for when this call fails, times out, or is skipped entirely
+        # (payload too large, fewer than 3 results).
         if len(groq_results) >= 3:
             slim_events = [
                 {
@@ -848,6 +860,7 @@ async def rank_with_groq(
                 logger.warning("Validator unavailable/failed — proceeding with "
                                "ranker results")
             else:
+                validator_succeeded = True
                 corrections = 0
                 for v in val.validations:
                     if v.hallucination_flag:
@@ -882,7 +895,17 @@ async def rank_with_groq(
 
         if event.id in groq_results and event.id not in hallucinated:
             gr = groq_results[event.id]
-            if _is_hallucinated(gr, event, profile, detail):
+            # If the real LLM cross-check validator ran for this batch, its
+            # clearance (event.id not in `hallucinated`) is authoritative —
+            # skip the local keyword heuristic entirely rather than let it
+            # second-guess and override a verdict an independent LLM call
+            # already examined against the event's own source data. Only
+            # fall back to the crude local check when the validator itself
+            # didn't run (failed, timed out, over budget, or fewer than 3
+            # results in this batch) — the scenario it was actually built
+            # as a safety net for.
+            run_local_check = not validator_succeeded
+            if run_local_check and _is_hallucinated(gr, event, profile, detail):
                 logger.warning(f"Replacing hallucinated rationale: '{event.name[:50]}'")
                 verdict   = tier
                 rationale = build_fallback_rationale(event, profile, detail, score, tier)
