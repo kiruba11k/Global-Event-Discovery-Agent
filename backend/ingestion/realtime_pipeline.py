@@ -349,8 +349,14 @@ async def fetch_realtime_candidates(
         db_candidates = list(r3.scalars().all())
         logger.info(f"Tier-3: {len(db_candidates)} candidates (geo+date only)")
 
-    if len(db_candidates) < 3:
-        # Tier 4: date window only (no geo, no industry)
+    # Tier 4 (drop geo entirely) only applies when the user didn't request
+    # a specific region — a user who typed "Delhi" or "Middle East" wants
+    # results scoped to that region (or nothing + suggestions), not an
+    # unrelated country's events silently substituted in. See
+    # api/routes_events.py's post-fetch "no candidates" handling, which
+    # now surfaces a proper not-found response with region suggestions
+    # instead of relying on this tier to always backfill something.
+    if len(db_candidates) < 3 and (is_global or not geo_filters):
         logger.warning("Tier-3 too few — returning all future events in date window")
         r4 = await db.execute(
             select(EventORM).where(
