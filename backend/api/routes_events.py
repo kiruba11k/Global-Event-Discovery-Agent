@@ -465,6 +465,8 @@ async def _icp_profile_dict(db: AsyncSession, profile: ICPProfile) -> dict:
         "pairs": pairs,
         "region": region,
         "extra_keywords": getattr(profile, "extra_keywords", None) or [],
+        "date_from": profile.date_from,
+        "date_to":   profile.date_to,
         "_profile_obj": profile,
     }
 
