@@ -467,17 +467,53 @@ def _word_in_text(word: str, text: str) -> bool:
     return bool(re.search(r"\b" + re.escape(word) + r"\b", text, re.I))
 
 
+# Synonyms that are already complete dictionary words AND a literal
+# prefix of a common, UNRELATED word ("hospital" -> "Hospitality",
+# "network" -> "networking" as in generic professional networking, not
+# telecom networks). The open-ended "\bsyn" prefix match below is
+# intentional for TRUNCATED stems like "manufactur"/"technolog" (not real
+# words on their own, so no unrelated-word collision is possible), but for
+# a synonym that's already a complete word, open-ended prefix matching
+# lets it silently match an unrelated derived word too. Confirmed on real
+# catalog data: "hospital" alone matched 52 distinct unrelated tag
+# phrases (mostly "Catering & Hospitality Industries"), and on one real
+# DB dump flooded 499 of 500 candidates as false Healthcare "GO" matches
+# for a search that had ~13 genuine ones.
+#
+# Fix: instead of blocking the stem outright (which would also break the
+# legitimate plural - "Hospitals" - since a bare word-boundary match
+# requires nothing to follow), each entry lists the SMALL set of safe
+# inflectional continuations to allow ("" for the bare word, "s" for the
+# plural) - anything else (like "ity", "ing") is rejected. This is not a
+# general-purpose fix (there's no way to fully automate "is this
+# continuation a different word" without real dictionary/semantic
+# knowledge - a generic stemmer collapses "hospital"/"hospitality" to the
+# same stem too, verified against Snowball/Porter), so new entries here
+# should come from scripts/audit_taxonomy_collisions.py's ranked output
+# plus a quick human read of the example phrases, not blind automation.
+_LIMITED_STEM_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "hospital": ("", "s"),   # Hospital, Hospitals - NOT Hospitality
+    "network":  ("", "s"),   # Network, Networks - NOT Networking (generic biz networking)
+}
+
+
 def _syn_in_text(syn: str, text: str) -> bool:
     """
     Boundary-aware synonym match.
     Short synonyms (≤4 chars) must match whole words only, so "auto"
     never fires inside "automation" and "ev" never fires inside "event".
     Longer synonyms are stems anchored at a word start ("manufactur"
-    matches "manufacturing", "technolog" matches "technology").
+    matches "manufacturing", "technolog" matches "technology") UNLESS
+    listed in _LIMITED_STEM_SYNONYMS, where the stem is itself a complete
+    word that collides with an unrelated longer word - those only match
+    their own listed safe continuations (see comment above).
     """
     syn = syn.strip().lower()
     if not syn:
         return False
+    if syn in _LIMITED_STEM_SYNONYMS:
+        suffixes = "|".join(re.escape(s) for s in _LIMITED_STEM_SYNONYMS[syn])
+        return bool(re.search(r"\b" + re.escape(syn) + r"(?:" + suffixes + r")\b", text, re.I))
     if len(syn) <= 4:
         return bool(re.search(r"\b" + re.escape(syn) + r"\b", text, re.I))
     return bool(re.search(r"\b" + re.escape(syn), text, re.I))

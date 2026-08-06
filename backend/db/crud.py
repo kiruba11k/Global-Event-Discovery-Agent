@@ -39,14 +39,15 @@ _INDUSTRY_SYNONYMS: list[tuple[str, list[str]]] = [
                            "production", "process industry", "heavy industry"]),
     # Technology
     ("technology",        ["technolog", "information technology", "software", "digital",
-                           "compute", "network", "telecom", "electronic", "semiconductor",
-                           "iot", "smart technolog", "multimedia", "cad", "cam", "tech"]),
+                           "compute", "network", "networks", "telecom", "electronic",
+                           "semiconductor", "iot", "smart technolog", "multimedia", "cad",
+                           "cam", "tech"]),
     ("information technology", ["information technology", "telecom", "compute", "network",
-                                "it service", "it solution", "digital transformation"]),
+                                "networks", "it service", "it solution", "digital transformation"]),
     ("software",          ["software", "digital", "compute", "saas", "cloud", "application",
                            "platform", "enterprise software", "b2b software"]),
     ("it",                ["information technology", "it ", "it service", "software",
-                           "compute", "network", "digital"]),
+                           "compute", "network", "networks", "digital"]),
     ("tech",              ["technolog", "software", "digital", "compute", "iot", "smart"]),
     # AI / Data
     ("ai",                ["artificial intelligence", "machine learning", "deep learning",
@@ -91,11 +92,16 @@ _INDUSTRY_SYNONYMS: list[tuple[str, list[str]]] = [
     ("payments",          ["payment", "fintech", "digital payment", "transaction",
                            "remittance", "card payment", "wallet"]),
     # Healthcare / Life Sciences
+    # "hospital" itself is excluded from ILIKE expansion below
+    # (_ILIKE_UNSAFE_TERMS - it's a substring of "Hospitality"); "hospitals"
+    # (plural) is a safe substitute that still recalls "Hospitals"-tagged
+    # events without that collision.
     ("healthcare",        ["healthcare", "health", "medical", "medtech", "pharma",
-                           "biotech", "hospital", "clinical", "life science", "dental",
-                           "optical", "nursing", "diagnostic", "telemedicine", "digital health"]),
-    ("health",            ["health", "healthcare", "medical", "hospital", "clinical",
-                           "wellness", "public health", "preventive health"]),
+                           "biotech", "hospital", "hospitals", "clinical", "life science",
+                           "dental", "optical", "nursing", "diagnostic", "telemedicine",
+                           "digital health"]),
+    ("health",            ["health", "healthcare", "medical", "hospital", "hospitals",
+                           "clinical", "wellness", "public health", "preventive health"]),
     ("medtech",           ["medtech", "medical device", "medical equipment", "diagnostic",
                            "imaging", "surgical", "medical technology"]),
     ("pharma",            ["pharma", "pharmaceutical", "drug", "biotech", "life science",
@@ -103,7 +109,7 @@ _INDUSTRY_SYNONYMS: list[tuple[str, list[str]]] = [
     ("biotech",           ["biotech", "life science", "pharmaceutical", "genomics",
                            "bioinformatics", "drug discovery", "medical research"]),
     ("medical",           ["medical", "healthcare", "medtech", "clinical", "hospital",
-                           "diagnostic", "medical device"]),
+                           "hospitals", "diagnostic", "medical device"]),
     # Logistics / Supply Chain
     ("logistics",         ["logistic", "supply chain", "transport", "freight", "shipping",
                            "warehousing", "cargo", "courier", "last mile", "fleet",
@@ -216,10 +222,10 @@ _INDUSTRY_SYNONYMS: list[tuple[str, list[str]]] = [
     ("packaging",         ["packaging", "printing", "label", "flexible packaging",
                            "rigid packaging", "sustainability packaging"]),
     # Telecom
-    ("telecom",           ["telecom", "5g", "network", "connectivity", "wireless",
+    ("telecom",           ["telecom", "5g", "network", "networks", "connectivity", "wireless",
                            "fibre", "broadband", "isp", "mobile", "carrier", "mvno"]),
-    ("telecommunications", ["telecom", "telecommunications", "5g", "network", "wireless",
-                            "mobile", "connectivity", "broadband"]),
+    ("telecommunications", ["telecom", "telecommunications", "5g", "network", "networks",
+                            "wireless", "mobile", "connectivity", "broadband"]),
     # Legal Tech
     ("legal",             ["legal tech", "legal", "law", "compliance", "regulatory",
                            "governance", "contract management", "litigation"]),
@@ -270,9 +276,29 @@ def _expand_industry_terms(industries: List[str]) -> List[str]:
     terms: list[str] = []
     seen:  set[str]  = set()
 
+    # Terms excluded from ILIKE expansion because they're a literal
+    # substring PREFIX of a common, unrelated EventsEye tag word - ILIKE
+    # '%term%' has no word-boundary concept at all (unlike the regex-based
+    # matching in relevance/scorer.py's _syn_in_text, which has its own
+    # parallel _LIMITED_STEM_SYNONYMS guard for the same collisions, plus
+    # the plural safety-net: e.g. "hospitals" is added alongside "hospital"
+    # in the synonym lists above, since it's a safe substitute that isn't
+    # itself a prefix of anything). Confirmed on real data:
+    #   "hospital" ILIKE-matches "Hospitality" ("Catering & Hospitality
+    #     Industries" - Travel/Hospitality's own tag) - flooded Healthcare
+    #     candidate recall with travel/food/hotel events.
+    #   "network" ILIKE-matches "networking" (generic professional
+    #     networking events, unrelated to Telecom/IT).
+    # Re-run scripts/audit_taxonomy_collisions.py against real catalog data
+    # to find more of this class - it ranks candidates by impact, but each
+    # one still needs a quick human read of the example phrases (there's no
+    # way to fully automate "is this a different word" without real
+    # dictionary/semantic knowledge - see that script's docstring).
+    _ILIKE_UNSAFE_TERMS = {"hospital", "network"}
+
     def _add(t: str):
         t = t.strip().lower()
-        if t and len(t) >= 2 and t not in seen:
+        if t and len(t) >= 2 and t not in seen and t not in _ILIKE_UNSAFE_TERMS:
             seen.add(t)
             terms.append(t)
 
