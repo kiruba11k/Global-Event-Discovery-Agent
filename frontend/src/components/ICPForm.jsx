@@ -41,12 +41,13 @@ const BUYER_SUGGESTIONS = [
   'leaders in energy and sustainability',
   'decision-makers in retail technology',
   'executives in real estate technology',
-  // Multi-persona, industry-agnostic examples — a vertical-agnostic
+  // Single-persona, industry-agnostic examples — a vertical-agnostic
   // platform (e.g. cybersecurity/cloud sold across every industry) can
-  // list multiple roles and skip a vertical entirely; leaving industry
-  // out of the sentence means "no industry restriction," not "guess one."
-  'CIOs and CISOs across all industries',
-  'CTOs and VP Engineering, any industry',
+  // skip a vertical entirely; leaving industry out of the sentence
+  // means "no industry restriction," not "guess one." One role only —
+  // the pipeline targets a single role + industry pair, not several.
+  'CISOs across all industries',
+  'VP Engineering, any industry',
 ]
 
 const GEO_OPTIONS = [
@@ -652,7 +653,7 @@ export default function ICPForm({
         <label className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'} htmlFor="icp-buyer">
           Who do you sell to?<span className="icp-required">*</span>
         </label>
-        <p className="icp-hint" id="icp-buyer-help">Role + industry, or multiple roles across all industries. e.g. "CTOs at fintech companies" or "CIOs and CISOs across all industries"</p>
+        <p className="icp-hint" id="icp-buyer-help">One role + industry. e.g. "CTOs at fintech companies" or "CIOs across all industries"</p>
         <div ref={buyerRef} style={{ position: 'relative' }}>
           <input
             id="icp-buyer"
