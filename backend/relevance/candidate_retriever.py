@@ -22,40 +22,9 @@ from config import get_settings
 from models.event import EventORM
 from relevance import pgvector_store
 from relevance.icp_extractor import normalize_geo
-from relevance.scorer import _PROFILE_TO_EVENTSEYE
+from relevance.scorer import expand_industry_synonyms as _expand_industry_synonyms
 
 settings = get_settings()
-
-# Cap how many synonyms one industry can contribute to the search term
-# list — _PROFILE_TO_EVENTSEYE entries run 10-30 synonyms each; sending
-# all of them per industry would blow up the tsquery for multi-industry
-# ICPs and dilute the match toward generic terms.
-_MAX_SYNONYMS_PER_INDUSTRY = 8
-
-
-def _expand_industry_synonyms(industry: str) -> list[str]:
-    """
-    Same taxonomy bridge scorer.py's _score_industry() Pass 2 uses
-    (EventsEye's industry vocabulary rarely says "Fintech" verbatim — it
-    says "Financial Technology", "Digital Banking", "Payment Systems",
-    etc.) — reused here, not duplicated, so the keyword-match layer gets
-    the same synonym coverage the old rule scorer had. Without this, the
-    keyword-match layer only ever searched for the LLM's canonical label
-    itself, missing events whose related_industries/relevant_keywords
-    use a synonym instead of that exact word.
-    """
-    ind_lower = industry.lower().strip()
-    if not ind_lower:
-        return []
-    ind_tokens = [t for t in re.split(r"[^a-z0-9]+", ind_lower) if len(t) > 2]
-
-    for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
-        key_words = [kw for kw in key.split() if len(kw) > 2]
-        if not key_words:
-            continue
-        if all(any(t == kw or t.startswith(kw) for t in ind_tokens) for kw in key_words):
-            return synonyms[:_MAX_SYNONYMS_PER_INDUSTRY]
-    return []
 
 
 def _to_tsquery_string(terms: list[str]) -> str:
@@ -199,16 +168,27 @@ async def sql_keyword_match(
             params[key] = f"%{term}%"
         where.append("(" + " OR ".join(like_clauses) + ")")
 
-    if not widen_geo and geo.get("country"):
-        where.append("(country ILIKE :country OR event_cities ILIKE :country_like)"
-                      if is_postgres else
-                      "(country LIKE :country OR event_cities LIKE :country_like)")
+    # Two-tier geo: city-level when we have one and aren't widening,
+    # else country-level, else (widen_geo=True) no geo filter at all.
+    # Previously this only ever filtered by country — should_widen_geo()
+    # existed to signal "drop city, fall back to country" but there was
+    # no city filter here to drop in the first place, so widening just
+    # removed the only filter that existed rather than the documented
+    # two-step narrowing.
+    match_op = "ILIKE" if is_postgres else "LIKE"
+    if not widen_geo and geo.get("city"):
+        where.append(f"(city {match_op} :city OR event_cities {match_op} :city_like)")
+        params["city"] = geo["city"] if is_postgres else f"%{geo['city']}%"
+        params["city_like"] = f"%{geo['city']}%"
+    elif not widen_geo and geo.get("country"):
+        where.append(f"(country {match_op} :country OR event_cities {match_op} :country_like)")
         params["country"] = geo["country"] if is_postgres else f"%{geo['country']}%"
         params["country_like"] = f"%{geo['country']}%"
 
     try:
         rows = (await db.execute(
-            text(f"SELECT * FROM events WHERE {' AND '.join(where)} LIMIT 200"),
+            text(f"SELECT * FROM events WHERE {' AND '.join(where)} "
+                 f"ORDER BY start_date ASC LIMIT 200"),
             params,
         )).mappings().all()
     except Exception as exc:
@@ -255,10 +235,21 @@ async def semantic_recall(
     if not residual_ids:
         return []
 
-    rows = (await db.execute(
-        text("SELECT * FROM events WHERE id = ANY(:ids)"),
-        {"ids": residual_ids},
-    )).mappings().all()
+    # id = ANY(:ids) is Postgres-only syntax. In practice this is only
+    # ever reached when scores is non-empty, which pgvector_store.
+    # semantic_scores() only returns on an active Postgres+pgvector setup
+    # (it gates on is_active()/ensure_schema() first) — so this should
+    # never actually run against SQLite. Wrapped anyway, consistent with
+    # every other DB call in this file, rather than relying on that
+    # invariant holding forever.
+    try:
+        rows = (await db.execute(
+            text("SELECT * FROM events WHERE id = ANY(:ids)"),
+            {"ids": residual_ids},
+        )).mappings().all()
+    except Exception as exc:
+        logger.warning(f"candidate_retriever: semantic recall event lookup failed ({exc})")
+        return []
     events = {r["id"]: EventORM(**{k: v for k, v in dict(r).items()
                                     if k in EventORM.__table__.columns.keys()})
               for r in rows}

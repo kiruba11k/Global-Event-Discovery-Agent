@@ -157,11 +157,17 @@ async def select_top_6(
         return [_fallback_entry(e, s) for e, s in top]
 
     selected: list[dict] = []
+    seen_ids: set = set()
     for item in parsed.selected:
         if item.event_id not in candidate_ids:
             logger.warning(f"llm_selector: dropping unknown id '{item.event_id}' "
                             "not in candidate set")
             continue
+        if item.event_id in seen_ids:
+            logger.warning(f"llm_selector: dropping duplicate id '{item.event_id}' "
+                            "returned more than once")
+            continue
+        seen_ids.add(item.event_id)
         selected.append({"event_id": item.event_id, "reason": item.reason,
                           "verdict": item.verdict})
 

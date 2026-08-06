@@ -15,7 +15,6 @@ catalog has ever used.
 """
 from __future__ import annotations
 
-import difflib
 from typing import Optional
 
 from loguru import logger
@@ -24,10 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from relevance.geo_aliases import canonical_geo
 from relevance.icp_parser import parse_icp_text
-
-# Fuzzy-match threshold for correcting a near-miss industry label against
-# the DB vocabulary (e.g. "Health Tech" -> "Healthcare / Medtech").
-_FUZZY_CUTOFF = 0.72
+from relevance.scorer import expand_industry_synonyms
 
 
 async def _db_industry_vocab(db: AsyncSession) -> list[str]:
@@ -54,15 +50,30 @@ async def _db_industry_vocab(db: AsyncSession) -> list[str]:
     return sorted(vocab)
 
 
-def _fuzzy_correct(industry: str, vocab: list[str]) -> Optional[str]:
+def _industry_present_in_catalog(industry: str, vocab: list[str]) -> bool:
+    """
+    True if `industry` (or one of its taxonomy-bridge synonyms) appears
+    as a substring of ANY vocab term actually present in the catalog.
+
+    NOT character-similarity fuzzy matching (e.g. difflib) — a canonical
+    LLM label like "Fintech" and a real DB vocab term like "Digital
+    Banking" or "Insurance" describe the same industry but share almost
+    no characters, so string-similarity scoring against raw catalog text
+    would fail to match on virtually every real industry (verified
+    against this catalog's actual related_industries values — every
+    canonical label tested returned no fuzzy match at all). Checking
+    substring presence of the SAME synonym list candidate_retriever.py's
+    keyword search already uses is both correct and consistent: if this
+    says "present", the keyword-match query will actually find rows.
+    """
     if not vocab:
-        return industry  # no vocab to validate against — pass through
-    lower_vocab = {v.lower(): v for v in vocab}
-    if industry.lower() in lower_vocab:
-        return lower_vocab[industry.lower()]
-    match = difflib.get_close_matches(industry.lower(), lower_vocab.keys(),
-                                       n=1, cutoff=_FUZZY_CUTOFF)
-    return lower_vocab[match[0]] if match else None
+        return True  # no vocab to validate against — don't block
+    ind_lower = industry.lower().strip()
+    if not ind_lower:
+        return False
+    candidates = [ind_lower] + [s.lower() for s in expand_industry_synonyms(industry)]
+    vocab_lower = " | ".join(v.lower() for v in vocab)
+    return any(c in vocab_lower for c in candidates)
 
 
 async def extract_industry_persona_pairs(
@@ -74,10 +85,10 @@ async def extract_industry_persona_pairs(
     the SQL keyword-match/candidate_retriever layer scores against.
 
     industry is validated against the DB's actual related_industries
-    vocabulary when a `db` session is given: an unmatched industry is
-    fuzzy-corrected to the nearest real vocabulary term, or dropped (with
-    a logged warning) if nothing is close enough. Without a db session
-    (or on a DB error) the LLM's canonical label passes through unchecked —
+    vocabulary when a `db` session is given: dropped (with a logged
+    warning) if neither the label nor any of its taxonomy-bridge
+    synonyms appears anywhere in the catalog. Without a db session (or
+    on a DB error) the LLM's canonical label passes through unchecked —
     degrade gracefully rather than block extraction on a vocab lookup.
 
     Returns EXACTLY ONE pair — this pipeline only ever targets a single
@@ -103,13 +114,10 @@ async def extract_industry_persona_pairs(
         primary_industry = (parsed.industries or [""])[0]
         primary_persona  = (parsed.personas or [""])[0]
 
-    corrected = _fuzzy_correct(primary_industry, vocab) if primary_industry else ""
-    if primary_industry and vocab and corrected is None:
-        logger.warning(f"icp_extractor: dropping unmatched industry "
-                        f"'{primary_industry}' (no close DB vocab match)")
+    if primary_industry and vocab and not _industry_present_in_catalog(primary_industry, vocab):
+        logger.warning(f"icp_extractor: dropping '{primary_industry}' — "
+                        "not present in catalog (no matching event data at all)")
         primary_industry = ""
-    else:
-        primary_industry = corrected or primary_industry
 
     return [{"industry": primary_industry, "persona": primary_persona}]
 

@@ -344,6 +344,32 @@ _PROFILE_TO_EVENTSEYE: dict[str, list[str]] = {
                                  "innovation", "scale-up", "seed funding"],
 }
 
+_MAX_SYNONYMS_PER_INDUSTRY = 8
+
+
+def expand_industry_synonyms(industry: str) -> list[str]:
+    """
+    Public taxonomy-bridge lookup: given a canonical/free-text industry
+    label, return the EventsEye-vocabulary synonyms _score_industry()'s
+    Pass 2 would match against ("Fintech" -> "financial technology",
+    "digital banking", "payment", "insurtech", ...). Single source of
+    truth — candidate_retriever.py's keyword-match search-term expansion
+    and icp_extractor.py's catalog-presence check both call this rather
+    than each maintaining their own copy of the same lookup.
+    """
+    ind_lower = industry.lower().strip()
+    if not ind_lower:
+        return []
+    ind_tokens = [t for t in re.split(r"[^a-z0-9]+", ind_lower) if len(t) > 2]
+
+    for key, synonyms in _PROFILE_TO_EVENTSEYE.items():
+        key_words = [kw for kw in key.split() if len(kw) > 2]
+        if not key_words:
+            continue
+        if all(any(t == kw or t.startswith(kw) for t in ind_tokens) for kw in key_words):
+            return synonyms[:_MAX_SYNONYMS_PER_INDUSTRY]
+    return []
+
 
 def _get_industry(event: EventORM) -> str:
     """

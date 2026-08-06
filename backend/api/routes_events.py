@@ -55,6 +55,7 @@ from relevance.profile_store import profile_core_hash
 from relevance.meeting_calculator import calculate_meeting_potential
 from relevance.candidate_retriever import get_top_candidates, resolve_region
 from relevance.llm_selector import select_top_6, validate_reasons
+from relevance.icp_extractor import _db_industry_vocab, _industry_present_in_catalog
 from scripts.seed_10times_global import CrawlConfig, run_10times_seed
 from scripts.seed_conferencealerts_global import ConferenceAlertsSeedConfig, run_conferencealerts_seed
 from scripts.seed_eventseye_global import run_eventseye_seed
@@ -418,7 +419,7 @@ def _extract_pdf_text(fb):
         return ""
 
 
-def _icp_profile_dict(profile: ICPProfile) -> dict:
+async def _icp_profile_dict(db: AsyncSession, profile: ICPProfile) -> dict:
     """
     Shape ICPProfile into the dict candidate_retriever.py / llm_selector.py
     expect: {"pairs": [{"industry","persona"}], "region": {...},
@@ -431,6 +432,14 @@ def _icp_profile_dict(profile: ICPProfile) -> dict:
     industry first); anything else in profile.icp_segments/
     target_industries/target_personas is intentionally dropped here, not
     cross-producted.
+
+    Logs (does not drop/block on) whether the primary industry has any
+    catalog presence at all — diagnostic visibility only. Dropping it
+    here would also strip it from sql_keyword_match's synonym expansion
+    (which is derived from this same industry string), so an imperfect
+    vocab check could actively hurt recall; retrieval already degrades
+    gracefully to semantic recall / the no-signal fallback on 0 keyword
+    hits, so this stays observability-only rather than a hard gate.
     """
     segments = getattr(profile, "icp_segments", None) or []
     if segments:
@@ -439,6 +448,13 @@ def _icp_profile_dict(profile: ICPProfile) -> dict:
     else:
         primary_industry = (profile.target_industries or [""])[0]
         primary_persona  = (profile.target_personas or [""])[0]
+
+    if primary_industry:
+        vocab = await _db_industry_vocab(db)
+        if vocab and not _industry_present_in_catalog(primary_industry, vocab):
+            logger.warning(f"_icp_profile_dict: '{primary_industry}' has no "
+                            "catalog presence (literal or synonym) — keyword "
+                            "match will likely rely on semantic recall instead")
 
     pairs = [{"industry": primary_industry, "persona": primary_persona}]
 
@@ -468,7 +484,7 @@ async def _run_keyword_embedding_pipeline(
     rank_with_groq path feeds — enrichment and fit scoring don't need to
     know which retrieval path produced `ranked`.
     """
-    icp_profile = _icp_profile_dict(profile)
+    icp_profile = await _icp_profile_dict(db, profile)
     candidates = await get_top_candidates(db, icp_profile)
     candidate_count = len(candidates)
 
