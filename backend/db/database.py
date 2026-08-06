@@ -273,49 +273,75 @@ async def init_db():
     )
     from models.cache import EnrichmentCacheORM  # noqa: registers table
 
-    async with engine.begin() as conn:
-        # Create tables that don't exist yet
-        await conn.run_sync(EventBase.metadata.create_all)
-        # Add any missing columns to existing tables
-        await _add_missing_columns(conn)
-        # create_all() only creates indexes for brand-new tables — an
-        # `events` table that already existed before this unique index
-        # was added to the ORM model never gets it retroactively, which
-        # silently breaks every `ON CONFLICT (dedup_hash)` upsert (falls
-        # through to a Postgres error, 0 rows inserted). Ensure it exists
-        # on every startup, idempotent.
-        async def _ensure_dedup_index():
-            await conn.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
-                "ON events (dedup_hash)"
-            ))
-        if await _run_isolated(conn, "events.dedup_hash unique index check failed", _ensure_dedup_index):
-            logger.debug("events.dedup_hash unique index ensured.")
+    # The whole migration pass (create_all + column/index/table
+    # ensure-steps below) shares ONE connection/transaction. _run_isolated
+    # wraps each individual statement in its own SAVEPOINT so a normal SQL
+    # error there can't poison the rest — but a connection-level failure
+    # (e.g. asyncpg's command_timeout firing while an ALTER TABLE is
+    # blocked on a lock held by another still-running instance during a
+    # Render deploy overlap) raises an asyncio.TimeoutError, which has an
+    # EMPTY str() and can leave the underlying asyncpg connection itself
+    # unusable — even a SAVEPOINT rollback then fails, so every later step
+    # on this same connection fails too, and engine.begin()'s own
+    # exit-time commit finally raises PendingRollbackError. That escaped
+    # uncaught before, crashing the whole app's lifespan (no port bound,
+    # Render kills the deploy) over what is otherwise a fully idempotent,
+    # safe-to-retry-next-boot migration pass. Catch broadly here so a
+    # broken migration connection degrades to "schema not updated this
+    # boot" instead of "app never starts" — the ALTER/CREATE INDEX
+    # statements are IF NOT EXISTS and re-run (successfully, against a
+    # fresh connection) on every subsequent startup.
+    try:
+        async with engine.begin() as conn:
+            # Create tables that don't exist yet
+            await conn.run_sync(EventBase.metadata.create_all)
+            # Add any missing columns to existing tables
+            await _add_missing_columns(conn)
+            # create_all() only creates indexes for brand-new tables — an
+            # `events` table that already existed before this unique index
+            # was added to the ORM model never gets it retroactively, which
+            # silently breaks every `ON CONFLICT (dedup_hash)` upsert (falls
+            # through to a Postgres error, 0 rows inserted). Ensure it exists
+            # on every startup, idempotent.
+            async def _ensure_dedup_index():
+                await conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_events_dedup_hash "
+                    "ON events (dedup_hash)"
+                ))
+            if await _run_isolated(conn, "events.dedup_hash unique index check failed", _ensure_dedup_index):
+                logger.debug("events.dedup_hash unique index ensured.")
 
-        # GIN full-text indexes backing candidate_retriever.py's SQL
-        # keyword-match retrieval (Postgres only — SQLite has no GIN/tsvector).
-        if IS_POSTGRES:
-            async def _ensure_keyword_indexes():
-                await conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_events_relevant_keywords_fts "
-                    "ON events USING GIN (to_tsvector('english', coalesce(relevant_keywords, '')))"
-                ))
-                await conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_events_related_industries_fts "
-                    "ON events USING GIN (to_tsvector('english', coalesce(related_industries, '')))"
-                ))
-                await conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_events_industry_relevant_for_fts "
-                    "ON events USING GIN (to_tsvector('english', coalesce(industry_relevant_for, '')))"
-                ))
-            if await _run_isolated(conn, "events keyword GIN indexes failed", _ensure_keyword_indexes):
-                logger.debug("events.relevant_keywords / related_industries GIN indexes ensured.")
+            # GIN full-text indexes backing candidate_retriever.py's SQL
+            # keyword-match retrieval (Postgres only — SQLite has no GIN/tsvector).
+            if IS_POSTGRES:
+                async def _ensure_keyword_indexes():
+                    await conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_events_relevant_keywords_fts "
+                        "ON events USING GIN (to_tsvector('english', coalesce(relevant_keywords, '')))"
+                    ))
+                    await conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_events_related_industries_fts "
+                        "ON events USING GIN (to_tsvector('english', coalesce(related_industries, '')))"
+                    ))
+                    await conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_events_industry_relevant_for_fts "
+                        "ON events USING GIN (to_tsvector('english', coalesce(industry_relevant_for, '')))"
+                    ))
+                if await _run_isolated(conn, "events keyword GIN indexes failed", _ensure_keyword_indexes):
+                    logger.debug("events.relevant_keywords / related_industries GIN indexes ensured.")
 
-        # source_health circuit-breaker state (survives cold starts)
-        async def _ensure_source_health():
-            from ingestion.source_health import ensure_table as _ensure_sh_table
-            await _ensure_sh_table(conn)
-        await _run_isolated(conn, "source_health table", _ensure_source_health)
+            # source_health circuit-breaker state (survives cold starts)
+            async def _ensure_source_health():
+                from ingestion.source_health import ensure_table as _ensure_sh_table
+                await _ensure_sh_table(conn)
+            await _run_isolated(conn, "source_health table", _ensure_source_health)
+    except Exception as exc:
+        logger.error(
+            f"init_db: migration pass failed ({exc!r}) — continuing startup with "
+            f"whatever schema state already exists. Safe to ignore if this was a "
+            f"transient lock/timeout during a deploy overlap; every step here is "
+            f"idempotent and will retry on the next successful boot."
+        )
 
     # SQLite performance tweaks
     if IS_SQLITE:
