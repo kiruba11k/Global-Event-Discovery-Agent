@@ -688,7 +688,7 @@ async def _count_industry(db: AsyncSession, industry: str) -> int:
 
 
 async def _build_industry_suggestions(
-    db: AsyncSession, excluded_industry: str, limit: int = 3,
+    db: AsyncSession, excluded_industry: str, raw_text: str = "", limit: int = 3,
 ) -> list[dict]:
     """
     Live "what DOES have events" suggestions for an industry the catalog
@@ -697,6 +697,14 @@ async def _build_industry_suggestions(
     icp_parser.py's LLM already canonicalizes user input into) against
     real event counts, so a suggestion chip is guaranteed to actually
     surface results if clicked.
+
+    Ordering: among the industries that DO have events, an LLM call picks
+    and ranks whichever ones are actually topically related to what the
+    user described ("quantum computing" -> Electronics/Semiconductors,
+    Advanced Materials — not just whatever happens to have the most
+    events overall). Falls back to plain count-descending order if the
+    LLM is unavailable/fails — every returned item is still guaranteed
+    real (count > 0) either way, only the ordering degrades.
     """
     from relevance.icp_parser import CANONICAL_INDUSTRIES
     excluded_l = (excluded_industry or "").strip().lower()
@@ -707,8 +715,53 @@ async def _build_industry_suggestions(
         cnt = await _count_industry(db, ind)
         if cnt > 0:
             counted.append({"industry": ind, "count": cnt})
-    counted.sort(key=lambda x: -x["count"])
-    return counted[:limit]
+
+    if not counted:
+        return []
+    by_count = sorted(counted, key=lambda x: -x["count"])
+    if not raw_text.strip():
+        return by_count[:limit]
+
+    try:
+        from pydantic import BaseModel
+        from relevance.llm_client import llm as _llm
+
+        class _RelevantIndustries(BaseModel):
+            industries: list[str] = []
+
+        available_names = [c["industry"] for c in by_count]
+        result = await _llm.chat_json(
+            system=(
+                "You match a described B2B buyer to the most topically relevant "
+                "industry categories from a fixed list of options - options that "
+                "have NO real connection to the buyer's business are worse than "
+                "options with fewer events but a genuine topical fit."
+            ),
+            user=(
+                f"Buyer description: {raw_text.strip()[:300]}\n"
+                f"Their stated industry ({excluded_industry}) has no matching events. "
+                f"From this list of industries that DO have events, pick and order the "
+                f"{limit} most topically/adjacently related to the buyer's actual "
+                f"business (not just the most popular): {available_names}\n"
+                f"Return ONLY industry names copied EXACTLY from that list."
+            ),
+            label="industry_suggestions",
+            schema=_RelevantIndustries,
+            max_completion_tokens=150,
+            cache_ttl=3600,
+        )
+        if result and result.industries:
+            by_name = {c["industry"]: c for c in counted}
+            ranked = [by_name[name] for name in result.industries if name in by_name]
+            if ranked:
+                # Fill any remaining slots from the count-ordered list, skipping dupes.
+                seen = {r["industry"] for r in ranked}
+                ranked.extend(c for c in by_count if c["industry"] not in seen)
+                return ranked[:limit]
+    except Exception as exc:
+        logger.debug(f"_build_industry_suggestions: relevance ranking skipped ({exc})")
+
+    return by_count[:limit]
 
 
 async def _run_search_pipeline(
@@ -1370,7 +1423,7 @@ async def parse_icp(payload: dict, db: AsyncSession = Depends(get_db)):
             count = await _count_industry(db, primary_industry)
             catalog_available = count > 0
             if not catalog_available:
-                suggested_industries = await _build_industry_suggestions(db, primary_industry)
+                suggested_industries = await _build_industry_suggestions(db, primary_industry, raw_text=text)
         except Exception as exc:
             logger.debug(f"parse-icp: catalog availability check skipped ({exc})")
             catalog_available = True  # fail open — never block on this check
