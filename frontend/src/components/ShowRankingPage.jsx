@@ -219,15 +219,19 @@ export default function ShowRankingPage({
   if (!top6.length) {
     return (
       <div className="rk-empty">
-        <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 14 }} aria-hidden="true">🔍</div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontFamily: 'var(--font-display, Georgia, serif)', color: 'var(--ink, #1E2B33)' }}>
-          No shows matched your criteria
-        </h2>
-        <p>
-          Try widening your target geography, loosening the date window, or broadening your buyer description -
-          a narrower ICP finds fewer (but more precise) matches.
-        </p>
-        <button className="rk-gate-inline-btn" onClick={onBackHome}>← Adjust your ICP</button>
+        <div className="rk-empty-inner">
+          <svg className="rk-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <h2 style={{ margin: '0 0 8px', fontSize: 20, fontFamily: 'var(--font-display, Georgia, serif)', color: 'var(--ink, #1E2B33)' }}>
+            No shows matched your criteria
+          </h2>
+          <p>
+            Try widening your target geography, loosening the date window, or broadening your buyer description -
+            a narrower ICP finds fewer (but more precise) matches.
+          </p>
+          <button className="rk-gate-inline-btn" onClick={onBackHome}>← Adjust your ICP</button>
+        </div>
       </div>
     )
   }

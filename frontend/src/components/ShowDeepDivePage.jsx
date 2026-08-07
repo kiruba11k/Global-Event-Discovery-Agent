@@ -189,10 +189,14 @@ export default function ShowDeepDivePage({
   if (!event) {
     return (
       <div className="ddv-root ddv-empty">
-        <div className="ddv-empty-icon" aria-hidden="true">📅</div>
-        <h2>Show not found</h2>
-        <p>This event may have moved or been removed from our index.</p>
-        {onBack && <button className="ddv-back-btn" onClick={onBack}>← Back to your ranking</button>}
+        <div className="ddv-empty-inner">
+          <svg className="ddv-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <h2>Show not found</h2>
+          <p>This event may have moved or been removed from our index.</p>
+          {onBack && <button className="ddv-back-btn" onClick={onBack}>← Back to your ranking</button>}
+        </div>
       </div>
     )
   }

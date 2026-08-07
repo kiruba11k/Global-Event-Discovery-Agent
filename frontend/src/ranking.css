@@ -782,12 +782,18 @@
 
 /* ── Empty state ────────────────────────────────────────────────── */
 .rk-empty {
+  min-height: 100vh;
+  display:        flex;
+  align-items:    center;
+  justify-content: center;
   padding:    60px 28px;
   text-align: center;
   color:      var(--ink-soft);
   font-size:  14px;
   background: var(--paper);
 }
+.rk-empty-inner { max-width: 420px; }
+.rk-empty-icon  { color: var(--ink-faint, #8A959C); margin-bottom: 14px; }
 .rk-empty p { margin: 0 0 16px; }
 
 /* ── ICP confidence range ─────────────────────────────────────── */

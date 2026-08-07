@@ -35,11 +35,16 @@
   font-family: var(--font-body);
 }
 .ddv-empty {
+  min-height: 100vh;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
   padding: 72px 28px;
   text-align: center;
   color: var(--ink-soft);
 }
-.ddv-empty-icon { font-size: 40px; margin-bottom: 12px; }
+.ddv-empty-inner { max-width: 420px; }
+.ddv-empty-icon { color: var(--ink-faint, #8A959C); margin-bottom: 12px; }
 .ddv-empty h2   { font-family: var(--font-display); font-weight: 600; color: var(--ink); margin: 0 0 8px; }
 .ddv-empty p    { font-size: 14px; margin: 0 0 20px; }
 
