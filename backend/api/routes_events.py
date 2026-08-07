@@ -743,7 +743,8 @@ async def _build_industry_suggestions(
                 f"From this list of industries that DO have events, pick and order the "
                 f"{limit} most topically/adjacently related to the buyer's actual "
                 f"business (not just the most popular): {available_names}\n"
-                f"Return ONLY industry names copied EXACTLY from that list."
+                f"Respond with JSON only, matching this exact schema: "
+                f'{{"industries": ["<name copied exactly from the list above>", ...]}}'
             ),
             label="industry_suggestions",
             schema=_RelevantIndustries,
