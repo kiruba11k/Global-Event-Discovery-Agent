@@ -127,6 +127,16 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
+      # Frontend-side maintenance kill switch — set to "true" to force
+      # the whole site to show a "we'll be back soon" screen, with NO
+      # dependency on the backend being reachable at all (unlike the
+      # backend's own MAINTENANCE_MODE, this one is inlined at BUILD
+      # time by Vite, so toggling it requires a redeploy of this static
+      # site — Render → this service → Manual Deploy → Deploy latest
+      # commit, after saving the env var change). Leave unset/"false"
+      # normally.
+      - key: VITE_MAINTENANCE_MODE
+        value: "false"
     # Render's rewrite rules apply unconditionally - a catch-all "/*" rule
     # serves /index.html for every request, even ones with a matching
     # static file already on disk (confirmed: /faq was returning the

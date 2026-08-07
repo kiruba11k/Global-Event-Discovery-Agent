@@ -260,15 +260,32 @@ export default function App() {
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
   const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
-  // Site-wide maintenance kill switch (backend settings.MAINTENANCE_MODE,
-  // see main.py's middleware) - null while unchecked (nothing renders
-  // differently yet), then { on, message } once the very first check
-  // resolves. Checked before anything else so a maintenance window shows
-  // one clean screen instead of the app half-loading then erroring on
-  // every 503'd call.
-  const [maintenance,      setMaintenance]       = useState(null)
+  // Site-wide maintenance kill switch. Two layers, checked in this order:
+  //
+  // 1. VITE_MAINTENANCE_MODE — a FRONTEND build-time env var (Render
+  //    static site → Environment). Read synchronously below, with NO
+  //    network round-trip at all - guaranteed to work even if the
+  //    backend is unreachable, misconfigured, or the API check below
+  //    fails for any reason (CORS, wrong VITE_API_URL, DNS, etc.). The
+  //    tradeoff: unlike the backend flag, this ONE needs a rebuild+
+  //    redeploy of the frontend to take effect (Vite inlines
+  //    import.meta.env.VITE_* at build time, it isn't read at runtime).
+  //
+  // 2. settings.MAINTENANCE_MODE — the BACKEND flag (main.py's
+  //    middleware), checked over the API below. Toggles instantly with
+  //    no frontend redeploy, but depends on that API call actually
+  //    succeeding - if it fails for any reason this deliberately falls
+  //    back to "not in maintenance" rather than risk a false site-wide
+  //    outage from an unrelated network hiccup.
+  //
+  // Either one being true is enough to show the maintenance screen.
+  const buildTimeMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === 'true'
+  const [maintenance,      setMaintenance]       = useState(
+    buildTimeMaintenance ? { on: true, message: '' } : null
+  )
 
   useEffect(() => {
+    if (buildTimeMaintenance) return   // already showing maintenance, no need to also hit the API
     api.getMaintenanceStatus()
       .then(s => setMaintenance({ on: !!s.maintenance, message: s.message || '' }))
       .catch(() => setMaintenance({ on: false, message: '' }))   // backend unreachable — fall through to the normal ErrorPage flow instead of a false "under maintenance"
