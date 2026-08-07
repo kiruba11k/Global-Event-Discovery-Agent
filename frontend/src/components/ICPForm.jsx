@@ -741,18 +741,25 @@ export default function ICPForm({
             </div>
           )
         })()}
-        {/* Catalog-availability warning: the LLM successfully parsed an
-            industry, but nothing in our event catalog matches it at all
-            (checked server-side via the same synonym bridge the real
-            search uses - see /api/parse-icp). Submitting as-is is
-            guaranteed to come back empty, so surface real, currently-
-            available categories the user can swap in with one click,
-            instead of letting them find that out only after waiting on
-            a full search. */}
+        {/* Catalog-availability warning. Two cases, both meaning "this
+            search is guaranteed to come back empty as typed":
+            1. The LLM parsed a specific industry, but nothing in our
+               event catalog matches it (checked server-side via the same
+               synonym bridge the real search uses - see /api/parse-icp).
+            2. The LLM found no canonical industry at all - a niche/
+               obscure/misspelled term it couldn't confidently map (e.g.
+               "quantum computing industry") - as opposed to correctly
+               returning no industry for genuinely industry-agnostic input
+               ("CIOs across all industries"), which does NOT trigger this.
+            Either way, surface real, currently-available categories the
+            user can swap in with one click, instead of letting them find
+            out only after waiting on a full search. */}
         {llmParse?.forText === buyer.trim() && llmParse?.catalog_available === false && (
           <div className="icp-no-catalog-warn" role="status">
             <p className="icp-no-catalog-warn-text">
-              We don't have {(llmParse.industries || [])[0] || 'that'} events yet. Try searching broader categories:
+              {llmParse.industries?.[0]
+                ? `We don't have ${llmParse.industries[0]} events yet. Try searching broader categories:`
+                : "We couldn't match that to an industry we track. Try one of these instead:"}
             </p>
             {llmParse.suggested_industries?.length > 0 && (
               <div className="icp-no-catalog-chips">
