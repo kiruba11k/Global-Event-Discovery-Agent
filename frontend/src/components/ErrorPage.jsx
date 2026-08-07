@@ -18,17 +18,17 @@ const KIND_CONTENT = {
   server: {
     Icon:    ServerCrash,
     title:   'Something went wrong on our end',
-    message: 'The server ran into a problem processing that request. This has been logged — please try again in a moment.',
+    message: 'The server ran into a problem processing that request. This has been logged - please try again in a moment.',
   },
   crash: {
     Icon:    AlertTriangle,
     title:   'This page hit an unexpected error',
-    message: "Something broke while rendering the page. Reloading usually fixes it — if it keeps happening, let us know.",
+    message: "Something broke while rendering the page. Reloading usually fixes it - if it keeps happening, let us know.",
   },
   maintenance: {
     Icon:    Wrench,
     title:   "We'll be back soon",
-    message: "We're doing some quick maintenance — thanks for your patience.",
+    message: "We're doing some quick maintenance - thanks for your patience.",
   },
 }
 
