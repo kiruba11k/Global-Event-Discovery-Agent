@@ -1947,6 +1947,24 @@ async def city_hint(
 
 
 # ══════════════════════════════════════════════════════════════════════
+# GET /api/maintenance-status  —  checked by the frontend BEFORE
+# rendering anything, so a full-site maintenance window shows a clean
+# message instead of the app half-loading then erroring. No DB/auth
+# dependency on purpose — must stay reachable even if everything else
+# is intentionally down. Also exempted from main.py's maintenance-mode
+# 503 gate itself (a maintenance check that maintenance-blocks itself
+# would be useless).
+# ══════════════════════════════════════════════════════════════════════
+
+@router.get("/maintenance-status")
+async def maintenance_status():
+    return {
+        "maintenance": settings.maintenance_mode,
+        "message": settings.maintenance_message or "We're doing some quick maintenance — back shortly.",
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
 # GET /api/stats  —  includes real-time API key status
 # ══════════════════════════════════════════════════════════════════════
 

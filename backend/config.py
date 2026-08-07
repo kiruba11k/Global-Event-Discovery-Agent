@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     frontend_origin: str = "http://localhost:5173"
+    # Master kill switch: when true, every request except GET
+    # /api/maintenance-status and GET /health gets a 503 with a
+    # maintenance payload (see main.py's middleware), and the frontend
+    # shows a full-page "we'll be back soon" screen instead of the app —
+    # set/unset via the Render env var, no redeploy needed either way.
+    maintenance_mode: bool = False
+    maintenance_message: str = ""
 
     # ── Database ─────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./events.db"
