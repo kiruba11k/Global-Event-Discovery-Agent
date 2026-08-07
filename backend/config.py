@@ -59,17 +59,6 @@ class Settings(BaseSettings):
     openai_max_tokens: int = 1024        # completion cap — output tokens cost ~4x input
     openai_timeout_seconds: int = 45
 
-    # Separate, higher ceiling for the ranker specifically (groq_ranker.py's
-    # _completion_budget). It outputs one JSON object per candidate event
-    # (~180 tokens each) — up to top_k_for_llm=15 events needs ~2,700
-    # tokens. openai_max_tokens=1024 above was clamping this and silently
-    # truncating the ranker's JSON output mid-object on every call,
-    # producing "unparseable JSON" and forcing every search onto the
-    # rule-based fallback even with a healthy OpenAI account. Sized for
-    # up to ~20 events with headroom; still far below what a full-size
-    # model call would cost.
-    openai_ranker_max_tokens: int = 4000
-
     # Comma-separated fallback chain tried when the primary model errors
     # or rate-limits. Keep every entry on the mini/nano tier — putting a
     # full-size model here defeats the cost cap.
@@ -179,14 +168,14 @@ class Settings(BaseSettings):
     rule_weight: float = 0.25
     go_threshold: float = 0.68
     consider_threshold: float = 0.42
-    top_k_for_llm: int = 10   # aggressive pre-filter — only the top-scored candidates ever reach the LLM
 
-    # ── New retrieval pipeline (candidate_retriever.py / llm_selector.py) ──
-    # Off by default: the SQL-keyword-match + embedding + top-12->6 LLM
-    # selection path is additive, gated behind this flag so production
-    # keeps using the existing score_candidates/rank_with_groq flow until
-    # this is explicitly turned on (env var USE_KEYWORD_PIPELINE=true).
-    use_keyword_pipeline: bool = False
+    # ── Retrieval pipeline (candidate_retriever.py / llm_selector.py) ──
+    # SQL-keyword-match + embedding recall -> top-12 -> single LLM call
+    # selects the top 6, each with a reason and GO/CONSIDER verdict. The
+    # only search pipeline now (the earlier score_candidates/rank_with_groq
+    # rule+two-LLM-call flow was removed once this was verified in
+    # production) — score_candidates() itself still lives in scorer.py,
+    # used by the standalone /geo-hint preview endpoint.
     keyword_match_weight: float = 0.5
     semantic_match_weight: float = 0.5
     candidate_pool_size: int = 12

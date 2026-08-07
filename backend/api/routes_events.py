@@ -8,13 +8,13 @@ POST /api/search:
                                     PredictHQ fan-out is disabled (see
                                     ingestion/realtime_pipeline.py); this
                                     just runs the tiered DB query.
-  3. score_candidates()          — rule-based + optional pgvector/FAISS scoring
-  4. rank_with_groq()            — LLM ranking + anti-hallucination validator,
-                                    runs ONCE (OpenAI now, see
-                                    relevance/llm_client.py). Verdict/score/
-                                    order are frozen after this call.
-  5. _apply_result_mix()         — enforce 3 GO + 3 CONSIDER
-  6. SerpAPI enrichment (Step 9) + _patch_ranked_with_enrichment() —
+  3. get_top_candidates()        — SQL keyword-match + embedding recall
+                                    (relevance/candidate_retriever.py),
+                                    blended and capped to a top-12 shortlist.
+  4. select_top_6()              — single LLM call selects the top 6 with a
+                                    reason and its own GO/CONSIDER verdict
+                                    per event (relevance/llm_selector.py).
+  5. SerpAPI enrichment (Step 9) + _patch_ranked_with_enrichment() —
                                     display-only field patch (est_attendees,
                                     pricing, link, description), no second
                                     LLM ranking/validation pass
@@ -27,7 +27,7 @@ import io
 import json
 import uuid
 from datetime import date, datetime
-from typing import Iterable, Optional
+from typing import Optional
 
 from fastapi import (
     APIRouter, BackgroundTasks, Depends, File, Form,
@@ -48,8 +48,7 @@ from ingestion.platform_normaliser import _iso_date
 from ingestion.realtime_pipeline import fetch_realtime_candidates
 from models.event import EventCreate, RankedEvent
 from models.icp_profile import CompanyContext, ICPProfile, SearchRequest, SearchResponse
-from relevance.groq_ranker import rank_with_groq
-from relevance.scorer import score_candidates, build_fallback_rationale
+from relevance.scorer import build_fallback_rationale
 from relevance.fit_scorer import calculate_fit_score, estimate_icp_count, calculate_universe_stats, count_competitors
 from relevance.profile_store import profile_core_hash
 from relevance.meeting_calculator import calculate_meeting_potential
@@ -258,34 +257,6 @@ def _within_dates(event, date_from, date_to) -> bool:
     return True
 
 
-_VERDICT_RANK = {"GO": 0, "CONSIDER": 1, "SKIP": 2}
-
-
-def _sort_ranked(ranked: list) -> list:
-    """
-    Final display order: GO events always above CONSIDER, CONSIDER above
-    SKIP, then by relevance score within each tier. Sorting by raw score
-    alone let a CONSIDER event sit at #1 above a GO event.
-    """
-    return sorted(
-        ranked,
-        key=lambda r: (_VERDICT_RANK.get(r.fit_verdict, 3), -(r.relevance_score or 0)),
-    )
-
-
-def _apply_result_mix(ranked: Iterable) -> list:
-    """
-    Return the genuine GO/CONSIDER matches, verdict-then-score order,
-    capped at RESULT_LIMIT (6) — never padded. If only 3 events truly
-    match the ICP, show 3; if 40 match, show the top 6; SKIP events are
-    never used to pad up to 6.
-    """
-    all_ranked      = list(ranked)
-    go_events       = [r for r in all_ranked if r.fit_verdict == "GO"]
-    consider_events = [r for r in all_ranked if r.fit_verdict == "CONSIDER"]
-    return (go_events + consider_events)[:RESULT_LIMIT]
-
-
 def _patch_ranked_with_enrichment(ranked: list, enrichments: dict) -> None:
     """
     Splice SerpAPI enrichment data into already-ranked events in place —
@@ -484,14 +455,13 @@ async def _run_keyword_embedding_pipeline(
     company_ctx: CompanyContext | None,
 ) -> tuple[list, dict, list, int]:
     """
-    Layers 4-5 of the keyword+embedding rework: SQL keyword match +
+    Layers 4-5 of the keyword+embedding pipeline: SQL keyword match +
     semantic recall -> top 12 -> single LLM call selects top 6, each with
     a reason AND its own GO/CONSIDER verdict (llm_selector.select_top_6 —
     the LLM's per-event judgment, not a fixed positional split). Returns
     (top_events, pre_scores, ranked, candidate_count) shaped to drop
-    straight into the same Step 9/10 code the old score_candidates/
-    rank_with_groq path feeds — enrichment and fit scoring don't need to
-    know which retrieval path produced `ranked`.
+    straight into the Step 9/10 code below — enrichment and fit scoring
+    don't need to know which retrieval layer produced `ranked`.
     """
     icp_profile = await _icp_profile_dict(db, profile)
     candidates = await get_top_candidates(db, icp_profile)
@@ -826,79 +796,22 @@ async def _run_search_pipeline(
         except Exception as exc:
             logger.warning(f"Semantic search: {exc}")
 
-    if settings.use_keyword_pipeline:
-        # ── Steps 6-8 (new path): SQL keyword+embedding retrieval →
-        # top-12 → single LLM selection → top-6 with reason. Response
-        # shape stays RankedEvent-compatible (fit_verdict/verdict_notes
-        # still populated) so nothing downstream — enrichment, fit
-        # scoring, frontend — needs to change while this is gated behind
-        # settings.use_keyword_pipeline (off by default).
-        top_events, pre_scores, ranked, shows_worth_considering_count = \
-            await _run_keyword_embedding_pipeline(
-                db=db, profile=profile, company_ctx=company_ctx,
-            )
-        _store_last_results(profile_id, ranked)
-        # No equivalent "relevant but outside the top 6" set on this path —
-        # get_top_candidates() only ever surfaces a 12-candidate shortlist,
-        # not the old pipeline's full scored-and-thresholded universe, and
-        # its (event, score) pairs don't carry the (tier, detail) shape the
-        # secondary Event Table below expects. The old pipeline's variable
-        # of the same name (all_relevant) is referenced unconditionally
-        # further down (all_relevant_events); leaving it undefined here
-        # crashed every keyword-pipeline search with an UnboundLocalError.
-        all_relevant: list = []
-    else:
-        # ── Step 6: Rule-based scoring ───────────────────────────────────
-        scored = score_candidates(candidates, profile, cosine_scores)
-
-        # ── Determine relevance threshold dynamically ─────────────────
-        # Events with score >= threshold are "worth considering".
-        # Threshold = 10% of the max score (so at least 10% ICP match).
-        # Always guarantee at least RESULT_LIMIT events pass the cut.
-        if scored:
-            max_score = max(s for _, s, _, _ in scored)
-            threshold = max(0.10, max_score * 0.10)
-        else:
-            threshold = 0.10
-
-        all_relevant = [(e, s, t, d) for e, s, t, d in scored if s >= threshold]
-
-        shows_worth_considering_count = len(all_relevant)
-
-        top        = all_relevant[:settings.top_k_for_llm]
-        top_events = [e for e, _, _, _ in top]
-        pre_scores = {e.id: s for e, s, _, _ in top}
-        pre_tiers  = {e.id: t for e, _, t, _ in top}
-        pre_details= {e.id: d for e, _, _, d in top}
-
-        logger.info(
-            f"Scored top {len(top_events)} (of {shows_worth_considering_count} relevant): "
-            f"GO={sum(1 for _,_,t,_ in top if t=='GO')}  "
-            f"CONSIDER={sum(1 for _,_,t,_ in top if t=='CONSIDER')}  "
-            f"SKIP={sum(1 for _,_,t,_ in top if t=='SKIP')}"
+    # ── Steps 6-8: SQL keyword+embedding retrieval → top-12 → single LLM
+    # selection → top-6 with reason (relevance/candidate_retriever.py +
+    # relevance/llm_selector.py). Response shape is RankedEvent-compatible
+    # (fit_verdict/verdict_notes populated) so enrichment/fit scoring/
+    # frontend below don't need to know which retrieval path produced it.
+    top_events, pre_scores, ranked, shows_worth_considering_count = \
+        await _run_keyword_embedding_pipeline(
+            db=db, profile=profile, company_ctx=company_ctx,
         )
-
-        # NOTE: used to build a shared Groq async client here for SerpAPI
-        # enrichment (enrichment/serp_enricher.py's optional groq_client
-        # param). Enrichment is disabled (DB-only mode) and the LLM gateway
-        # moved to OpenAI (relevance/llm_client.py handles its own client),
-        # so there's nothing to build.
-
-        # ── Step 7: Groq LLM ranking + cross-validation (no enrichment yet) ─
-        # Run ranking first on raw DB data to select the 6 final events,
-        # then enrich only those 6 — avoids wasting SerpAPI quota on events
-        # that won't be shown.
-        ranked = await rank_with_groq(
-            events=top_events, profile=profile,
-            pre_scores=pre_scores, pre_tiers=pre_tiers, pre_details=pre_details,
-            company_ctx=company_ctx, enrichments={},
-            deal_size_category=deal_size,
-        )
-        ranked = _sort_ranked(ranked)
-
-        # ── Step 8: Enforce 6 results (3 GO + 3 CONSIDER, fill with SKIP) ─
-        ranked = _apply_result_mix(ranked)
-        _store_last_results(profile_id, ranked)
+    _store_last_results(profile_id, ranked)
+    # No "relevant but outside the top 6" universe on this path —
+    # get_top_candidates() only ever surfaces a 12-candidate shortlist, not
+    # a full scored-and-thresholded universe, and its (event, score) pairs
+    # don't carry the (tier, detail) shape the secondary Event Table below
+    # expects.
+    all_relevant: list = []
 
     # ── Step 9: SerpAPI enrichment — only for the 6 final events ──────
     # Cost optimisation: skip events already enriched in DB (serpapi_enriched=True
@@ -1045,14 +958,11 @@ async def _run_search_pipeline(
         # Find the original EventORM for factor scoring
         event_orm = top_events_by_id.get(r.event_id if hasattr(r, "event_id") else r.id)
         if event_orm:
-            # score_max=1.0 for the keyword+embedding pipeline: its
-            # blended_score is scaled 0..1 (keyword_weight + semantic_weight
-            # sum to 1), unlike scorer.py's rule_score which tops out at
+            # score_max=1.0: the keyword+embedding pipeline's blended_score
+            # is scaled 0..1 (keyword_weight + semantic_weight sum to 1),
+            # unlike scorer.py's rule_score which tops out at
             # MAX_RULE_SCORE (~0.6) — see fit_scorer._factor_icp_density.
-            fit_score_max = 1.0 if settings.use_keyword_pipeline else None
-            fit = (calculate_fit_score(event_orm, profile, rule_s, fit_score_max)
-                   if fit_score_max is not None else
-                   calculate_fit_score(event_orm, profile, rule_s))
+            fit = calculate_fit_score(event_orm, profile, rule_s, 1.0)
             icp = estimate_icp_count(event_orm, profile, rule_s)
             comp_cnt = count_competitors(event_orm, profile)
             ev_dict["fit_grade"]          = fit["fit_grade"]
@@ -1575,13 +1485,12 @@ async def geo_hint(
             preferred_event_types=[],
         )
         scored = _score_cands(rows, mini_profile, {})
-        # Mirror groq_ranker.py's hard persona override exactly: a CONFIRMED
-        # persona mismatch (real audience_personas data that names a
-        # different role) force-SKIPs an event in the real pipeline, after
-        # this hint's rule/cosine tiering has already run. Without applying
-        # the same check here, this hint counts events as "relevant" that
-        # the actual search will drop at that later stage — the gap that
-        # caused "Singapore - 3 events match" to become 0 real results.
+        # A CONFIRMED persona mismatch (real audience_personas data that
+        # names a different role) should not count as relevant here either,
+        # after this hint's rule/cosine tiering has already run. Without
+        # applying this check, this hint counts events as "relevant" that
+        # the actual search pipeline would drop — the gap that caused
+        # "Singapore - 3 events match" to become 0 real results.
         def _survives_persona_override(detail: dict) -> bool:
             if not (with_personas and per_list):
                 return True
