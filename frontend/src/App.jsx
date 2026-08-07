@@ -260,6 +260,19 @@ export default function App() {
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
   const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
+  // Site-wide maintenance kill switch (backend settings.MAINTENANCE_MODE,
+  // see main.py's middleware) - null while unchecked (nothing renders
+  // differently yet), then { on, message } once the very first check
+  // resolves. Checked before anything else so a maintenance window shows
+  // one clean screen instead of the app half-loading then erroring on
+  // every 503'd call.
+  const [maintenance,      setMaintenance]       = useState(null)
+
+  useEffect(() => {
+    api.getMaintenanceStatus()
+      .then(s => setMaintenance({ on: !!s.maintenance, message: s.message || '' }))
+      .catch(() => setMaintenance({ on: false, message: '' }))   // backend unreachable — fall through to the normal ErrorPage flow instead of a false "under maintenance"
+  }, [])
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
 
@@ -455,6 +468,20 @@ export default function App() {
   }
 
   const allDisplay = results.filter(e => e.fit_verdict !== 'SKIP')
+
+  /* ── Site-wide maintenance window — takes priority over every other
+     screen, including static pages, so the whole site really is "down"
+     from one backend env var flip (settings.MAINTENANCE_MODE). */
+  if (maintenance?.on) {
+    return (
+      <ErrorPage
+        kind="maintenance"
+        message={maintenance.message}
+        onRetry={() => window.location.reload()}
+        onGoHome={() => window.location.reload()}
+      />
+    )
+  }
 
   /* ── Screen: Error (server down / network unreachable / 5xx) ─ */
   if (screen === 'error') {

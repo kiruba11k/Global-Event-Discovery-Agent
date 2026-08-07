@@ -5,8 +5,9 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from loguru import logger
 
 from config import get_settings
@@ -76,6 +77,33 @@ app.add_middleware(
     allow_methods  = ["*"],
     allow_headers  = ["*"],
 )
+
+# Maintenance-mode kill switch (settings.maintenance_mode, config.py).
+# Lets every non-exempt request short-circuit to a 503 without touching
+# the DB/LLM/queue at all — the frontend's own maintenance-status check
+# (App.jsx) already shows a full-page message before rendering anything,
+# this is the belt-and-braces backstop for direct API/curl usage and for
+# any request that races ahead of that check on first load. CORS
+# preflight (OPTIONS) is left alone so the browser's own CORS handling
+# isn't disrupted by a 503 on the preflight itself.
+_MAINTENANCE_EXEMPT_PATHS = {"/health", "/api/maintenance-status"}
+
+
+@app.middleware("http")
+async def _maintenance_gate(request: Request, call_next):
+    if (
+        settings.maintenance_mode
+        and request.method != "OPTIONS"
+        and request.url.path not in _MAINTENANCE_EXEMPT_PATHS
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "maintenance": True,
+                "message": settings.maintenance_message or "We're doing some quick maintenance — back shortly.",
+            },
+        )
+    return await call_next(request)
 
 # Main search + stats routes
 app.include_router(events_router, prefix="/api", tags=["events"])

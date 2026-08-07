@@ -117,6 +117,12 @@ export const api = {
 
   getEvent: (id) => request(`/events/${id}`),
 
+  // ── Maintenance mode - checked before rendering anything else ──
+  // Never throws on a "maintenance on" response (the endpoint itself
+  // always returns 200 - see api/routes_events.py) and stays reachable
+  // even while the maintenance-mode middleware 503s everything else.
+  getMaintenanceStatus: () => request('/maintenance-status'),
+
   // ── Stats & refresh ───────────────────────────────────
   getStats: () => request('/stats'),
 

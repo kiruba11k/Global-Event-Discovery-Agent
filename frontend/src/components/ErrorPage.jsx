@@ -7,7 +7,7 @@
     2. App.jsx        — set as the active screen when a core action (search)
                          fails with a network/server-level error.
 */
-import { WifiOff, ServerCrash, AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import { WifiOff, ServerCrash, AlertTriangle, Wrench, RefreshCw, Home } from 'lucide-react'
 
 const KIND_CONTENT = {
   network: {
@@ -25,10 +25,16 @@ const KIND_CONTENT = {
     title:   'This page hit an unexpected error',
     message: "Something broke while rendering the page. Reloading usually fixes it — if it keeps happening, let us know.",
   },
+  maintenance: {
+    Icon:    Wrench,
+    title:   "We'll be back soon",
+    message: "We're doing some quick maintenance — thanks for your patience.",
+  },
 }
 
-export default function ErrorPage({ kind = 'server', detail = '', onRetry, onGoHome }) {
-  const { Icon, title, message } = KIND_CONTENT[kind] || KIND_CONTENT.server
+export default function ErrorPage({ kind = 'server', detail = '', message: messageOverride = '', onRetry, onGoHome }) {
+  const { Icon, title, message: defaultMessage } = KIND_CONTENT[kind] || KIND_CONTENT.server
+  const message = messageOverride || defaultMessage
 
   return (
     <div
@@ -120,9 +126,11 @@ export default function ErrorPage({ kind = 'server', detail = '', onRetry, onGoH
             cursor:         'pointer',
           }}
         >
-          <RefreshCw size={15} aria-hidden="true" /> Try again
+          <RefreshCw size={15} aria-hidden="true" /> {kind === 'maintenance' ? 'Check again' : 'Try again'}
         </button>
-        <button
+        {/* "Go home" is meaningless during a site-wide maintenance window
+            (home is down too - it'd just reload into this same screen). */}
+        {kind !== 'maintenance' && <button
           onClick={onGoHome}
           style={{
             display:        'inline-flex',
@@ -139,7 +147,7 @@ export default function ErrorPage({ kind = 'server', detail = '', onRetry, onGoH
           }}
         >
           <Home size={15} aria-hidden="true" /> Go home
-        </button>
+        </button>}
       </div>
     </div>
   )
