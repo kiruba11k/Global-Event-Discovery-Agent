@@ -20,17 +20,17 @@ export default function NotFoundPage({ onGoHome, onScrollToForm, onNavigate }) {
   )
 
   return (
-    <div className="lg-page">
-      <div className="lg-hero">
-        <div className="lg-hero-eyebrow">404</div>
-        <h1 className="lg-hero-title">Page not found</h1>
-        <div className="lg-hero-updated">
-          The page you're looking for doesn't exist, may have moved, or the link may be broken.
-        </div>
-      </div>
+    <div className="lg-page lg-page--centered">
+      <div className="lg-body" style={{ textAlign: 'center', margin: '0 auto' }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--ink-faint, #8A959C)', marginBottom: 12 }}>
+          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+        </svg>
 
-      <div className="lg-body" style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">🔍</div>
+        <div className="lg-hero-eyebrow">404</div>
+        <h1 className="lg-hero-title" style={{ fontSize: 'clamp(24px, 3.4vw, 34px)' }}>Page not found</h1>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--ink-faint, #6B7680)' }}>
+          The page you're looking for doesn't exist, may have moved, or the link may be broken.
+        </p>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button className="rk-tier-btn rk-tier-btn--accent" onClick={onGoHome}>

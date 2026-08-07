@@ -66,6 +66,17 @@
   min-height: 100vh;
 }
 
+/* Modifier for content-light pages (e.g. 404) that should center as one
+   block, rather than the hero-banner + long-form-body layout below
+   (used by text-heavy pages like Privacy/Terms/FAQ). */
+.lg-page--centered {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  padding: 24px;
+}
+.lg-page--centered .lg-body { max-width: 480px; padding: 0; }
+
 .lg-hero {
   padding: 140px 24px 56px;
   text-align: center;
