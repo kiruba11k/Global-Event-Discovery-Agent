@@ -656,6 +656,61 @@ async def _build_suggestions(
     return suggestions[:5]
 
 
+async def _count_industry(db: AsyncSession, industry: str) -> int:
+    """Count future events matching `industry` or any of its taxonomy-
+    bridge synonyms (relevance/scorer.py's expand_industry_synonyms —
+    same bridge candidate_retriever.py's SQL match uses), so this count
+    agrees with what a real search would actually find."""
+    from sqlalchemy import text as _text
+    from relevance.scorer import expand_industry_synonyms as _expand_ind
+    terms = list(dict.fromkeys([industry] + _expand_ind(industry)))
+    if not terms:
+        return 0
+    where = []
+    params: dict = {}
+    for i, term in enumerate(terms):
+        key = f"it{i}"
+        where.append(
+            f"(related_industries ILIKE :{key} OR industry_tags ILIKE :{key} "
+            f"OR relevant_keywords ILIKE :{key} OR industry_relevant_for ILIKE :{key})"
+        )
+        params[key] = f"%{term}%"
+    today = date.today().isoformat()
+    try:
+        row = (await db.execute(
+            _text(f"SELECT COUNT(*) FROM events WHERE start_date >= :today AND ({' OR '.join(where)})"),
+            {**params, "today": today},
+        )).fetchone()
+        return int(row[0]) if row else 0
+    except Exception as exc:
+        logger.debug(f"_count_industry({industry!r}) failed: {exc}")
+        return 0
+
+
+async def _build_industry_suggestions(
+    db: AsyncSession, excluded_industry: str, limit: int = 3,
+) -> list[dict]:
+    """
+    Live "what DOES have events" suggestions for an industry the catalog
+    has nothing for — mirrors _build_suggestions' role for geography.
+    Checks every CANONICAL_INDUSTRIES label (the same fixed taxonomy
+    icp_parser.py's LLM already canonicalizes user input into) against
+    real event counts, so a suggestion chip is guaranteed to actually
+    surface results if clicked.
+    """
+    from relevance.icp_parser import CANONICAL_INDUSTRIES
+    excluded_l = (excluded_industry or "").strip().lower()
+    counted = []
+    for ind in CANONICAL_INDUSTRIES:
+        if ind.lower() == excluded_l:
+            continue
+        cnt = await _count_industry(db, ind)
+        if cnt > 0:
+            counted.append({"industry": ind, "count": cnt})
+    counted.sort(key=lambda x: -x["count"])
+    return counted[:limit]
+
+
 async def _run_search_pipeline(
     profile: ICPProfile,
     company_context: CompanyContext | None,
@@ -1278,11 +1333,19 @@ async def search_status(job_id: str):
 # ══════════════════════════════════════════════════════════════════════
 
 @router.post("/parse-icp")
-async def parse_icp(payload: dict):
+async def parse_icp(payload: dict, db: AsyncSession = Depends(get_db)):
     """
     Parse a free-text buyer description ("Head of Perioperative Services
     at ambulatory surgery centers") into canonical industries + personas
     via LLM, covering any designation instead of a hardcoded keyword map.
+
+    Also checks whether the PRIMARY parsed industry has any matching
+    events in the catalog at all (same synonym-bridge check
+    icp_extractor.py's extract_industry_persona_pairs() already does for
+    the search path itself) — when it doesn't, includes live suggestions
+    of canonical industries that DO have events, so the ICP form can show
+    "We don't have <X> events yet. Try: <suggestions>" instead of letting
+    the user submit a search that's guaranteed to come back empty.
 
     Degrades gracefully: {"source": "rules"} tells the frontend to keep
     its local keyword-parse result. Never returns an error to the UI.
@@ -1298,14 +1361,30 @@ async def parse_icp(payload: dict):
         result = None
     if result is None:
         return {"source": "rules"}
+
+    catalog_available  = True
+    suggested_industries: list[dict] = []
+    primary_industry = (result.industries or [""])[0]
+    if primary_industry:
+        try:
+            count = await _count_industry(db, primary_industry)
+            catalog_available = count > 0
+            if not catalog_available:
+                suggested_industries = await _build_industry_suggestions(db, primary_industry)
+        except Exception as exc:
+            logger.debug(f"parse-icp: catalog availability check skipped ({exc})")
+            catalog_available = True  # fail open — never block on this check
+
     return {
-        "source":         "llm",
-        "industries":     result.industries,
-        "personas":       result.personas,
-        "extra_keywords": result.extra_keywords,
-        "seniority":      result.seniority,
-        "confidence":     result.confidence,
-        "segments":       [s.model_dump() for s in result.segments],
+        "source":               "llm",
+        "industries":           result.industries,
+        "personas":             result.personas,
+        "extra_keywords":       result.extra_keywords,
+        "seniority":            result.seniority,
+        "confidence":           result.confidence,
+        "segments":             [s.model_dump() for s in result.segments],
+        "catalog_available":    catalog_available,
+        "suggested_industries": suggested_industries,
     }
 
 

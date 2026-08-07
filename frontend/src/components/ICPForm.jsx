@@ -741,6 +741,39 @@ export default function ICPForm({
             </div>
           )
         })()}
+        {/* Catalog-availability warning: the LLM successfully parsed an
+            industry, but nothing in our event catalog matches it at all
+            (checked server-side via the same synonym bridge the real
+            search uses - see /api/parse-icp). Submitting as-is is
+            guaranteed to come back empty, so surface real, currently-
+            available categories the user can swap in with one click,
+            instead of letting them find that out only after waiting on
+            a full search. */}
+        {llmParse?.forText === buyer.trim() && llmParse?.catalog_available === false && (
+          <div className="icp-no-catalog-warn" role="status">
+            <p className="icp-no-catalog-warn-text">
+              We don't have {(llmParse.industries || [])[0] || 'that'} events yet. Try searching broader categories:
+            </p>
+            {llmParse.suggested_industries?.length > 0 && (
+              <div className="icp-no-catalog-chips">
+                {llmParse.suggested_industries.map(s => (
+                  <button
+                    key={s.industry}
+                    type="button"
+                    className="icp-no-catalog-chip"
+                    onClick={() => {
+                      const { personas } = effectiveParse(buyer)
+                      setBuyer(personas?.length ? `${personas[0]} at ${s.industry}` : s.industry)
+                      setErrors(p => ({ ...p, buyer: '' }))
+                    }}
+                  >
+                    {s.industry}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {errors.buyer && <p className="icp-error">{errors.buyer}</p>}
       </div>
 
