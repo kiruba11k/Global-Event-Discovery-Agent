@@ -1,9 +1,10 @@
 """
 relevance/candidate_retriever.py — SQL keyword-match + embedding
-candidate retrieval (Layers 1, 2 and 4 of the new pipeline).
+candidate retrieval (Layers 1, 2 and 4 of the search pipeline).
 
-Gated behind settings.use_keyword_pipeline — additive, does not replace
-relevance/scorer.py's score_candidates() unless the caller opts in.
+This is the sole retrieval path api/routes_events.py's search endpoint
+uses. relevance/scorer.py's score_candidates() (rule-based scoring) still
+exists separately, used only by the standalone /geo-hint preview endpoint.
 
 Flow: resolve_region() -> get_region_candidate_count()/should_widen_geo()
 (internal control signal only) -> sql_keyword_match() + semantic_recall()

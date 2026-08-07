@@ -1,11 +1,10 @@
 """
-relevance/llm_selector.py — Layer 5 of the new pipeline: single LLM call
-picks the top 6 of 12 candidates, each with a reason AND a GO/CONSIDER
-verdict (the LLM's own judgment per event, not a positional 3+3 split).
-Replaces groq_ranker.py's GO/CONSIDER/SKIP tiering for callers that opt
-into settings.use_keyword_pipeline. No SKIP here — anything selected
-into the top 6 already cleared the bar; SKIP only applies to events that
-never made the cut, which this function doesn't surface at all.
+relevance/llm_selector.py — Layer 5 of the search pipeline: single LLM
+call picks the top 6 of 12 candidates, each with a reason AND a
+GO/CONSIDER verdict (the LLM's own judgment per event, not a positional
+3+3 split). No SKIP here — anything selected into the top 6 already
+cleared the bar; SKIP only applies to events that never made the cut,
+which this function doesn't surface at all.
 """
 from __future__ import annotations
 

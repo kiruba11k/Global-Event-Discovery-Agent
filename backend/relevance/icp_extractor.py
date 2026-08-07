@@ -1,7 +1,6 @@
 """
 relevance/icp_extractor.py — Layer 0 of the keyword+embedding pipeline
-(candidate_retriever.py / llm_selector.py, gated behind
-settings.use_keyword_pipeline).
+(candidate_retriever.py / llm_selector.py).
 
 Deliberately does NOT re-implement LLM industry/persona extraction —
 relevance/icp_parser.py already does that (canonical taxonomy, segment
