@@ -1385,6 +1385,20 @@ async def search_status(job_id: str):
 # POST /api/parse-icp  —  LLM-based universal buyer-text parsing
 # ══════════════════════════════════════════════════════════════════════
 
+_INDUSTRY_AGNOSTIC_PHRASES = (
+    "across all industries", "any industry", "industry-agnostic",
+    "industry agnostic", "sold horizontally", "all industries", "every industry",
+)
+
+
+def _looks_industry_agnostic(text: str) -> bool:
+    """True when the buyer text explicitly says it targets every vertical
+    (mirrors icp_parser.py's own system-prompt examples for when an empty
+    industries list is the CORRECT answer, not a failed parse)."""
+    t = text.lower()
+    return any(p in t for p in _INDUSTRY_AGNOSTIC_PHRASES)
+
+
 @router.post("/parse-icp")
 async def parse_icp(payload: dict, db: AsyncSession = Depends(get_db)):
     """
@@ -1427,6 +1441,21 @@ async def parse_icp(payload: dict, db: AsyncSession = Depends(get_db)):
         except Exception as exc:
             logger.debug(f"parse-icp: catalog availability check skipped ({exc})")
             catalog_available = True  # fail open — never block on this check
+    elif not _looks_industry_agnostic(text):
+        # The LLM found no canonical industry at all (as opposed to
+        # correctly returning [] for genuinely industry-agnostic input
+        # like "CIOs across all industries") — e.g. a niche/obscure/
+        # misspelled industry it couldn't confidently map to the fixed
+        # taxonomy ("quantum computing industry"). That's just as much a
+        # "this won't find anything" case as a named-but-uncatalogued
+        # industry, so still surface real available categories rather
+        # than silently showing no guidance at all.
+        try:
+            suggested_industries = await _build_industry_suggestions(db, "", raw_text=text)
+            catalog_available = not suggested_industries
+        except Exception as exc:
+            logger.debug(f"parse-icp: unresolved-industry suggestions skipped ({exc})")
+            catalog_available = True
 
     return {
         "source":               "llm",
