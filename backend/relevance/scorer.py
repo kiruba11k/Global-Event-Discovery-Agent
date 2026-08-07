@@ -595,8 +595,17 @@ def _score_industry(event: EventORM, profile: ICPProfile) -> Tuple[float, list[s
     return round(score, 4), matched
 
 
-# Expanded persona synonym map for matching event text
-_PERSONA_ALIASES: dict[str, list[str]] = {
+# Expanded persona synonym map for matching event text — DB audience_personas
+# text almost never uses the ICP form's canonical label verbatim ("VP Sales"
+# vs. an event stored under "Head of Sales" or "Sales Director"), so this is
+# the same bridge role expand_industry_synonyms() plays for industries: the
+# LLM (relevance/icp_parser.py's _SYSTEM prompt) canonicalizes whatever role
+# wording the user typed into one of CANONICAL_PERSONAS, then this map
+# expands that canonical label into every DB spelling variant actually
+# worth matching against. PUBLIC (see expand_persona_synonyms below) so
+# candidate_retriever.py's SQL layer can use the same bridge, not just this
+# module's own rule scoring.
+PERSONA_ALIASES: dict[str, list[str]] = {
     "cio":               ["cio", "chief information officer", "it director", "head of it",
                           "vp it", "director of it", "head of technology"],
     "cto":               ["cto", "chief technology officer", "vp engineering", "head of engineering",
@@ -634,7 +643,39 @@ _PERSONA_ALIASES: dict[str, list[str]] = {
                           "systems manager", "infrastructure manager"],
     "finance manager":   ["finance manager", "financial controller", "finance director",
                           "treasury manager", "accounting manager"],
+    "cro":               ["cro", "chief revenue officer", "vp sales", "sales director",
+                          "head of sales", "director of sales"],
+    "head of growth":    ["head of growth", "vp growth", "growth director",
+                          "growth manager", "director of growth"],
+    "supply chain manager": ["supply chain manager", "logistics manager", "vp supply chain",
+                             "supply chain director", "head of supply chain", "logistics director"],
+    "data scientist / analytics": ["data scientist", "analytics manager", "head of analytics",
+                                    "vp data", "chief data officer", "cdo", "data analytics director"],
+    "project manager":   ["project manager", "program manager", "pmo director",
+                          "delivery manager", "head of pmo"],
 }
+
+# Back-compat alias — _score_persona below (and any other in-module caller)
+# used the private name before this map became a shared public bridge.
+_PERSONA_ALIASES = PERSONA_ALIASES
+
+
+def expand_persona_synonyms(persona: str) -> list[str]:
+    """
+    Public bridge (mirrors expand_industry_synonyms above): given a
+    canonical persona label ("VP Sales", "CFO", ...), return every DB-
+    spelling variant worth matching against, including the label itself.
+    Falls back to just [persona.lower()] for an unrecognised label rather
+    than returning nothing — an unmapped persona should still match its
+    own literal text.
+    """
+    p_lower = (persona or "").strip().lower()
+    if not p_lower:
+        return []
+    aliases = PERSONA_ALIASES.get(p_lower)
+    if aliases:
+        return list(dict.fromkeys(aliases))
+    return [p_lower]
 
 
 def _score_persona(event: EventORM, profile: ICPProfile) -> Tuple[float, list[str]]:

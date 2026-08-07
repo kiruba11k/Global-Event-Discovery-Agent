@@ -24,6 +24,7 @@ from models.event import EventORM
 from relevance import pgvector_store
 from relevance.icp_extractor import normalize_geo
 from relevance.scorer import expand_industry_synonyms as _expand_industry_synonyms
+from relevance.scorer import expand_persona_synonyms as _expand_persona_synonyms
 
 settings = get_settings()
 
@@ -171,19 +172,31 @@ async def sql_keyword_match(
 ) -> list[EventORM]:
     """
     Full-text/ILIKE match against relevant_keywords + related_industries +
-    industry_relevant_for (curated CSV's "who this event is relevant for"
-    field — a direct buyer-industry-fit signal, arguably stronger than
-    related_industries which describes the event's own vertical rather
-    than its intended audience). Uses to_tsquery on Postgres (backed by
-    the GIN indexes ensured in db.database.init_db()); falls back to
-    ILIKE on SQLite/dev.
+    industry_relevant_for + audience_personas (curated CSV's "who this
+    event is relevant for" field — a direct buyer-industry-fit signal,
+    arguably stronger than related_industries which describes the event's
+    own vertical rather than its intended audience). Uses to_tsquery on
+    Postgres (backed by the GIN indexes ensured in db.database.init_db());
+    falls back to ILIKE on SQLite/dev.
+
+    Personas go through the same canonical-label -> DB-spelling bridge as
+    industries (expand_persona_synonyms, mirroring expand_industry_synonyms)
+    — the ICP form's LLM parser (icp_parser.py) already canonicalizes
+    whatever role wording the user typed ("Head of Tech", "IT lead") into
+    one of CANONICAL_PERSONAS; this expands that canonical label into the
+    DB's actual audience_personas phrasing before the SQL match runs, so a
+    role search isn't limited to an exact-string hit.
     """
     industries = [p["industry"] for p in icp_profile.get("pairs", []) if p.get("industry")]
+    personas   = [p["persona"] for p in icp_profile.get("pairs", []) if p.get("persona")]
     keywords   = icp_profile.get("extra_keywords", []) or []
     synonyms: list[str] = []
     for industry in industries:
         synonyms.extend(_expand_industry_synonyms(industry))
-    search_terms = list(dict.fromkeys(industries + keywords + synonyms))
+    persona_synonyms: list[str] = []
+    for persona in personas:
+        persona_synonyms.extend(_expand_persona_synonyms(persona))
+    search_terms = list(dict.fromkeys(industries + keywords + synonyms + personas + persona_synonyms))
     if not search_terms:
         return []
 
@@ -204,7 +217,8 @@ async def sql_keyword_match(
         where.append(
             "(to_tsvector('english', coalesce(relevant_keywords,'')) @@ to_tsquery('english', :raw_q) "
             "OR to_tsvector('english', coalesce(related_industries,'')) @@ to_tsquery('english', :raw_q) "
-            "OR to_tsvector('english', coalesce(industry_relevant_for,'')) @@ to_tsquery('english', :raw_q))"
+            "OR to_tsvector('english', coalesce(industry_relevant_for,'')) @@ to_tsquery('english', :raw_q) "
+            "OR to_tsvector('english', coalesce(audience_personas,'')) @@ to_tsquery('english', :raw_q))"
         )
         params["raw_q"] = tsquery
     else:
@@ -213,7 +227,7 @@ async def sql_keyword_match(
             key = f"kw{i}"
             like_clauses.append(
                 f"(relevant_keywords LIKE :{key} OR related_industries LIKE :{key} "
-                f"OR industry_relevant_for LIKE :{key})"
+                f"OR industry_relevant_for LIKE :{key} OR audience_personas LIKE :{key})"
             )
             params[key] = f"%{term}%"
         where.append("(" + " OR ".join(like_clauses) + ")")
