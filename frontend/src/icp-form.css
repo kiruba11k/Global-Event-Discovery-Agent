@@ -244,6 +244,40 @@ legend.icp-label {
   border:     1px solid var(--c-meet, #E85D3D);
 }
 
+/* ── Catalog-not-available warning (buyer field) ─────────────────── */
+.icp-no-catalog-warn {
+  margin-top:    8px;
+  padding:       12px 14px;
+  background:    var(--c-talk-soft, #FCF0D4);
+  border:        1px solid rgba(217,144,0,.4);
+  border-radius: var(--r-md, 10px);
+}
+.icp-no-catalog-warn-text {
+  margin:      0 0 8px;
+  font-size:   13px;
+  font-weight: 600;
+  color:       #9A6700;
+}
+.icp-no-catalog-chips {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       6px;
+}
+.icp-no-catalog-chip {
+  font-size:     12px;
+  font-weight:   600;
+  color:         #9A6700;
+  background:    transparent;
+  border:        1px solid rgba(217,144,0,.5);
+  border-radius: var(--r-pill, 999px);
+  padding:       5px 12px;
+  cursor:        pointer;
+  transition:    background .15s, color .15s;
+}
+.icp-no-catalog-chip:hover {
+  background: rgba(217,144,0,.15);
+}
+
 /* ── Geo chips (selected) ────────────────────────────────────────── */
 .icp-geo-selected {
   display:  flex;
