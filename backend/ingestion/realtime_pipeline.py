@@ -23,6 +23,7 @@ from config import get_settings
 from db.crud import batch_upsert_events, _expand_industry_terms   # ← fixed
 from ingestion.icp_query_builder import build_queries
 from relevance.geo_aliases import expand_geo
+from relevance.scorer import expand_persona_synonyms
 from ingestion.ticketmaster_realtime import run_ticketmaster_queries
 from ingestion.eventbrite_realtime import run_eventbrite_queries
 from ingestion.ita_trade_events import run_ita_queries
@@ -316,6 +317,23 @@ async def fetch_realtime_candidates(
             ind_filters.append(EventORM.name.ilike(f"%{term}%"))
         if ind_filters:
             stmt = stmt.where(or_(*ind_filters))
+
+    # Persona filter — canonical role label (from icp_parser.py's LLM
+    # parse) expanded through the same synonym bridge industries use
+    # (relevance/scorer.py's expand_persona_synonyms), since DB
+    # audience_personas text is rarely the exact label the ICP form sent
+    # ("VP Sales" vs. an event stored under "Head of Sales"). Tier-1 only
+    # — Tier-2 below intentionally drops this if it's too narrow.
+    persona_filters = []
+    if profile.target_personas:
+        persona_terms = []
+        for persona in profile.target_personas:
+            persona_terms.extend(expand_persona_synonyms(persona))
+        for term in dict.fromkeys(persona_terms):
+            persona_filters.append(EventORM.audience_personas.ilike(f"%{term}%"))
+            persona_filters.append(EventORM.description.ilike(f"%{term}%"))
+        if persona_filters:
+            stmt = stmt.where(or_(*persona_filters))
 
     result        = await db.execute(stmt.limit(500))
     db_candidates = list(result.scalars().all())
