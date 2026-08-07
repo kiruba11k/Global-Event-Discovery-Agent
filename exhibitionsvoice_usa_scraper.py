@@ -1,17 +1,22 @@
 """
-ExhibitionsVoice USA trade-show scraper.
+ExhibitionsVoice trade-show scraper — all countries.
 
-Scrapes https://exhibitionsvoice.com/trade-shows/country/usa page by page.
-For each listing page it visits every event's detail page, extracts the full
-event data, and APPENDS the rows to the CSV before moving on to the next
-listing page — so progress is saved incrementally.
+Scrapes https://exhibitionsvoice.com/trade-shows/country/<slug> page by page,
+country by country. For each listing page it visits every event's detail page,
+extracts the full event data, and APPENDS the rows to that country's CSV
+before moving on to the next listing page — so progress is saved
+incrementally. When one country is finished it moves to the next country,
+each saved in a different CSV (e.g. usa_trade_shows.csv,
+china_trade_shows.csv, ...).
 
 Usage:
     pip install requests beautifulsoup4
-    python exhibitionsvoice_usa_scraper.py            # scrape all pages
-    python exhibitionsvoice_usa_scraper.py --start 3  # resume from page 3
+    python exhibitionsvoice_usa_scraper.py                     # all countries
+    python exhibitionsvoice_usa_scraper.py --country usa       # one country
+    python exhibitionsvoice_usa_scraper.py --country usa --start 3
+    python exhibitionsvoice_usa_scraper.py --from-country india # resume list from India
 
-Output: usa_trade_shows.csv
+Output: one CSV per country in --outdir (default: current directory).
 """
 
 import argparse
@@ -26,10 +31,59 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://exhibitionsvoice.com"
-HUB_URL = BASE_URL + "/trade-shows/country/usa"
-OUTPUT_CSV = "usa_trade_shows.csv"
 REQUEST_DELAY = 1.5  # seconds between requests, be polite
 TIMEOUT = 30
+
+# Country slugs in scrape order (as listed on exhibitionsvoice.com)
+COUNTRIES = [
+    "usa",
+    "china",
+    "brazil",
+    "indonesia",
+    "germany",
+    "india",
+    "australia",
+    "france",
+    "united-kingdom",
+    "thailand",
+    "singapore",
+    "vietnam",
+    "cambodia",
+    "malaysia",
+    "mexico",
+    "colombia",
+    "united-arab-emirates",
+    "taiwan",
+    "saudi-arabia",
+    "kenya",
+    "south-korea",
+    "switzerland",
+    "japan",
+    "philippines",
+    "canada",
+    "turkey",
+    "peru",
+    "netherlands",
+    "egypt",
+    "sweden",
+    "italy",
+    "russia",
+    "tanzania",
+    "kazakhstan",
+    "belgium",
+    "austria",
+    "south-africa",
+    "pakistan",
+    "argentina",
+    "spain",
+    "ghana",
+    "portugal",
+    "hong-kong-sar-china",
+    "syria",
+    "iran",
+    "panama",
+    "macau",
+]
 
 HEADERS = {
     "User-Agent": (
@@ -40,6 +94,7 @@ HEADERS = {
 }
 
 FIELDNAMES = [
+    "country",
     "page",
     "event_name",
     "event_url",
@@ -211,38 +266,38 @@ def load_scraped_urls(csv_path):
         return {row.get("event_url", "") for row in csv.DictReader(f)}
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Scrape ExhibitionsVoice USA trade shows")
-    parser.add_argument("--start", type=int, default=1, help="page to start from")
-    parser.add_argument("--end", type=int, default=None, help="page to stop at (inclusive)")
-    parser.add_argument("--out", default=OUTPUT_CSV, help="output CSV path")
-    args = parser.parse_args()
+def scrape_country(slug, start=1, end=None, outdir="."):
+    """Scrape one country hub, page by page, into its own CSV."""
+    hub_url = f"{BASE_URL}/trade-shows/country/{slug}"
+    csv_path = os.path.join(outdir, f"{slug.replace('-', '_')}_trade_shows.csv")
 
-    already_scraped = load_scraped_urls(args.out)
+    already_scraped = load_scraped_urls(csv_path)
     if already_scraped:
-        print(f"Resuming: {len(already_scraped)} events already in {args.out}")
+        print(f"Resuming {slug}: {len(already_scraped)} events already in {csv_path}")
 
-    print(f"Fetching hub page: {HUB_URL}")
-    first_soup = get_soup(f"{HUB_URL}?slug=usa&page={args.start}")
+    print(f"\n########## Country: {slug} ##########")
+    print(f"Fetching hub page: {hub_url}")
+    first_soup = get_soup(f"{hub_url}?slug={slug}&page={start}")
     if first_soup is None:
-        sys.exit("Could not load the hub page.")
+        print(f"Could not load hub page for {slug}; skipping country.")
+        return
 
     total_pages = get_total_pages(first_soup)
-    last_page = min(args.end, total_pages) if args.end else total_pages
-    print(f"Total pages detected: {total_pages}; scraping pages {args.start}–{last_page}")
+    last_page = min(end, total_pages) if end else total_pages
+    print(f"Total pages detected: {total_pages}; scraping pages {start}–{last_page}")
 
-    page = args.start
+    page = start
     soup = first_soup
     while page <= last_page:
         if soup is None:
-            soup = get_soup(f"{HUB_URL}?slug=usa&page={page}")
+            soup = get_soup(f"{hub_url}?slug={slug}&page={page}")
             if soup is None:
                 print(f"Skipping page {page} (could not load).")
                 page += 1
                 continue
 
         events = parse_listing_page(soup)
-        print(f"\n=== Page {page}: {len(events)} events ===")
+        print(f"\n=== {slug} — Page {page}: {len(events)} events ===")
 
         rows = []
         for i, (title, url) in enumerate(events, 1):
@@ -254,6 +309,7 @@ def main():
             data = parse_event_page(url)
             if data is None:
                 continue
+            data["country"] = slug
             data["page"] = page
             if not data["event_name"]:
                 data["event_name"] = title
@@ -262,15 +318,48 @@ def main():
 
         # Save this page's data BEFORE moving to the next page
         if rows:
-            append_rows(rows, args.out)
-            print(f"  -> Saved {len(rows)} rows to {args.out}")
+            append_rows(rows, csv_path)
+            print(f"  -> Saved {len(rows)} rows to {csv_path}")
 
         page += 1
         soup = None
         if page <= last_page:
             time.sleep(REQUEST_DELAY)
 
-    print(f"\nDone. Data stored in {args.out}")
+    print(f"Finished {slug}. Data stored in {csv_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Scrape ExhibitionsVoice trade shows for all countries"
+    )
+    parser.add_argument("--country", help="scrape only this country slug (e.g. usa)")
+    parser.add_argument(
+        "--from-country",
+        help="start the full country list from this slug (skip earlier ones)",
+    )
+    parser.add_argument("--start", type=int, default=1, help="page to start from")
+    parser.add_argument("--end", type=int, default=None, help="page to stop at (inclusive)")
+    parser.add_argument("--outdir", default=".", help="directory for the output CSVs")
+    args = parser.parse_args()
+
+    os.makedirs(args.outdir, exist_ok=True)
+
+    if args.country:
+        countries = [args.country]
+    else:
+        countries = COUNTRIES
+        if args.from_country:
+            if args.from_country not in countries:
+                sys.exit(f"Unknown country slug: {args.from_country}")
+            countries = countries[countries.index(args.from_country):]
+
+    print(f"Countries to scrape: {', '.join(countries)}")
+    for slug in countries:
+        scrape_country(slug, start=args.start, end=args.end, outdir=args.outdir)
+        time.sleep(REQUEST_DELAY)
+
+    print("\nAll countries done.")
 
 
 if __name__ == "__main__":
