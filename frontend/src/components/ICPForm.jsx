@@ -888,11 +888,27 @@ export default function ICPForm({
                   padding: '10px 12px',
                   fontSize: 12,
                 }}>
-                  <span style={{ color: '#4C5A63' }}>
-                    Cities in <strong>{country}</strong> with matching events:{' '}
-                    {suggestions.map((s, i) => (
-                      <span key={s.city}>
-                        {s.city} ({s.count}){i < suggestions.length - 1 ? ', ' : ''}
+                  <span style={{ color: '#4C5A63', display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 10px' }}>
+                    <span>Cities in <strong>{country}</strong> with matching events:</span>
+                    {suggestions.map(s => (
+                      <span key={s.city} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {s.city}
+                        <span style={{
+                          display:        'inline-flex',
+                          alignItems:     'center',
+                          justifyContent: 'center',
+                          minWidth:       18,
+                          height:         18,
+                          padding:        '0 4px',
+                          borderRadius:   '50%',
+                          background:     'var(--c-find, #0E7C6B)',
+                          color:          '#fff',
+                          fontSize:       10,
+                          fontWeight:     700,
+                          lineHeight:     1,
+                        }}>
+                          {s.count}
+                        </span>
                       </span>
                     ))}
                   </span>
